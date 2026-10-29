@@ -16,7 +16,7 @@ A self-contained ADO.NET provider for Cassie is under development. It currently 
 
 `ExecuteScalarAsync`, `ExecuteNonQueryAsync`, and `BeginTransactionAsync` use asynchronous pgwire operations and honor their cancellation tokens. A pre-canceled transaction start sends no query. If cancellation arrives after `BEGIN` reaches Cassie, the provider rolls back before reusing the connection and closes the session if rollback cannot restore a ready state. Async non-query execution drains every result set before returning the combined affected-row count.
 
-`CassieProviderFactory` creates connections, commands, parameters, and `CassieDataAdapter` instances. Its `DbProviderFactory.CreateDataSource` entry point also creates the framework `DbDataSource`, which returns closed Cassie connections. The adapter supports synchronous `Fill` into `DataTable` and `DataSet`, plus `Update` when modification commands are assigned. The .NET framework marks `DbDataAdapter.Update` as requiring unreferenced code; trimmed callers need to account for that annotation when their query schema is statically known.
+`CassieProviderFactory` creates connections, commands, parameters, and `CassieDataAdapter` instances. Its `DbProviderFactory.CreateDataSource` entry point creates a `CassieDataSource`, which derives from `DbDataSource` and returns independently owned Cassie connections. `CreateConnection` returns a closed connection; `OpenConnection` and `OpenConnectionAsync` open it. Disposing the source prevents new connections while existing connections and the optional logger factory remain caller-owned. The adapter supports synchronous `Fill` into `DataTable` and `DataSet`, plus `Update` when modification commands are assigned. The .NET framework marks `DbDataAdapter.Update` as requiring unreferenced code; trimmed callers need to account for that annotation when their query schema is statically known.
 
 `CassieCommand.Prepare` and `PrepareAsync` register a named pgwire statement and reuse it across executions. Parameter values can change between binds; SQL or parameter-type changes trigger re-preparation, and server statements are closed when commands are disposed or deferred until an active reader finishes. A new physical session invalidates prior prepared-statement state.
 
@@ -47,6 +47,35 @@ Parameterized, prepared, and binary-result extended queries fetch at most 128 ro
 The target is Cassie's documented product contract, not full PostgreSQL parity. Cassie is a single-node read-model database; supported SQL, type, catalog, and client workflows are defined by the Cassie roadmap and compatibility documents. Distributed SQL, native PostgreSQL extension loading, general stored-program execution, triggers, replication, and unsupported PostgreSQL forms remain outside the product contract; Cassie's limited one-statement `CALL` workflow is supported.
 
 `CassieDiagnostics.ActivitySource` and `CassieDiagnostics.Meter` expose provider activities and operation count/duration metrics for connection open/close, query, and streaming COPY calls. Query activities and durations remain open through row consumption until the response is drained or the reader is closed. Set `CassieConnection.LoggerFactory` to a Microsoft `ILoggerFactory` to receive source-generated connection lifecycle and operation failure logs. Logs include the operation and exception type only; they omit SQL text, parameter values, credentials, and server error details. Telemetry uses operation and outcome tags and follows the same data-minimization boundary.
+
+## Dependency injection
+
+The optional [`Cassie.DependencyInjection`](src/Cassie.DependencyInjection/README.md)
+package provides conventional `IServiceCollection` extensions for the provider
+and REST clients:
+
+```csharp
+using Microsoft.Extensions.DependencyInjection;
+
+services.AddCassieDataSource(connectionString);
+services.AddCassieRestClient(new Uri("https://cassie.example/"));
+```
+
+The application supplies `services` and `connectionString`.
+`CassieDataSource` is a singleton; injected `CassieConnection` instances are
+scoped and start closed. The source copies the application's optional
+`ILoggerFactory` to each connection without taking ownership of that factory.
+Connections created directly from the source belong to their caller.
+`DbDataSource` and `DbConnection` aliases are added only when no other provider
+has registered them; typed Cassie services continue to resolve their own source.
+
+`CassieRestClient` is scoped and owns a separate HTTP client and cookie container
+in each scope. `CassieAdminClient` resolves to that same REST client's `Admin`
+property. Login and logout remain explicit. Scope disposal releases the HTTP
+client without revoking the server session; use `LogoutAsync` for that. Keep
+scopes isolated between users. Existing registrations retain their lifetime and
+ownership, aliases follow the typed service, and repeated registration keeps the
+first configuration.
 
 ## REST API
 

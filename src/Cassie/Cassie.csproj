@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>ADO.NET provider for Cassie.</Description>
+    <Description>ADO.NET provider with vector and administration REST clients for Cassie.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/cntryl/cassie-dotnet</RepositoryUrl>
   </PropertyGroup>

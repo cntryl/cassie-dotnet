@@ -4,8 +4,10 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Cassie/Cassie.csproj" />
+    <Project Path="src/Cassie.DependencyInjection/Cassie.DependencyInjection.csproj" />
   </Folder>
   <Folder Name="/test/">
     <Project Path="test/Cassie.Tests/Cassie.Tests.csproj" />
+    <Project Path="test/Cassie.DependencyInjection.Tests/Cassie.DependencyInjection.Tests.csproj" />
   </Folder>
 </Solution>

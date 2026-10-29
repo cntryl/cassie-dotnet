@@ -22,7 +22,9 @@ namespace Cntryl.Cassie.Commands
         public override int CommandTimeout
         {
             get => _commandTimeout;
-            set => _commandTimeout = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(value));
+            set => _commandTimeout = value is >= 0 and <= 2_147_483
+                ? value
+                : throw new ArgumentOutOfRangeException(nameof(value), value, "CommandTimeout must be between 0 and 2147483 seconds.");
         }
         /// <inheritdoc />
         public override CommandType CommandType { get; set; } = CommandType.Text;

@@ -71,6 +71,9 @@ jobs:
       - name: Build
         run: dotnet build Cassie.slnx --configuration Release --no-restore
 
+      - name: Pack packages
+        run: dotnet pack Cassie.slnx --configuration Release --no-build --no-restore --output artifacts/packages
+
       - name: Start disposable Cassie endpoints
         env:
           CASSIE_BINARY: ${{ github.workspace }}/artifacts/ci/cassie/target/debug/cassie
@@ -135,7 +138,7 @@ jobs:
           CASSIE_DOTNET_REQUIRE_LIVE: "true"
           CASSIE_DOTNET_TEST_CONNECTION_STRING: >-
             Host=127.0.0.1;Port=5433;Database=postgres;Username=root;Password=cassie-ci;SSL Mode=Disable;Timeout=15
-        run: dotnet test --solution Cassie.slnx --configuration Release --no-build --no-restore --filter-trait Isolation=Server --minimum-expected-tests 1
+        run: dotnet test --project test/Cassie.Tests/Cassie.Tests.csproj --configuration Release --no-build --no-restore --filter-trait Isolation=Server --minimum-expected-tests 1
 
       - name: Stop disposable Cassie endpoints
         if: always()

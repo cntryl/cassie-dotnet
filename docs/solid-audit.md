@@ -110,3 +110,39 @@ The subsequent REST client change targets `/v1/...` and the unversioned
 `/livez`, `/readyz`, `/startupz`, and `/targetz` probes. Its CI follows Cassie
 `main` and records the resolved server SHA. See [REST client](rest-client.md) for
 the explicitly authorized temporary live-contract failures during that migration.
+
+## Dependency injection follow-up
+
+The optional `Cassie.DependencyInjection` package adds service registrations while
+the core `Cassie` package stays independent of dependency injection. Its
+`CassieDataSource` derives from the existing ADO.NET `DbDataSource` contract,
+creates caller-owned connections, borrows logging, and leaves shared pools intact
+when disposed. Framework ADO.NET types provide the shared provider contracts;
+there is no separate `Cassie.Abstractions` package.
+
+Four new regression tests first reproduced aliases disposing externally supplied
+instances or changing an existing service's lifetime. Alias registration now
+preserves instance ownership and the winning typed registration's lifetime,
+including the REST client's administration alias. Default REST scopes own
+separate cookie containers. Authentication and server logout remain explicit.
+
+Command timeout assignment also now uses the connection-string builder's supported
+range, zero through 2,147,483 seconds. Three boundary regressions were red before
+the fix; all seven timeout cases and ten data-source lifecycle cases pass.
+
+The follow-up core run against the same immutable server passed 621 cases,
+including the isolated restore, with zero skips. The six REST login failures
+remain the explicitly accepted pending `/v1/...` server migration. Both local
+packages are now version `0.1.0`. An isolated package-only consumer restored
+`Cassie.DependencyInjection.0.1.0.nupkg` and its core dependency through a fresh
+NuGet cache, compiled as macOS ARM64 Native AOT with warnings treated as errors,
+and passed singleton/scoped ownership, REST client separation, and live pgwire
+execution. This does not qualify the pending REST routes or publish either
+package.
+
+All 15 dedicated DI cases pass, including real HTTP cookie separation, synchronous
+and asynchronous container disposal, existing-provider aliases, logger ownership,
+and the four ownership/lifetime regressions. Combined with the disjoint core
+runs, the follow-up result is 636 passes, six expected pending REST failures,
+and zero skips across 642 cases. Release solution build, format verification,
+whitespace checks, and workflow validation are clean.

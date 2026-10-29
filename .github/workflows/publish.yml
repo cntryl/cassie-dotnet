@@ -13,11 +13,12 @@ concurrency:
 
 jobs:
   publish:
-    name: Pack and publish package
+    name: Pack and publish packages
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
+      NuGetPackageSourceCredentials_cntryl: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
       NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PACKAGE_SOURCE: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
 
@@ -40,9 +41,9 @@ jobs:
         id: version
         run: echo "package-version=$(dotnet msbuild src/Cassie/Cassie.csproj -getProperty:PackageVersion -nologo)" >> "$GITHUB_OUTPUT"
 
-      - name: Pack package
+      - name: Pack packages
         run: >-
-          dotnet pack src/Cassie/Cassie.csproj
+          dotnet pack Cassie.slnx
           --configuration Release
           --output artifacts/packages
           -p:PackageVersion="${{ steps.version.outputs.package-version }}"
