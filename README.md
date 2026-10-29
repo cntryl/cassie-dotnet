@@ -1,186 +1,96 @@
 # Cassie .NET
 
-Public APIs are organized under `Cntryl.Cassie.Connection`, `Cntryl.Cassie.Commands`, `Cntryl.Cassie.Data`, `Cntryl.Cassie.Types`, `Cntryl.Cassie.Diagnostics`, and `Cntryl.Cassie.Rest`. `CassieProviderFactory` and `CassieException` remain in `Cntryl.Cassie`. This namespace migration changes CLR type identities: existing consumers must update their imports and rebuild. See the [SOLID audit](docs/solid-audit.md) for the responsibility boundaries and remaining findings.
+Two ways to use Cassie from .NET, plus optional dependency injection:
 
-TLS is required by default and validates the server certificate and host name using platform trust. Set `SSL Root Certificate=/path/to/ca-bundle.pem` to trust a PEM CA bundle for an isolated Cassie deployment; the provider still validates the certificate chain and host name. `SSL Mode=Prefer` permits a cleartext fallback when the server declines TLS, and `SSL Mode=Disable` opts out of TLS.
+- **ADO.NET** for SQL, transactions, and streaming `COPY` over pgwire.
+- **REST** for vector collections, search, and administration.
+- **Dependency injection** through the separate `Cassie.DependencyInjection` package.
 
-Bound parameters are input-only. Cassie's current `CALL` contract does not expose output parameters or the body statement's result rows.
+Requires .NET 10. Packages are published to GitHub Packages.
 
-`CassieCommand.CommandType = CommandType.StoredProcedure` accepts a procedure name, optionally qualified by schema, and binds input parameters in collection order. The provider quotes the identifier components and sends a positional `CALL`; Cassie does not support output parameters or result rows from the procedure body.
+## Install
 
-A self-contained ADO.NET provider for Cassie is under development. It currently implements TCP startup with cleartext-password authentication, PostgreSQL SSL negotiation with platform certificate validation, simple and extended query execution, named text parameters, streaming text-format results, multiple results, transactions and savepoints, server error details, PostgreSQL query cancellation, and provider-specific `CopyFromAsync`/`CopyToAsync` APIs for streaming raw `COPY` data, including CSV table input and authorized database-image restore/backup workflows. Cassie currently offers cleartext-password authentication; SCRAM is not part of its server contract.
+Add the `cntryl` NuGet source and give NuGet a classic GitHub personal access
+token with `read:packages`. Store credentials in your local or CI secret store;
+set `NuGetPackageSourceCredentials_cntryl` to
+`Username=<GitHub username>;Password=<token>`. See [GitHub's NuGet guide] and
+[NuGet's credential guidance].
 
-`CassieConnection.ChangeDatabase` and `ChangeDatabaseAsync` switch databases by reopening the connection with a new startup database. They require an open connection with no active reader or transaction. If the new connection cannot be opened, the connection remains closed and retains its previous connection string. When `Database` is omitted, the username is the startup database.
+```sh
+dotnet nuget add source https://nuget.pkg.github.com/cntryl/index.json --name cntryl
+dotnet add package Cassie --version 0.1.1
+```
 
-`CassieConnectionStringBuilder.Options` sends PostgreSQL-style startup options to Cassie, such as `-c TimeZone=UTC` or `--search_path=public`. Embedded NUL characters are rejected in connection startup values and SQL/COPY command text before they can be truncated by pgwire's C-string framing.
+For dependency injection, also install:
 
-`ExecuteScalarAsync`, `ExecuteNonQueryAsync`, and `BeginTransactionAsync` use asynchronous pgwire operations and honor their cancellation tokens. A pre-canceled transaction start sends no query. If cancellation arrives after `BEGIN` reaches Cassie, the provider rolls back before reusing the connection and closes the session if rollback cannot restore a ready state. Async non-query execution drains every result set before returning the combined affected-row count.
+```sh
+dotnet add package Cassie.DependencyInjection --version 0.1.1
+```
 
-`CassieProviderFactory` creates connections, commands, parameters, and `CassieDataAdapter` instances. Its `DbProviderFactory.CreateDataSource` entry point creates a `CassieDataSource`, which derives from `DbDataSource` and returns independently owned Cassie connections. `CreateConnection` returns a closed connection; `OpenConnection` and `OpenConnectionAsync` open it. Disposing the source prevents new connections while existing connections and the optional logger factory remain caller-owned. The adapter supports synchronous `Fill` into `DataTable` and `DataSet`, plus `Update` when modification commands are assigned. The .NET framework marks `DbDataAdapter.Update` as requiring unreferenced code; trimmed callers need to account for that annotation when their query schema is statically known.
+## Run a query
 
-`CassieCommand.Prepare` and `PrepareAsync` register a named pgwire statement and reuse it across executions. Parameter values can change between binds; SQL or parameter-type changes trigger re-preparation, and server statements are closed when commands are disposed or deferred until an active reader finishes. A new physical session invalidates prior prepared-statement state.
+Load `connectionString`, `username`, and `password` from your app configuration
+or secret store.
 
-Async command, reader, transaction, and connection disposal use asynchronous protocol cleanup. Query cancellation sends its cancel request asynchronously, drains the response to `ReadyForQuery`, and closes the session if the protocol cannot be recovered.
+```csharp
+using System;
+using Cntryl.Cassie.Connection;
 
-The provider sends binary parameters for supported scalar and extended values, including Boolean, integers, OID and reg* identifiers, floating point, exact NUMERIC, bytea, UUID, date/time/timestamp, timestamptz, JSON at Cassie's OID 114, network addresses, MAC addresses, bit strings, LSNs, `timetz`, intervals, and dimensioned vectors; other values use text format. Unsigned 64-bit values bind as exact NUMERIC and can be read back with `GetFieldValue<ulong>` when the result is a nonnegative integer within range; `GetValue` still returns `CassieNumeric` to preserve exact NUMERIC values. `DbType.Date` accepts `DateTime` and uses its calendar date; `TIME` accepts `TimeOnly` or a nonnegative `TimeSpan` below 24 hours, truncating submicrosecond ticks to Cassie's microsecond precision. `GetValue` returns `TimeOnly` for `TIME`, while `GetFieldValue<TimeSpan>` is also supported. Results use text format by default. `CassieCommand.BinaryResults` supports binary scalar results including OID and reg* identifiers, exact NUMERIC, JSON, JSONPath on server revisions that register it, network addresses, MAC addresses, bit strings, LSNs, `timetz`, intervals, dimensioned vectors, and registered PostgreSQL arrays. The Experimental `void` result (OID 2278) decodes its empty binary payload as `string.Empty`; a nonempty payload is rejected as malformed. Network values retain address family and prefix, bit strings retain bit length, vectors retain FLOAT4 components and dimension, and binary arrays are returned as `CassieArray` with rank, dimension lengths, PostgreSQL lower bounds, element OID, and row-major values. `CassieArray` preserves explicit PostgreSQL dimensions and lower bounds. Multidimensional CLR arrays preserve their lengths and nonzero lower bounds; zero-based CLR dimensions map to PostgreSQL's conventional lower bound 1. Both forms can be rebound in binary or text parameter format; text-format array results remain strings. `NUMERIC` values returned by `GetValue` use `CassieNumeric` to preserve arbitrary precision; `GetDecimal` and `GetFieldValue<decimal>` convert values when they fit `System.Decimal`. Connection pooling is enabled by default and can be disabled with `Pooling=false`. It supports `Maximum Pool Size`, session reset through `DISCARD ALL`, pool clearing, and cancellation while waiting for capacity. Pool identity includes `Options`, so connections with different startup settings do not share a physical session. The reader maps common PostgreSQL scalar OIDs to CLR values and returns unsupported text-format OIDs as strings. See [`test/Cassie.Tests/Live`](test/Cassie.Tests/Live/README.md) for the live-server test instructions. Broader compatibility and production qualification remain incomplete.
+await using var source = new CassieDataSource(connectionString);
+await using var connection = await source.OpenConnectionAsync();
+await using var command = connection.CreateCommand();
+command.CommandText = "SELECT 1";
 
-Distinct binary JSONB OID 3802 is supported on Cassie revisions that register that selected type; current mainline treats JSONB as the JSON OID 114 alias.
+Console.WriteLine(await command.ExecuteScalarAsync());
+```
 
-`DateTime` binds as the wall-clock value of `timestamp` without time zone, regardless of `DateTime.Kind`; text and binary formats both preserve microsecond precision. `DateTime[]` infers `timestamp[]` and uses the same element encoding. Use `DateTimeOffset` for `timestamptz`. Cassie's temporal array normalization and text formatting remain unqualified.
+TLS certificate validation is on by default. For a private CA, set
+`SSL Root Certificate` in the connection string.
 
-`GetDateTime` and `GetFieldValue<DateTime>` convert `date` to midnight with `DateTimeKind.Unspecified`, preserve `timestamp` wall-clock values with `Unspecified` kind, and convert `timestamptz` to UTC. The same conversions apply to text and binary results.
+## Use REST
 
-Cassie date and timestamp types also support infinity sentinels and finite calendar values outside .NET's range; `time` and `timetz` support `24:00`. These values use the tagged `CassieTemporalValue` carrier, while ordinary values keep the CLR mappings above. `GetFieldValue<CassieTemporalValue>` provides a common tagged representation for ordinary temporal values too. Use its `FromDateDays`, `FromTimeMicroseconds`, `FromTimeWithTimeZoneMicroseconds`, `FromTimestampMicroseconds`, and `FromTimestampWithTimeZoneMicroseconds` factories to bind raw Cassie values. Text results that cannot be represented as a raw value retain their original spelling in `TextValue`.
+```csharp
+using System;
+using Cntryl.Cassie.Rest;
 
-Text date and timestamp decoding follows the session `DateStyle`, including ISO, SQL, German, and Postgres output. The provider consumes startup and asynchronous `ParameterStatus` messages in query and COPY response streams. Cassie reports changed settings after each statement result, including changes made through `set_config` in a stored view; simple-query batches receive each update before the next statement. The provider retains a `SHOW DateStyle` fallback for server revisions that do not send updates, and tracks pgwire transaction status so the fallback can wait until a failed transaction is recovered. Values with named time-zone abbreviations or calendar ranges that cannot be mapped safely to .NET retain their exact text in `CassieTemporalValue.TextValue`.
+using var client = new CassieRestClient(new Uri("https://cassie.example/"));
+await client.LoginAsync(username, password);
 
-`CassieParameter.ParameterFormat` selects automatic, text, or binary input encoding. Automatic mode uses binary when a matching codec is available; requesting binary requires a codec. CLR array parameters infer the registered element array OID even when `DbType` names the scalar element type; nullable `byte` and `sbyte` arrays map to `int2[]`, `ushort` arrays to `int4[]`, and `ulong` arrays to `numeric[]`. `byte[]` remains scalar `bytea`. `TimeSpan[]` maps to `time[]`. Set `PostgresTypeOid` when the CLR type does not distinguish registered variants such as `inet[]`/`cidr[]`, `macaddr[]`/`macaddr8[]`, or `bit[]`/`varbit[]`; empty and NULL-only arrays of these variant types also need an explicit OID. `DbType.Xml` is rejected because Cassie does not register XML. Explicit OIDs 19 (`name`) and 1003 (`name[]`) support both PostgreSQL text and binary parameter formats on Cassie revisions that register the `name` type; it is pending in the current mainline type contract.
+CassieRestQueryResult matches = await client.SearchAsync(
+    "documents", new("embedding", "connection setup", Limit: 5));
 
-`CassieConnection.GetSchema` and `GetSchemaAsync` expose the provider metadata collection list and the stable `Tables` and `Columns` subsets from Cassie's `information_schema`, including ADO.NET restrictions for catalog, schema, table, type, and column. `CommandBehavior.SchemaOnly` uses PostgreSQL Parse/Describe/Sync to return result metadata without binding parameters or executing the statement. `SingleRow` and `SingleResult` limit the reader-visible rows/results while draining the wire response so the connection remains reusable. `SequentialAccess` enforces forward-only column order and resets the position for each row; each received row and field remains buffered within the provider's pgwire frame limit.
+CassieRestQueryResult result = await client.Admin.ExecuteQueryAsync(
+    new("postgres", "SELECT 1 AS answer"));
+```
 
-Parameterized, prepared, and binary-result extended queries fetch at most 128 rows per portal execution. The reader resumes `PortalSuspended` responses within the same extended-query segment and sends Sync after completion; closing a reader drains remaining pages so the connection returns to a ready state.
-
-`CassieDataReader.GetSchemaTable` and `GetColumnSchema` expose field names, CLR and PostgreSQL types, reported sizes, and numeric precision/scale. Base-table origin, nullability, and key constraints remain unknown when Cassie's RowDescription does not provide them.
-
-`CassieDataReader.GetStream` reads bytea values and `GetTextReader` reads text values. Both wrap the current row's buffered field value; they provide the standard ADO.NET access pattern but do not stream an individual field directly from the socket.
-
-The target is Cassie's documented product contract, not full PostgreSQL parity. Cassie is a single-node read-model database; supported SQL, type, catalog, and client workflows are defined by the Cassie roadmap and compatibility documents. Distributed SQL, native PostgreSQL extension loading, general stored-program execution, triggers, replication, and unsupported PostgreSQL forms remain outside the product contract; Cassie's limited one-statement `CALL` workflow is supported.
-
-`CassieDiagnostics.ActivitySource` and `CassieDiagnostics.Meter` expose provider activities and operation count/duration metrics for connection open/close, query, and streaming COPY calls. Query activities and durations remain open through row consumption until the response is drained or the reader is closed. Set `CassieConnection.LoggerFactory` to a Microsoft `ILoggerFactory` to receive source-generated connection lifecycle and operation failure logs. Logs include the operation and exception type only; they omit SQL text, parameter values, credentials, and server error details. Telemetry uses operation and outcome tags and follows the same data-minimization boundary.
+Create the collection and vector index before searching. Cassie uses its
+configured embedding provider to embed the search text. The REST client uses
+`/v1/...` routes; run it with a server revision that supports them. See the
+[REST guide] for vectors, administration, and probe endpoints.
 
 ## Dependency injection
 
-The optional [`Cassie.DependencyInjection`](src/Cassie.DependencyInjection/README.md)
-package provides conventional `IServiceCollection` extensions for the provider
-and REST clients:
+`Cassie.DependencyInjection` registers the data source, scoped connections, and
+REST clients. In ASP.NET Core startup, call:
 
 ```csharp
+using System;
 using Microsoft.Extensions.DependencyInjection;
 
-services.AddCassieDataSource(connectionString);
-services.AddCassieRestClient(new Uri("https://cassie.example/"));
+builder.Services.AddCassieDataSource(connectionString);
+builder.Services.AddCassieRestClient(new Uri("https://cassie.example/"));
 ```
 
-The application supplies `services` and `connectionString`.
-`CassieDataSource` is a singleton; injected `CassieConnection` instances are
-scoped and start closed. The source copies the application's optional
-`ILoggerFactory` to each connection without taking ownership of that factory.
-Connections created directly from the source belong to their caller.
-`DbDataSource` and `DbConnection` aliases are added only when no other provider
-has registered them; typed Cassie services continue to resolve their own source.
+## More
 
-`CassieRestClient` is scoped and owns a separate HTTP client and cookie container
-in each scope. `CassieAdminClient` resolves to that same REST client's `Admin`
-property. Login and logout remain explicit. Scope disposal releases the HTTP
-client without revoking the server session; use `LogoutAsync` for that. Keep
-scopes isolated between users. Existing registrations retain their lifetime and
-ownership, aliases follow the typed service, and repeated registration keeps the
-first configuration.
+- [ADO.NET overview]
+- [REST guide]
+- [Dependency injection details]
+- [Live test setup]
 
-## REST API
-
-The same package includes `CassieRestClient` for Cassie's collection, document,
-vector-search, and administration APIs. Resources use the `/v1/` prefix, including
-`/v1/collections` and `/v1/admin/query/execute`. Health and metrics endpoints keep
-the unversioned `/livez`, `/readyz`, `/startupz`, `/targetz`, and `/metrics` paths.
-
-The client uses Cassie's HTTP session-cookie
-authentication. Constructing the client with a base URI creates and owns an
-HTTP client and cookie container, so login cookies are carried automatically.
-Dispose the REST client when its session's work is finished; `LogoutAsync`
-explicitly revokes the server session.
-
-This example assumes application-provided `username`, `password`, and
-`cancellationToken` values. Configure the server's embedding provider first; its
-output dimension must match the example's `vector(3)` field.
-
-```csharp
-using Cntryl.Cassie.Rest;
-using System.Text.Json.Nodes;
-
-using CassieRestClient rest = new(new Uri("https://cassie.example/"));
-_ = await rest.LoginAsync(username, password, cancellationToken);
-
-string collection = await rest.CreateCollectionAsync(
-    new CassieCollectionDefinition("documents",
-    [
-        new CassieRestField("content", "text"),
-        new CassieRestField("embedding", "vector(3)")
-    ]), cancellationToken);
-
-_ = await rest.CreateVectorIndexAsync(collection,
-    new CassieVectorIndexDefinition("embedding", new Dictionary<string, string>
-    {
-        ["source_field"] = "content",
-        ["metric"] = "cosine",
-        ["index_type"] = "hnsw"
-    }), cancellationToken);
-
-_ = await rest.AddDocumentAsync(collection, new JsonObject
-{
-    ["content"] = "A guide to configuring Cassie connections."
-}, cancellationToken);
-
-CassieRestQueryResult result = await rest.SearchAsync(collection,
-    new CassieVectorSearchRequest("embedding", "connection setup", Limit: 10),
-    cancellationToken);
-
-foreach (IReadOnlyList<System.Text.Json.JsonElement> row in result.Rows)
-{
-    Console.WriteLine(row[1].GetString()); // content follows the internal row ID
-}
-```
-
-Vector index options use string values, including numeric tuning options. Cassie
-supports `bruteforce`, `hnsw`, and `ivfflat` indexes. The server chooses the
-embedding provider and model, backfills documents when the index is created, and
-embeds new documents from `source_field` when they have no supplied vector.
-`SearchAsync` sends query text to that provider and returns column metadata plus
-positional `JsonElement` rows. Results are ordered by distance and include the
-document fields; the REST search response does not contain a score or distance
-column. `Limit: 0` returns an empty result. Use `GetDocumentAsync` and
-`DeleteDocumentAsync` with the identifier returned by `AddDocumentAsync`.
-
-`rest.Admin` shares the same authenticated HTTP session and exposes database
-listing and creation, database catalog discovery, SQL execution, validation and
-explanation, explicit query cancellation, projection verification-manifest
-exports and comparisons, consistency reports, and server health and metrics.
-SQL operations require an explicit database:
-
-```csharp
-CassieRestQueryResult query = await rest.Admin.ExecuteQueryAsync(
-    new CassieAdminQueryRequest("postgres", "SELECT 1 AS value"),
-    cancellationToken);
-Console.WriteLine(query.Rows[0][0].GetInt32());
-await rest.LogoutAsync(cancellationToken);
-```
-
-Use `ValidateQueryAsync` to describe SQL without executing it; invalid SQL raises
-a REST error. `ExplainQueryAsync` retains the server's versioned plan as a
-`JsonObject`. Users, roles, procedures, and settings are administered through SQL;
-the current server has no separate REST resources for those operations.
-
-Set `CassieAdminQueryRequest.OperationId` to a UUID when an operation needs
-explicit server cancellation, then call `CancelQueryAsync` from the same REST
-session. A cancellation token cancels the local HTTP operation; it does not
-guarantee that server work or a write has been rolled back. Mutating requests
-are not retried automatically. `CassieRestException` exposes the HTTP status and
-server error message.
-
-The current server requires an administrator for collection, document, vector,
-and administrative mutation routes. Database-authorized nonadministrators can
-use the SQL inspection and read-only query routes. The client with a borrowed
-`HttpClient` preserves that client's lifetime and settings; the caller must
-provide a cookie-capable handler and isolate cookies for the authenticated
-session. REST serialization uses generated JSON metadata for trimming and
-Native AOT compatibility.
-
-- `src/` — provider implementation
-- `test/` — provider and integration tests
-- [`bench/`](bench/README.md) — dependency-free reproducible provider benchmark runner
-- `docs/` — design and development notes
-
-Build with `dotnet build Cassie.slnx` and run the unit tests with `dotnet test Cassie.slnx`. Restoring the Cntryl convention packages requires access to GitHub Packages; configure credentials locally, never in this repository.
-
-The REST probe methods use the unversioned `/livez`, `/readyz`, `/startupz`,
-and `/targetz` endpoints. `/metrics` also remains unversioned.
+[GitHub's NuGet guide]: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-nuget-registry
+[NuGet's credential guidance]: https://learn.microsoft.com/nuget/consume-packages/consuming-packages-authenticated-feeds
+[ADO.NET overview]: https://github.com/cntryl/cassie-dotnet/blob/main/docs/ado-net.md
+[REST guide]: https://github.com/cntryl/cassie-dotnet/blob/main/docs/rest-client.md
+[Dependency injection details]: https://github.com/cntryl/cassie-dotnet/blob/main/src/Cassie.DependencyInjection/README.md
+[Live test setup]: https://github.com/cntryl/cassie-dotnet/blob/main/test/Cassie.Tests/Live/README.md

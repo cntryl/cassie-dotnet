@@ -133,7 +133,8 @@ the fix; all seven timeout cases and ten data-source lifecycle cases pass.
 The follow-up core run against the same immutable server passed 621 cases,
 including the isolated restore, with zero skips. The six REST login failures
 remain the explicitly accepted pending `/v1/...` server migration. Both local
-packages are now version `0.1.0`. An isolated package-only consumer restored
+packages were first published as `0.1.0`; the starter README and source mapping
+are updated in the `0.1.1` patch. An isolated package-only consumer restored
 `Cassie.DependencyInjection.0.1.0.nupkg` and its core dependency through a fresh
 NuGet cache, compiled as macOS ARM64 Native AOT with warnings treated as errors,
 and passed singleton/scoped ownership, REST client separation, and live pgwire
