@@ -1,0 +1,14 @@
+#!/bin/sh
+# Rejects commit messages that carry a Co-authored-by trailer.
+# Enable once per clone with: git config core.hooksPath .githooks
+
+message_file="$1"
+
+# Comment lines are stripped by git, so they must not trigger a rejection.
+if grep -v '^[[:space:]]*#' "$message_file" | grep -qiE '^[[:space:]]*co-authored-by[[:space:]]*:'; then
+    echo "error: commit message contains a Co-authored-by trailer, which this repository does not allow." >&2
+    echo "Remove the Co-authored-by line(s) and commit again." >&2
+    exit 1
+fi
+
+exit 0

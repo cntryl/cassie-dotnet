@@ -1,0 +1,10 @@
+<Project>
+  <Import Project="../Directory.Build.props" />
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Cntryl.Conventions.Testing.Analyzers" Version="1.0.0" PrivateAssets="all" />
+    <PackageReference Include="Cntryl.Conventions.Testing.CodeFixes" Version="1.0.0" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

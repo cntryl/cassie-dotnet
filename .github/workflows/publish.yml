@@ -1,0 +1,62 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: cassie-nuget-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Pack and publish package
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PACKAGE_SOURCE: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
+
+    steps:
+      - name: Require main
+        if: github.ref != 'refs/heads/main'
+        run: echo "Publish must run from refs/heads/main" && exit 1
+
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Read package version
+        id: version
+        run: echo "package-version=$(dotnet msbuild src/Cassie/Cassie.csproj -getProperty:PackageVersion -nologo)" >> "$GITHUB_OUTPUT"
+
+      - name: Pack package
+        run: >-
+          dotnet pack src/Cassie/Cassie.csproj
+          --configuration Release
+          --output artifacts/packages
+          -p:PackageVersion="${{ steps.version.outputs.package-version }}"
+
+      - name: Publish package to GitHub Packages
+        run: >-
+          dotnet nuget push "artifacts/packages/*.nupkg"
+          --api-key "$NUGET_AUTH_TOKEN"
+          --source "$PACKAGE_SOURCE"
+          --skip-duplicate
+
+      - name: Tag release
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.package-version }}
+        run: |
+          git tag "v${PACKAGE_VERSION}"
+          git push origin "refs/tags/v${PACKAGE_VERSION}"

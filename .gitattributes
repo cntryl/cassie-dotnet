@@ -1,0 +1,36 @@
+# Normalize all text to LF in the repository and the working tree.
+* text=auto eol=lf
+
+# Source and project files
+*.cs text diff=csharp
+*.csproj text
+*.props text
+*.targets text
+*.slnx text
+*.sln text eol=crlf
+*.editorconfig text
+*.config text
+*.json text
+*.jsonl text
+*.md text diff=markdown
+*.yml text
+*.yaml text
+
+# Scripts and hooks must keep LF to run on any platform
+*.sh text eol=lf
+.githooks/* text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pem binary
+*.pfx binary
+*.snk binary
+*.dll binary
+*.nupkg binary
+
+# Keep benchmark records and generated text out of language statistics
+bench/results/** linguist-generated=true

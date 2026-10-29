@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/bench/">
+    <Project Path="bench/Cassie.Benchmarks/Cassie.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Cassie/Cassie.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/Cassie.LiveQualification/Cassie.LiveQualification.csproj" />
+    <Project Path="test/Cassie.Tests/Cassie.Tests.csproj" />
+  </Folder>
+</Solution>
