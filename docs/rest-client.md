@@ -1,6 +1,6 @@
 # REST client
 
-`Cntryl.Cassie.Rest` adds a REST client alongside the ADO.NET provider. It targets the agreed `/v1/...` server contract. The pinned test server still exposes `/api/v1/...`, so the new prefix currently has six expected live-test failures. The user authorized delivery with those failures retained until the server migration lands; that authorization covers this endpoint mismatch only.
+`Cntryl.Cassie.Rest` adds a REST client alongside the ADO.NET provider. It targets the agreed `/v1/...` server contract. The earlier test server exposed `/api/v1/...`, causing six live-test failures until the server migration lands.
 
 ## Connection and authentication
 
@@ -67,6 +67,5 @@ All six live REST workflows previously passed against `/api/v1/...` on Cassie `1
 
 Final local validation exercised **610 tests: 604 passed, six failed, zero skipped**. All 527 non-live cases and all 77 existing pgwire live cases passed. XML readback confirmed every failure belongs to the new REST live class and occurs during login against the pre-migration server; no unrelated failure was accepted. The fresh local package restored into an isolated consumer and published as macOS ARM64 Native AOT with warnings treated as errors and no warnings. Its new-prefix REST runtime integration remains unqualified while the server routes are pending. Hosted CI, deployment, publication, and production readiness remain separate claims. See [live-test setup](../test/Cassie.Tests/Live/README.md) for required endpoints and embedding configuration.
 
-CI checks out Cassie `main` during the coordinated route migration and records
-the resolved commit in its cache key and uploaded revision artifact. A rerun can
-adopt the new server routes without weakening or skipping the live contracts.
+CI runs the published `ghcr.io/cntryl/cassie:main` image. Updating that image can
+bring in new server routes without weakening or skipping the live contracts.

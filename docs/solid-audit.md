@@ -107,8 +107,8 @@ The final managed XML results are under `/var/folders/dg/rh2n13nx6cqgwpb8lkkxsgy
 The SOLID remediation CI built that immutable Cassie revision with the pinned Rust toolchain and separate ordinary/restore endpoints. Exact-head CI and CodeQL passed before [PR #1](https://github.com/cntryl/cassie-dotnet/pull/1) merged as `3f2ca8b09c6c444faa5807919bbe495c1a65dc32`. These results do not establish deployment, production performance, publication, or release qualification. Historical results in `design.md` apply to the earlier source that produced them.
 
 The subsequent REST client change targets `/v1/...` and the unversioned
-`/livez`, `/readyz`, `/startupz`, and `/targetz` probes. Its CI follows Cassie
-`main` and records the resolved server SHA. See [REST client](rest-client.md) for
+`/livez`, `/readyz`, `/startupz`, and `/targetz` probes. CI runs the published
+Cassie `main` container. See [REST client](rest-client.md) for
 the explicitly authorized temporary live-contract failures during that migration.
 
 ## Dependency injection follow-up
