@@ -1,10 +1,11 @@
 using Cntryl.Cassie.Connection;
 using Cntryl.Cassie.Rest;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using System.Data.Common;
 
-namespace Microsoft.Extensions.DependencyInjection
+namespace Cntryl.Cassie.DependencyInjection
 {
     /// <summary>Registers Cassie data sources and HTTP clients with Microsoft dependency injection.</summary>
     public static class CassieServiceCollectionExtensions

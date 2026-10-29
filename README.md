@@ -4,7 +4,7 @@ Two ways to use Cassie from .NET, plus optional dependency injection:
 
 - **ADO.NET** for SQL, transactions, and streaming `COPY` over pgwire.
 - **REST** for vector collections, search, and administration.
-- **Dependency injection** through the separate `Cassie.DependencyInjection` package.
+- **Dependency injection** through the separate `Cntryl.Cassie.DependencyInjection` package.
 
 Requires .NET 10. Packages are published to GitHub Packages.
 
@@ -18,13 +18,13 @@ set `NuGetPackageSourceCredentials_cntryl` to
 
 ```sh
 dotnet nuget add source https://nuget.pkg.github.com/cntryl/index.json --name cntryl
-dotnet add package Cassie --version 0.1.1
+dotnet add package Cntryl.Cassie --version 0.1.0
 ```
 
 For dependency injection, also install:
 
 ```sh
-dotnet add package Cassie.DependencyInjection --version 0.1.1
+dotnet add package Cntryl.Cassie.DependencyInjection --version 0.1.0
 ```
 
 ## Run a query
@@ -70,11 +70,12 @@ configured embedding provider to embed the search text. The REST client uses
 
 ## Dependency injection
 
-`Cassie.DependencyInjection` registers the data source, scoped connections, and
+`Cntryl.Cassie.DependencyInjection` registers the data source, scoped connections, and
 REST clients. In ASP.NET Core startup, call:
 
 ```csharp
 using System;
+using Cntryl.Cassie.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 builder.Services.AddCassieDataSource(connectionString);
