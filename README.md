@@ -18,13 +18,13 @@ set `NuGetPackageSourceCredentials_cntryl` to
 
 ```sh
 dotnet nuget add source https://nuget.pkg.github.com/cntryl/index.json --name cntryl
-dotnet add package Cntryl.Cassie --version 0.1.2
+dotnet add package Cntryl.Cassie --version 0.1.0
 ```
 
 For dependency injection, also install:
 
 ```sh
-dotnet add package Cntryl.Cassie.DependencyInjection --version 0.1.2
+dotnet add package Cntryl.Cassie.DependencyInjection --version 0.1.0
 ```
 
 ## Run a query
