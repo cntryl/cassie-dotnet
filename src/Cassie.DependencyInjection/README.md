@@ -1,10 +1,11 @@
-# Cassie.DependencyInjection
+# Cntryl.Cassie.DependencyInjection
 
 Microsoft dependency injection registrations for the Cassie ADO.NET provider and
 REST clients. Reference this package when your application uses
-`IServiceCollection`; the `Cassie` package remains usable independently.
+`IServiceCollection`; the `Cntryl.Cassie` package remains usable independently.
 
 ```csharp
+using Cntryl.Cassie.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 services.AddCassieDataSource(connectionString);

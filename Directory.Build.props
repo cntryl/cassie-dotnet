@@ -1,8 +1,10 @@
 <Project>
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <PackageVersion>0.1.1</PackageVersion>
+    <PackageVersion>0.1.2</PackageVersion>
     <RootNamespace>Cntryl.$(MSBuildProjectName)</RootNamespace>
+    <AssemblyName>Cntryl.$(MSBuildProjectName)</AssemblyName>
+    <PackageId>Cntryl.$(MSBuildProjectName)</PackageId>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AnalysisLevel>latest</AnalysisLevel>

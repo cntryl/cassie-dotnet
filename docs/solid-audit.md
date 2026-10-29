@@ -113,8 +113,8 @@ the explicitly authorized temporary live-contract failures during that migration
 
 ## Dependency injection follow-up
 
-The optional `Cassie.DependencyInjection` package adds service registrations while
-the core `Cassie` package stays independent of dependency injection. Its
+The optional `Cntryl.Cassie.DependencyInjection` package adds service registrations while
+the core `Cntryl.Cassie` package stays independent of dependency injection. Its
 `CassieDataSource` derives from the existing ADO.NET `DbDataSource` contract,
 creates caller-owned connections, borrows logging, and leaves shared pools intact
 when disposed. Framework ADO.NET types provide the shared provider contracts;
