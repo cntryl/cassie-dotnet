@@ -1,9 +1,10 @@
+using Cntryl.Cassie.Commands;
+using Cntryl.Cassie.Connection;
 using System.Diagnostics;
 using System.Data.Common;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.Json;
-using Cntryl.Cassie;
 
 string connectionString = Environment.GetEnvironmentVariable("CASSIE_DOTNET_BENCHMARK_CONNECTION_STRING")
     ?? throw new InvalidOperationException("Set CASSIE_DOTNET_BENCHMARK_CONNECTION_STRING to a Cassie connection string.");

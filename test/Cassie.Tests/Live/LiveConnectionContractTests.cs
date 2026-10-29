@@ -1,10 +1,25 @@
+using Cntryl.Cassie.Commands;
+using Cntryl.Cassie.Connection;
 using System.Security.Authentication;
 using Xunit;
 
 namespace Cntryl.Cassie.Tests.Live
 {
-    public sealed class LiveConnectionContractTests(LiveServerFixture server) : LiveTestBase(server)
+    [Collection(LiveEndpoint.CollectionName)]
+    public sealed class LiveConnectionContractTests : IAsyncLifetime
     {
+        private readonly LiveSession _live = new();
+
+        public ValueTask InitializeAsync()
+        {
+            return _live.InitializeAsync();
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            return _live.DisposeAsync();
+        }
+
         [Fact]
         public async Task ShouldApplyApplicationNameGivenStartupOptionsWhenConnectionOpens()
         {
@@ -13,7 +28,9 @@ namespace Cntryl.Cassie.Tests.Live
             Assert.SkipWhen(expected is null, "Set CASSIE_DOTNET_TEST_STARTUP_APPLICATION_NAME and include a matching Options=-c application_name=... in the connection string.");
 
             // Act
-            object? actual = await ExecuteScalarAsync("SELECT current_setting('application_name')");
+            using CassieCommand show = _live.CreateCommand();
+            show.CommandText = "SELECT current_setting('application_name')";
+            object? actual = await show.ExecuteScalarAsync(TestContext.Current.CancellationToken);
 
             // Assert
             Assert.Equal(expected, actual);

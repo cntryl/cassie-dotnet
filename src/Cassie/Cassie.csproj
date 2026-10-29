@@ -5,6 +5,7 @@
     <RepositoryUrl>https://github.com/cntryl/cassie-dotnet</RepositoryUrl>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Cassie.Tests" />
     <None Include="../../README.md" Pack="true" PackagePath="/" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.13" />
   </ItemGroup>

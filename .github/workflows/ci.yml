@@ -15,35 +15,45 @@ concurrency:
 
 env:
   NuGetPackageSourceCredentials_cntryl: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
+  CASSIE_TEST_REVISION: 19edf3a36fc9d2a65187d137370b6f164fcdfb2e
+  CASSIE_RUST_TOOLCHAIN: 1.99.0
 
 jobs:
   ci:
     name: Build and test
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    services:
-      cassie:
-        image: ghcr.io/cntryl/cassie:latest
-        credentials:
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-        ports:
-          - 5432:5432
-          - 8080:8080
-        env:
-          CASSIE_PGWIRE_LISTEN: 0.0.0.0:5432
-          CASSIE_REST_LISTEN: 0.0.0.0:8080
-          CASSIE_ROOT_PASSWORD: cassie-ci
-          CASSIE_STORAGE_MODE: memory
-          CASSIE_ALLOW_INSECURE_NON_LOOPBACK_LISTEN: "1"
+    timeout-minutes: 25
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+
+      - name: Check out pinned Cassie source
+        uses: actions/checkout@v7
+        with:
+          repository: cntryl/cassie
+          ref: ${{ env.CASSIE_TEST_REVISION }}
+          path: artifacts/ci/cassie
+          persist-credentials: false
 
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
+
+      - name: Set up Cassie Rust toolchain
+        run: rustup toolchain install "$CASSIE_RUST_TOOLCHAIN" --profile minimal
+
+      - name: Cache pinned Cassie build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            artifacts/ci/cassie/target
+          key: ${{ runner.os }}-cassie-${{ env.CASSIE_TEST_REVISION }}-rust-${{ env.CASSIE_RUST_TOOLCHAIN }}-${{ hashFiles('artifacts/ci/cassie/Cargo.lock') }}
+
+      - name: Build pinned Cassie
+        run: rustup run "$CASSIE_RUST_TOOLCHAIN" cargo build --locked --manifest-path artifacts/ci/cassie/Cargo.toml --bin cassie
 
       - name: Restore
         run: dotnet restore Cassie.slnx
@@ -54,15 +64,79 @@ jobs:
       - name: Build
         run: dotnet build Cassie.slnx --configuration Release --no-restore
 
+      - name: Start disposable Cassie endpoints
+        env:
+          CASSIE_BINARY: ${{ github.workspace }}/artifacts/ci/cassie/target/debug/cassie
+        run: |
+          for instance in ordinary restore; do
+            instance_dir="$RUNNER_TEMP/cassie-$instance"
+            mkdir -p "$instance_dir"
+            if [[ "$instance" == ordinary ]]; then
+              pg_port=5432
+              rest_port=8080
+            else
+              pg_port=5433
+              rest_port=8081
+            fi
+            (
+              cd "$instance_dir"
+              CASSIE_PGWIRE_LISTEN="127.0.0.1:$pg_port" \
+              CASSIE_REST_LISTEN="127.0.0.1:$rest_port" \
+              CASSIE_STORAGE_MODE=memory \
+              CASSIE_ROOT_PASSWORD=cassie-ci \
+                "$CASSIE_BINARY" > server.log 2>&1 &
+              echo "$!" > server.pid
+            )
+          done
+
       - name: Wait for Cassie
         run: >-
           curl --fail --silent --show-error --retry 30 --retry-delay 1
           --retry-connrefused --max-time 2 --output /dev/null
           http://127.0.0.1:8080/healthz
 
+      - name: Wait for database image Cassie
+        run: >-
+          curl --fail --silent --show-error --retry 30 --retry-delay 1
+          --retry-connrefused --max-time 2 --output /dev/null
+          http://127.0.0.1:8081/healthz
+
       - name: Test
         env:
           CASSIE_DOTNET_REQUIRE_LIVE: "true"
           CASSIE_DOTNET_TEST_CONNECTION_STRING: >-
-            Host=127.0.0.1;Port=5432;Database=postgres;Username=root;Password=cassie-ci;SSL Mode=Disable;Timeout=15
-        run: dotnet test Cassie.slnx --configuration Release --no-build --no-restore
+            Host=127.0.0.1;Port=5432;Database=postgres;Username=root;Password=cassie-ci;SSL Mode=Disable;Timeout=15;Options=-c application_name=cassie_ci
+          CASSIE_DOTNET_TEST_STARTUP_APPLICATION_NAME: cassie_ci
+          CASSIE_DOTNET_TEST_ARRAYS: "true"
+          CASSIE_DOTNET_TEST_ARRAY_SHAPES: "true"
+          CASSIE_DOTNET_TEST_NAME_TYPE: "true"
+          CASSIE_DOTNET_TEST_JSONB_TYPE: "true"
+          CASSIE_DOTNET_TEST_JSONPATH_TYPE: "true"
+          CASSIE_DOTNET_TEST_RECORD_TYPES: "true"
+          CASSIE_DOTNET_TEST_PARAMETER_STATUS_UPDATES: "true"
+        run: dotnet test --solution Cassie.slnx --configuration Release --no-build --no-restore --filter-not-trait Isolation=Server
+
+      - name: Test database image
+        env:
+          CASSIE_DOTNET_REQUIRE_LIVE: "true"
+          CASSIE_DOTNET_TEST_CONNECTION_STRING: >-
+            Host=127.0.0.1;Port=5433;Database=postgres;Username=root;Password=cassie-ci;SSL Mode=Disable;Timeout=15
+        run: dotnet test --solution Cassie.slnx --configuration Release --no-build --no-restore --filter-trait Isolation=Server --minimum-expected-tests 1
+
+      - name: Stop disposable Cassie endpoints
+        if: always()
+        run: |
+          for instance in ordinary restore; do
+            pid_file="$RUNNER_TEMP/cassie-$instance/server.pid"
+            if [[ -f "$pid_file" ]]; then
+              kill "$(cat "$pid_file")" || true
+            fi
+          done
+
+      - name: Upload Cassie logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cassie-server-logs
+          path: ${{ runner.temp }}/cassie-*/server.log
+          if-no-files-found: ignore

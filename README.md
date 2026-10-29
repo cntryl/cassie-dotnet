@@ -1,5 +1,7 @@
 # Cassie .NET
 
+Public APIs are organized under `Cntryl.Cassie.Connection`, `Cntryl.Cassie.Commands`, `Cntryl.Cassie.Data`, `Cntryl.Cassie.Types`, and `Cntryl.Cassie.Diagnostics`. `CassieProviderFactory` and `CassieException` remain in `Cntryl.Cassie`. This namespace migration changes CLR type identities: existing consumers must update their imports and rebuild. See the [SOLID audit](docs/solid-audit.md) for the responsibility boundaries and remaining findings.
+
 TLS is required by default and validates the server certificate and host name using platform trust. Set `SSL Root Certificate=/path/to/ca-bundle.pem` to trust a PEM CA bundle for an isolated Cassie deployment; the provider still validates the certificate chain and host name. `SSL Mode=Prefer` permits a cleartext fallback when the server declines TLS, and `SSL Mode=Disable` opts out of TLS.
 
 Bound parameters are input-only. Cassie's current `CALL` contract does not expose output parameters or the body statement's result rows.

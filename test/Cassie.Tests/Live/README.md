@@ -2,9 +2,17 @@
 
 The `Live*ContractTests` classes exercise the provider against a real Cassie
 pgwire endpoint. They share one xUnit collection, so they run one at a time, and
-each test owns a dedicated non-pooled connection plus uniquely named tables that
-are dropped on teardown. Use a disposable server: the database image test
-restores into a new database that the current server cannot drop.
+each test owns a dedicated non-pooled connection. Schema object names are fixed
+SQL constants and reused by this serialized collection; run only one test process
+against a disposable server. Teardown drops only objects that the test created,
+through a separate connection to its original database, and reports cleanup
+failures.
+
+Use disposable servers. Run the database image test on a separate fresh server:
+it restores a database that the current server cannot drop, and later DDL on the
+same server can fail with `transactional DDL cannot access multiple databases`.
+That test has the `Isolation=Server` trait. It drops its source table after taking
+the backup and leaves the restored database to be removed with the server.
 
 | Variable | Effect |
 | --- | --- |
@@ -22,7 +30,14 @@ restores into a new database that the current server cannot drop.
 
 ```sh
 CASSIE_DOTNET_TEST_CONNECTION_STRING="Host=127.0.0.1;Port=5432;Database=postgres;Username=root;Password=...;SSL Mode=Disable" \
-  dotnet test --project test/Cassie.Tests/Cassie.Tests.csproj
+  dotnet test --project test/Cassie.Tests/Cassie.Tests.csproj --filter-namespace Cntryl.Cassie.Tests.Live --filter-not-trait Isolation=Server
+```
+
+Start another fresh disposable server, set the connection string to its endpoint,
+and run only the database image test:
+
+```sh
+dotnet test --project test/Cassie.Tests/Cassie.Tests.csproj --filter-trait Isolation=Server --minimum-expected-tests 1
 ```
 
 For TLS, use `SSL Mode=Require;SSL Root Certificate=/path/to/ca.pem` with a host

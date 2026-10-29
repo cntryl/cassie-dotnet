@@ -1,3 +1,5 @@
+using Cntryl.Cassie.Commands;
+using Cntryl.Cassie.Types;
 using System.Data;
 using System.Net;
 using System.Net.NetworkInformation;
@@ -5,8 +7,21 @@ using Xunit;
 
 namespace Cntryl.Cassie.Tests.Live
 {
-    public sealed class LiveScalarCodecContractTests(LiveServerFixture server) : LiveTestBase(server)
+    [Collection(LiveEndpoint.CollectionName)]
+    public sealed class LiveScalarCodecContractTests : IAsyncLifetime
     {
+        private readonly LiveSession _live = new();
+
+        public ValueTask InitializeAsync()
+        {
+            return _live.InitializeAsync();
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            return _live.DisposeAsync();
+        }
+
         private static readonly CassieTimeWithTimeZone TimeWithTimeZone = new(new TimeOnly(3, 4, 5).Add(TimeSpan.FromTicks(60_070)), 7200);
 
         public static TheoryData<string> TextParameterCases =>
@@ -38,7 +53,8 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             (object value, object expected) = TextParameterCase(caseName);
-            using CassieCommand command = CreateCommand("SELECT @value");
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @value";
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "value", Value = value, ParameterFormat = CassieParameterFormat.Text });
 
             // Act
@@ -53,11 +69,13 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             DateTime expected = new DateTime(2000, 1, 2, 1, 2, 3, 456, DateTimeKind.Unspecified).AddTicks(7_890);
-            using CassieCommand command = CreateCommand("SELECT @value::timestamp AS value", binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @value::timestamp AS value";
+            command.BinaryResults = true;
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "value", Value = DateTime.SpecifyKind(expected, DateTimeKind.Local), ParameterFormat = CassieParameterFormat.Binary });
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             Assert.Equal(expected, reader.GetValue(0));
@@ -68,11 +86,12 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             DateTime expected = new DateTime(2000, 1, 2, 1, 2, 3, 456, DateTimeKind.Unspecified).AddTicks(7_890);
-            using CassieCommand command = CreateCommand("SELECT @value::timestamp AS value");
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @value::timestamp AS value";
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "value", Value = DateTime.SpecifyKind(expected, DateTimeKind.Utc), ParameterFormat = CassieParameterFormat.Text });
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             Assert.Equal(expected, reader.GetValue(0));
@@ -87,12 +106,12 @@ namespace Cntryl.Cassie.Tests.Live
             DateTime expectedDate = new(2000, 1, 2, 0, 0, 0, DateTimeKind.Unspecified);
             DateTime expectedTimestamp = new(2000, 1, 2, 1, 2, 3, 4, DateTimeKind.Unspecified);
             DateTime expectedTimestampTz = new(2000, 1, 2, 1, 2, 3, 4, DateTimeKind.Utc);
-            using CassieCommand command = CreateCommand(
-                "SELECT DATE '2000-01-02' AS date_value, TIMESTAMP '2000-01-02 01:02:03.004' AS timestamp_value, TIMESTAMPTZ '2000-01-02 01:02:03.004+00:00' AS timestamptz_value",
-                binaryResults);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT DATE '2000-01-02' AS date_value, TIMESTAMP '2000-01-02 01:02:03.004' AS timestamp_value, TIMESTAMPTZ '2000-01-02 01:02:03.004+00:00' AS timestamptz_value";
+            command.BinaryResults = binaryResults;
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             Assert.Equal(expectedDate, reader.GetDateTime(0));
@@ -121,9 +140,9 @@ namespace Cntryl.Cassie.Tests.Live
                 CassieTemporalValue.FromTimestampWithTimeZoneMicroseconds(long.MaxValue)
             ];
             int[] typeOids = [1082, 1083, 1266, 1114, 1184];
-            using CassieCommand command = CreateCommand(
-                "SELECT @value0::date AS value0, @value1::time AS value1, @value2::timetz AS value2, @value3::timestamp AS value3, @value4::timestamptz AS value4",
-                binaryResults);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @value0::date AS value0, @value1::time AS value1, @value2::timetz AS value2, @value3::timestamp AS value3, @value4::timestamptz AS value4";
+            command.BinaryResults = binaryResults;
             for (int index = 0; index < expectedValues.Length; index++)
             {
                 _ = command.Parameters.Add(new CassieParameter
@@ -136,7 +155,7 @@ namespace Cntryl.Cassie.Tests.Live
             }
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             for (int index = 0; index < expectedValues.Length; index++)
@@ -173,11 +192,14 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldDecodeTextTemporalsGivenSqlDmyDateStyleWhenSessionSettingChanges()
         {
             // Arrange
-            _ = await ExecuteNonQueryAsync("SET DateStyle = 'SQL, DMY'");
-            using CassieCommand query = CreateCommand("SELECT DATE '2000-01-02' AS date_value, TIMESTAMP '2000-01-02 03:04:05.000006' AS timestamp_value");
+            using CassieCommand setDateStyle = _live.CreateCommand();
+            setDateStyle.CommandText = "SET DateStyle = 'SQL, DMY'";
+            _ = await setDateStyle.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+            using CassieCommand query = _live.CreateCommand();
+            query.CommandText = "SELECT DATE '2000-01-02' AS date_value, TIMESTAMP '2000-01-02 03:04:05.000006' AS timestamp_value";
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(query);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(query);
 
             // Assert
             Assert.Equal(new DateOnly(2000, 1, 2), reader.GetValue(0));
@@ -189,20 +211,21 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             LiveFeature.Require("PARAMETER_STATUS_UPDATES");
-            string view = UniqueName("cassie_live_datestyle_view");
-            RegisterCleanup("DROP VIEW IF EXISTS " + view);
-            _ = await ExecuteNonQueryAsync($"CREATE VIEW {view} AS SELECT set_config('datestyle', 'SQL, DMY', false) AS changed");
-            using CassieCommand queryView = CreateCommand($"SELECT changed, DATE '2000-01-02' AS value FROM {view}");
+            await _live.CreateDateStyleViewAsync();
+            using CassieCommand queryView = _live.CreateCommand();
+            queryView.CommandText = $"SELECT changed, DATE '2000-01-02' AS value FROM {LiveSession.DateStyleView}";
 
             // Act
             object? duringView;
-            await using (System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(queryView))
+            await using (System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(queryView))
             {
                 duringView = reader.GetValue(1);
                 Assert.Equal("SQL, DMY", reader.GetValue(0));
             }
 
-            object? afterView = await ExecuteScalarAsync("SELECT DATE '2000-01-02' AS value");
+            using CassieCommand queryAfterView = _live.CreateCommand();
+            queryAfterView.CommandText = "SELECT DATE '2000-01-02' AS value";
+            object? afterView = await queryAfterView.ExecuteScalarAsync(TestContext.Current.CancellationToken);
 
             // Assert
             Assert.Equal(new DateOnly(2000, 1, 2), duringView);
@@ -213,10 +236,11 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldExposeUnknownMetadataGivenUntypedNullWhenQueryReturnsNull()
         {
             // Arrange
-            using CassieCommand command = CreateCommand("SELECT NULL AS value");
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT NULL AS value";
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             Assert.Equal("unknown", reader.GetDataTypeName(0));
@@ -228,12 +252,12 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldReadTypedValuesGivenBinaryResultsWhenScalarsAreSelected()
         {
             // Arrange
-            using CassieCommand command = CreateCommand(
-                "SELECT 42::int4 AS i, true AS b, '550e8400-e29b-41d4-a716-446655440001'::uuid AS u, DATE '2000-01-02' AS d",
-                binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT 42::int4 AS i, true AS b, '550e8400-e29b-41d4-a716-446655440001'::uuid AS u, DATE '2000-01-02' AS d";
+            command.BinaryResults = true;
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             Assert.Equal(42, reader.GetInt32(0));
@@ -246,7 +270,9 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldRoundTripRegclassGivenBinaryOidParameterWhenResultIsBinary()
         {
             // Arrange
-            using CassieCommand command = CreateCommand("SELECT @relation::regclass AS relation", binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @relation::regclass AS relation";
+            command.BinaryResults = true;
             _ = command.Parameters.Add(new CassieParameter
             {
                 ParameterName = "relation",
@@ -256,7 +282,7 @@ namespace Cntryl.Cassie.Tests.Live
             });
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             Assert.Equal("regclass", reader.GetDataTypeName(0));
@@ -268,11 +294,13 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldRoundTripVectorGivenBinaryParameterWhenResultIsBinary()
         {
             // Arrange
-            using CassieCommand command = CreateCommand("SELECT @vector AS vector", binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @vector AS vector";
+            command.BinaryResults = true;
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "vector", Value = new CassieVector(1, 2, 3) });
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             CassieVector vector = Assert.IsType<CassieVector>(reader.GetValue(0));
@@ -286,12 +314,12 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldDecodeNetworkTypesGivenBinaryResultsWhenLiteralsAreSelected()
         {
             // Arrange
-            using CassieCommand command = CreateCommand(
-                "SELECT '192.0.2.9/24'::inet AS inet, '192.0.2.0/24'::cidr AS cidr, '01:23:45:67:89:ab'::macaddr AS mac, B'10101'::varbit AS bits, '1/A'::pg_lsn AS lsn",
-                binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT '192.0.2.9/24'::inet AS inet, '192.0.2.0/24'::cidr AS cidr, '01:23:45:67:89:ab'::macaddr AS mac, B'10101'::varbit AS bits, '1/A'::pg_lsn AS lsn";
+            command.BinaryResults = true;
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             CassieNetworkAddress inet = Assert.IsType<CassieNetworkAddress>(reader.GetValue(0));
@@ -312,9 +340,9 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldRoundTripExtendedTypesGivenBinaryParametersWhenResultsAreBinary()
         {
             // Arrange
-            using CassieCommand command = CreateCommand(
-                "SELECT @inet::inet AS inet, @cidr::cidr AS cidr, @mac::macaddr AS mac, @bits::varbit AS bits, @lsn::pg_lsn AS lsn, @timetz::timetz AS timetz, @interval::interval AS interval",
-                binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @inet::inet AS inet, @cidr::cidr AS cidr, @mac::macaddr AS mac, @bits::varbit AS bits, @lsn::pg_lsn AS lsn, @timetz::timetz AS timetz, @interval::interval AS interval";
+            command.BinaryResults = true;
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "inet", Value = new CassieNetworkAddress(IPAddress.Parse("192.0.2.9"), 24, false) });
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "cidr", Value = new CassieNetworkAddress(IPAddress.Parse("192.0.2.0"), 24, true) });
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "mac", Value = PhysicalAddress.Parse("0123456789AB") });
@@ -324,7 +352,7 @@ namespace Cntryl.Cassie.Tests.Live
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "interval", Value = new CassieInterval(14, -2, 1_500_000) });
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             Assert.Equal(new CassieNetworkAddress(IPAddress.Parse("192.0.2.9"), 24, false), reader.GetValue(0));
@@ -340,11 +368,12 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldPreserveExactValueGivenNumericParameterWhenPrecisionExceedsDouble()
         {
             // Arrange
-            using CassieCommand command = CreateCommand("SELECT @value::numeric AS value");
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @value::numeric AS value";
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "value", Value = new CassieNumeric("9007199254740993.1255") });
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             Assert.Equal("9007199254740993.1255", Assert.IsType<CassieNumeric>(reader.GetValue(0)).Value);
@@ -354,10 +383,12 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldPreserveExactValueGivenBinaryNumericResultWhenReadAsDecimal()
         {
             // Arrange
-            using CassieCommand command = CreateCommand("SELECT 4503599627370496.5628::numeric AS value", binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT 4503599627370496.5628::numeric AS value";
+            command.BinaryResults = true;
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             Assert.Equal("4503599627370496.5628", Assert.IsType<CassieNumeric>(reader.GetValue(0)).Value);
@@ -368,12 +399,14 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldRoundTripMaximumValueGivenUInt64ParameterWhenBoundAsNumeric()
         {
             // Arrange
-            using CassieCommand command = CreateCommand("SELECT @inferred::numeric AS inferred, @typed::numeric AS typed", binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @inferred::numeric AS inferred, @typed::numeric AS typed";
+            command.BinaryResults = true;
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "inferred", Value = ulong.MaxValue });
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "typed", DbType = DbType.UInt64, Value = ulong.MaxValue });
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             Assert.Equal("18446744073709551615", Assert.IsType<CassieNumeric>(reader.GetValue(0)).Value);
@@ -387,12 +420,14 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             TimeSpan expected = new TimeSpan(1, 2, 3).Add(TimeSpan.FromTicks(4_567_890));
-            using CassieCommand command = CreateCommand("SELECT @inferred::time AS inferred, @typed::time AS typed", binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @inferred::time AS inferred, @typed::time AS typed";
+            command.BinaryResults = true;
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "inferred", Value = expected });
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "typed", DbType = DbType.Time, Value = expected });
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             Assert.Equal(expected, Assert.IsType<TimeOnly>(reader.GetValue(0)).ToTimeSpan());
@@ -405,7 +440,9 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldSendCalendarDateGivenDateTimeParameterWhenDbTypeIsDate()
         {
             // Arrange
-            using CassieCommand command = CreateCommand("SELECT @value::date AS value", binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @value::date AS value";
+            command.BinaryResults = true;
             _ = command.Parameters.Add(new CassieParameter
             {
                 ParameterName = "value",
@@ -414,7 +451,7 @@ namespace Cntryl.Cassie.Tests.Live
             });
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             Assert.Equal(new DateOnly(2000, 1, 2), reader.GetValue(0));
@@ -424,11 +461,12 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldReadInt32GivenBinaryParameterWhenTextResultsAreRequested()
         {
             // Arrange
-            using CassieCommand command = CreateCommand("SELECT @value::int4");
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @value::int4";
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "value", Value = 123 });
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             Assert.Equal(123, reader.GetInt32(0));
@@ -438,11 +476,13 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldRoundTripDocumentGivenJsonOidParameterWhenResultIsBinary()
         {
             // Arrange
-            using CassieCommand command = CreateCommand("SELECT @document AS document", binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @document AS document";
+            command.BinaryResults = true;
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "document", Value = /*lang=json,strict*/ "{\"answer\":42}", PostgresTypeOid = 114 });
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             Assert.Equal(/*lang=json,strict*/ "{\"answer\":42}", reader.GetString(0));
@@ -453,11 +493,13 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             LiveFeature.Require("JSONB_TYPE");
-            using CassieCommand command = CreateCommand("SELECT @document::jsonb AS document", binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @document::jsonb AS document";
+            command.BinaryResults = true;
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "document", Value = /*lang=json,strict*/ "{\"answer\":42}", PostgresTypeOid = 3802 });
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             Assert.Equal(/*lang=json,strict*/ "{\"answer\": 42}", reader.GetString(0));
@@ -468,11 +510,13 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             LiveFeature.Require("JSONPATH_TYPE");
-            using CassieCommand command = CreateCommand("SELECT @path::jsonpath AS path", binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @path::jsonpath AS path";
+            command.BinaryResults = true;
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "path", Value = "$.foo", PostgresTypeOid = 4072 });
 
             // Act
-            await using System.Data.Common.DbDataReader reader = await ReadFirstRowAsync(command);
+            await using System.Data.Common.DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             Assert.Equal("$.\"foo\"", reader.GetString(0));
