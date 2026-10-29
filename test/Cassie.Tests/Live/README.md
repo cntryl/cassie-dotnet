@@ -47,7 +47,7 @@ For TLS, use `SSL Mode=Require;SSL Root Certificate=/path/to/ca.pem` with a host
 name that matches the certificate.
 
 REST vector tests require the server to use `CASSIE_EMBEDDINGS_PROVIDER=local` and
-`CASSIE_LOCAL_DIMENSIONS=3`. CI builds Cassie main, records its resolved commit, and starts disposable servers with these
+`CASSIE_LOCAL_DIMENSIONS=3`. CI starts disposable Cassie containers with these
 settings and requires both pgwire and REST coverage. The REST tests use cookie
 login, explicit and generated document vectors, search pagination, administration
 queries, explicit server cancellation, and projection consistency manifests.
