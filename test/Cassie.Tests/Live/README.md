@@ -17,6 +17,9 @@ the backup and leaves the restored database to be removed with the server.
 | Variable | Effect |
 | --- | --- |
 | `CASSIE_DOTNET_TEST_CONNECTION_STRING` | Endpoint to test. Without it every live test is skipped. |
+| `CASSIE_DOTNET_TEST_REST_BASE_ADDRESS` | REST endpoint for the vector and administration contracts. |
+| `CASSIE_DOTNET_TEST_REST_USERNAME` | REST login username. |
+| `CASSIE_DOTNET_TEST_REST_PASSWORD` | REST login password. |
 | `CASSIE_DOTNET_REQUIRE_LIVE=true` | Fail instead of skip when the endpoint is missing. CI sets this. |
 | `CASSIE_DOTNET_TEST_ARRAYS=true` | One-dimensional array parameter and result tests. |
 | `CASSIE_DOTNET_TEST_ARRAY_SHAPES=true` | Multidimensional and lower-bound array tests. |
@@ -42,3 +45,9 @@ dotnet test --project test/Cassie.Tests/Cassie.Tests.csproj --filter-trait Isola
 
 For TLS, use `SSL Mode=Require;SSL Root Certificate=/path/to/ca.pem` with a host
 name that matches the certificate.
+
+REST vector tests require the server to use `CASSIE_EMBEDDINGS_PROVIDER=local` and
+`CASSIE_LOCAL_DIMENSIONS=3`. CI builds Cassie main, records its resolved commit, and starts disposable servers with these
+settings and requires both pgwire and REST coverage. The REST tests use cookie
+login, explicit and generated document vectors, search pagination, administration
+queries, explicit server cancellation, and projection consistency manifests.

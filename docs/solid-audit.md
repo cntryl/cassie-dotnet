@@ -104,4 +104,9 @@ The package-reference Native AOT consumer exercised field metadata, arrays, nume
 
 The final managed XML results are under `/var/folders/dg/rh2n13nx6cqgwpb8lkkxsgy80000gn/T/cassie-dotnet-solid-validation-hvy2qkax/ordinary/results.xml` and the sibling `restore/results.xml`. The earlier 407-case result predates the F1–F4 remediation and is superseded by these fresh checks.
 
-[CI configuration](../.github/workflows/ci.yml) builds that same immutable Cassie revision with the pinned Rust toolchain, starts separate ordinary and restore endpoints, enables opt-in contracts, and requires live coverage. Workflow validation and local execution passed; hosted CI remains pending and must be checked on the exact pull-request head. These results do not establish deployment, production performance, publication, or release qualification. Historical results in `design.md` apply to the earlier source that produced them.
+The SOLID remediation CI built that immutable Cassie revision with the pinned Rust toolchain and separate ordinary/restore endpoints. Exact-head CI and CodeQL passed before [PR #1](https://github.com/cntryl/cassie-dotnet/pull/1) merged as `3f2ca8b09c6c444faa5807919bbe495c1a65dc32`. These results do not establish deployment, production performance, publication, or release qualification. Historical results in `design.md` apply to the earlier source that produced them.
+
+The subsequent REST client change targets `/v1/...` and the unversioned
+`/livez`, `/readyz`, `/startupz`, and `/targetz` probes. Its CI follows Cassie
+`main` and records the resolved server SHA. See [REST client](rest-client.md) for
+the explicitly authorized temporary live-contract failures during that migration.
