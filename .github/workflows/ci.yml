@@ -15,7 +15,7 @@ concurrency:
 
 env:
   NuGetPackageSourceCredentials_cntryl: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
-  CASSIE_TEST_REVISION: 19edf3a36fc9d2a65187d137370b6f164fcdfb2e
+  CASSIE_TEST_REVISION: main
   CASSIE_RUST_TOOLCHAIN: 1.99.0
 
 jobs:
@@ -27,13 +27,20 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Check out pinned Cassie source
+      - name: Check out Cassie contract source
         uses: actions/checkout@v7
         with:
           repository: cntryl/cassie
           ref: ${{ env.CASSIE_TEST_REVISION }}
           path: artifacts/ci/cassie
           persist-credentials: false
+
+      - name: Record Cassie revision
+        id: cassie
+        run: |
+          cassie_revision="$(git -C artifacts/ci/cassie rev-parse HEAD)"
+          printf '%s\n' "$cassie_revision" > "$RUNNER_TEMP/cassie-revision.txt"
+          printf 'sha=%s\n' "$cassie_revision" >> "$GITHUB_OUTPUT"
 
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v6
@@ -43,16 +50,16 @@ jobs:
       - name: Set up Cassie Rust toolchain
         run: rustup toolchain install "$CASSIE_RUST_TOOLCHAIN" --profile minimal
 
-      - name: Cache pinned Cassie build
+      - name: Cache Cassie contract build
         uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             artifacts/ci/cassie/target
-          key: ${{ runner.os }}-cassie-${{ env.CASSIE_TEST_REVISION }}-rust-${{ env.CASSIE_RUST_TOOLCHAIN }}-${{ hashFiles('artifacts/ci/cassie/Cargo.lock') }}
+          key: ${{ runner.os }}-cassie-${{ steps.cassie.outputs.sha }}-rust-${{ env.CASSIE_RUST_TOOLCHAIN }}-${{ hashFiles('artifacts/ci/cassie/Cargo.lock') }}
 
-      - name: Build pinned Cassie
+      - name: Build Cassie contract server
         run: rustup run "$CASSIE_RUST_TOOLCHAIN" cargo build --locked --manifest-path artifacts/ci/cassie/Cargo.toml --bin cassie
 
       - name: Restore
@@ -83,6 +90,8 @@ jobs:
               CASSIE_PGWIRE_LISTEN="127.0.0.1:$pg_port" \
               CASSIE_REST_LISTEN="127.0.0.1:$rest_port" \
               CASSIE_STORAGE_MODE=memory \
+              CASSIE_EMBEDDINGS_PROVIDER=local \
+              CASSIE_LOCAL_DIMENSIONS=3 \
               CASSIE_ROOT_PASSWORD=cassie-ci \
                 "$CASSIE_BINARY" > server.log 2>&1 &
               echo "$!" > server.pid
@@ -93,20 +102,24 @@ jobs:
         run: >-
           curl --fail --silent --show-error --retry 30 --retry-delay 1
           --retry-connrefused --max-time 2 --output /dev/null
-          http://127.0.0.1:8080/healthz
+          http://127.0.0.1:8080/readyz
 
       - name: Wait for database image Cassie
         run: >-
           curl --fail --silent --show-error --retry 30 --retry-delay 1
           --retry-connrefused --max-time 2 --output /dev/null
-          http://127.0.0.1:8081/healthz
+          http://127.0.0.1:8081/readyz
 
       - name: Test
+        id: tests
         env:
           CASSIE_DOTNET_REQUIRE_LIVE: "true"
           CASSIE_DOTNET_TEST_CONNECTION_STRING: >-
             Host=127.0.0.1;Port=5432;Database=postgres;Username=root;Password=cassie-ci;SSL Mode=Disable;Timeout=15;Options=-c application_name=cassie_ci
           CASSIE_DOTNET_TEST_STARTUP_APPLICATION_NAME: cassie_ci
+          CASSIE_DOTNET_TEST_REST_BASE_ADDRESS: http://127.0.0.1:8080/
+          CASSIE_DOTNET_TEST_REST_USERNAME: root
+          CASSIE_DOTNET_TEST_REST_PASSWORD: cassie-ci
           CASSIE_DOTNET_TEST_ARRAYS: "true"
           CASSIE_DOTNET_TEST_ARRAY_SHAPES: "true"
           CASSIE_DOTNET_TEST_NAME_TYPE: "true"
@@ -117,6 +130,7 @@ jobs:
         run: dotnet test --solution Cassie.slnx --configuration Release --no-build --no-restore --filter-not-trait Isolation=Server
 
       - name: Test database image
+        if: ${{ !cancelled() && (steps.tests.outcome == 'success' || steps.tests.outcome == 'failure') }}
         env:
           CASSIE_DOTNET_REQUIRE_LIVE: "true"
           CASSIE_DOTNET_TEST_CONNECTION_STRING: >-
@@ -138,5 +152,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: cassie-server-logs
-          path: ${{ runner.temp }}/cassie-*/server.log
+          path: |
+            ${{ runner.temp }}/cassie-*/server.log
+            ${{ runner.temp }}/cassie-revision.txt
           if-no-files-found: ignore

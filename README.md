@@ -1,6 +1,6 @@
 # Cassie .NET
 
-Public APIs are organized under `Cntryl.Cassie.Connection`, `Cntryl.Cassie.Commands`, `Cntryl.Cassie.Data`, `Cntryl.Cassie.Types`, and `Cntryl.Cassie.Diagnostics`. `CassieProviderFactory` and `CassieException` remain in `Cntryl.Cassie`. This namespace migration changes CLR type identities: existing consumers must update their imports and rebuild. See the [SOLID audit](docs/solid-audit.md) for the responsibility boundaries and remaining findings.
+Public APIs are organized under `Cntryl.Cassie.Connection`, `Cntryl.Cassie.Commands`, `Cntryl.Cassie.Data`, `Cntryl.Cassie.Types`, `Cntryl.Cassie.Diagnostics`, and `Cntryl.Cassie.Rest`. `CassieProviderFactory` and `CassieException` remain in `Cntryl.Cassie`. This namespace migration changes CLR type identities: existing consumers must update their imports and rebuild. See the [SOLID audit](docs/solid-audit.md) for the responsibility boundaries and remaining findings.
 
 TLS is required by default and validates the server certificate and host name using platform trust. Set `SSL Root Certificate=/path/to/ca-bundle.pem` to trust a PEM CA bundle for an isolated Cassie deployment; the provider still validates the certificate chain and host name. `SSL Mode=Prefer` permits a cleartext fallback when the server declines TLS, and `SSL Mode=Disable` opts out of TLS.
 
@@ -48,9 +48,110 @@ The target is Cassie's documented product contract, not full PostgreSQL parity. 
 
 `CassieDiagnostics.ActivitySource` and `CassieDiagnostics.Meter` expose provider activities and operation count/duration metrics for connection open/close, query, and streaming COPY calls. Query activities and durations remain open through row consumption until the response is drained or the reader is closed. Set `CassieConnection.LoggerFactory` to a Microsoft `ILoggerFactory` to receive source-generated connection lifecycle and operation failure logs. Logs include the operation and exception type only; they omit SQL text, parameter values, credentials, and server error details. Telemetry uses operation and outcome tags and follows the same data-minimization boundary.
 
+## REST API
+
+The same package includes `CassieRestClient` for Cassie's collection, document,
+vector-search, and administration APIs. Resources use the `/v1/` prefix, including
+`/v1/collections` and `/v1/admin/query/execute`. Health and metrics endpoints keep
+the unversioned `/livez`, `/readyz`, `/startupz`, `/targetz`, and `/metrics` paths.
+
+The client uses Cassie's HTTP session-cookie
+authentication. Constructing the client with a base URI creates and owns an
+HTTP client and cookie container, so login cookies are carried automatically.
+Dispose the REST client when its session's work is finished; `LogoutAsync`
+explicitly revokes the server session.
+
+This example assumes application-provided `username`, `password`, and
+`cancellationToken` values. Configure the server's embedding provider first; its
+output dimension must match the example's `vector(3)` field.
+
+```csharp
+using Cntryl.Cassie.Rest;
+using System.Text.Json.Nodes;
+
+using CassieRestClient rest = new(new Uri("https://cassie.example/"));
+_ = await rest.LoginAsync(username, password, cancellationToken);
+
+string collection = await rest.CreateCollectionAsync(
+    new CassieCollectionDefinition("documents",
+    [
+        new CassieRestField("content", "text"),
+        new CassieRestField("embedding", "vector(3)")
+    ]), cancellationToken);
+
+_ = await rest.CreateVectorIndexAsync(collection,
+    new CassieVectorIndexDefinition("embedding", new Dictionary<string, string>
+    {
+        ["source_field"] = "content",
+        ["metric"] = "cosine",
+        ["index_type"] = "hnsw"
+    }), cancellationToken);
+
+_ = await rest.AddDocumentAsync(collection, new JsonObject
+{
+    ["content"] = "A guide to configuring Cassie connections."
+}, cancellationToken);
+
+CassieRestQueryResult result = await rest.SearchAsync(collection,
+    new CassieVectorSearchRequest("embedding", "connection setup", Limit: 10),
+    cancellationToken);
+
+foreach (IReadOnlyList<System.Text.Json.JsonElement> row in result.Rows)
+{
+    Console.WriteLine(row[1].GetString()); // content follows the internal row ID
+}
+```
+
+Vector index options use string values, including numeric tuning options. Cassie
+supports `bruteforce`, `hnsw`, and `ivfflat` indexes. The server chooses the
+embedding provider and model, backfills documents when the index is created, and
+embeds new documents from `source_field` when they have no supplied vector.
+`SearchAsync` sends query text to that provider and returns column metadata plus
+positional `JsonElement` rows. Results are ordered by distance and include the
+document fields; the REST search response does not contain a score or distance
+column. `Limit: 0` returns an empty result. Use `GetDocumentAsync` and
+`DeleteDocumentAsync` with the identifier returned by `AddDocumentAsync`.
+
+`rest.Admin` shares the same authenticated HTTP session and exposes database
+listing and creation, database catalog discovery, SQL execution, validation and
+explanation, explicit query cancellation, projection verification-manifest
+exports and comparisons, consistency reports, and server health and metrics.
+SQL operations require an explicit database:
+
+```csharp
+CassieRestQueryResult query = await rest.Admin.ExecuteQueryAsync(
+    new CassieAdminQueryRequest("postgres", "SELECT 1 AS value"),
+    cancellationToken);
+Console.WriteLine(query.Rows[0][0].GetInt32());
+await rest.LogoutAsync(cancellationToken);
+```
+
+Use `ValidateQueryAsync` to describe SQL without executing it; invalid SQL raises
+a REST error. `ExplainQueryAsync` retains the server's versioned plan as a
+`JsonObject`. Users, roles, procedures, and settings are administered through SQL;
+the current server has no separate REST resources for those operations.
+
+Set `CassieAdminQueryRequest.OperationId` to a UUID when an operation needs
+explicit server cancellation, then call `CancelQueryAsync` from the same REST
+session. A cancellation token cancels the local HTTP operation; it does not
+guarantee that server work or a write has been rolled back. Mutating requests
+are not retried automatically. `CassieRestException` exposes the HTTP status and
+server error message.
+
+The current server requires an administrator for collection, document, vector,
+and administrative mutation routes. Database-authorized nonadministrators can
+use the SQL inspection and read-only query routes. The client with a borrowed
+`HttpClient` preserves that client's lifetime and settings; the caller must
+provide a cookie-capable handler and isolate cookies for the authenticated
+session. REST serialization uses generated JSON metadata for trimming and
+Native AOT compatibility.
+
 - `src/` — provider implementation
 - `test/` — provider and integration tests
 - [`bench/`](bench/README.md) — dependency-free reproducible provider benchmark runner
 - `docs/` — design and development notes
 
 Build with `dotnet build Cassie.slnx` and run the unit tests with `dotnet test Cassie.slnx`. Restoring the Cntryl convention packages requires access to GitHub Packages; configure credentials locally, never in this repository.
+
+The REST probe methods use the unversioned `/livez`, `/readyz`, `/startupz`,
+and `/targetz` endpoints. `/metrics` also remains unversioned.
