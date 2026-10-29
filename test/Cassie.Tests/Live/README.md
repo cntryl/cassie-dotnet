@@ -12,7 +12,8 @@ Use disposable servers. Run the database image test on a separate fresh server:
 it restores a database that the current server cannot drop, and later DDL on the
 same server can fail with `transactional DDL cannot access multiple databases`.
 That test has the `Isolation=Server` trait. It drops its source table after taking
-the backup and leaves the restored database to be removed with the server.
+the backup and leaves the restored database to be removed with the server. Run
+it separately; the client CI suite excludes it.
 
 | Variable | Effect |
 | --- | --- |
@@ -47,7 +48,7 @@ For TLS, use `SSL Mode=Require;SSL Root Certificate=/path/to/ca.pem` with a host
 name that matches the certificate.
 
 REST vector tests require the server to use `CASSIE_EMBEDDINGS_PROVIDER=local` and
-`CASSIE_LOCAL_DIMENSIONS=3`. CI starts disposable Cassie containers with these
+`CASSIE_LOCAL_DIMENSIONS=3`. CI starts a disposable Cassie container with these
 settings and requires both pgwire and REST coverage. The REST tests use cookie
 login, explicit and generated document vectors, search pagination, administration
 queries, explicit server cancellation, and projection consistency manifests.

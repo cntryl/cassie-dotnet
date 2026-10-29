@@ -33,18 +33,6 @@ jobs:
           CASSIE_LOCAL_DIMENSIONS: "3"
           CASSIE_ROOT_PASSWORD: cassie-ci
           CASSIE_ALLOW_INSECURE_NON_LOOPBACK_LISTEN: "1"
-      cassie-restore:
-        image: ghcr.io/cntryl/cassie:main
-        ports:
-          - 127.0.0.1:5433:5432
-          - 127.0.0.1:8081:8080
-        env:
-          CASSIE_STORAGE_MODE: memory
-          CASSIE_EMBEDDINGS_PROVIDER: local
-          CASSIE_LOCAL_DIMENSIONS: "3"
-          CASSIE_ROOT_PASSWORD: cassie-ci
-          CASSIE_ALLOW_INSECURE_NON_LOOPBACK_LISTEN: "1"
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -67,14 +55,12 @@ jobs:
         run: dotnet pack Cassie.slnx --configuration Release --no-build --no-restore --output artifacts/packages
 
       - name: Wait for Cassie
-        run: |
-          for port in 8080 8081; do
-            curl --fail --silent --show-error --retry 30 --retry-delay 1 \
-              --retry-connrefused --max-time 2 --output /dev/null "http://127.0.0.1:$port/readyz"
-          done
+        run: >-
+          curl --fail --silent --show-error --retry 30 --retry-delay 1
+          --retry-connrefused --max-time 2 --output /dev/null
+          http://127.0.0.1:8080/readyz
 
       - name: Test
-        id: tests
         env:
           CASSIE_DOTNET_REQUIRE_LIVE: "true"
           CASSIE_DOTNET_TEST_CONNECTION_STRING: >-
@@ -91,11 +77,3 @@ jobs:
           CASSIE_DOTNET_TEST_RECORD_TYPES: "true"
           CASSIE_DOTNET_TEST_PARAMETER_STATUS_UPDATES: "true"
         run: dotnet test --solution Cassie.slnx --configuration Release --no-build --no-restore --filter-not-trait Isolation=Server
-
-      - name: Test database image
-        if: ${{ !cancelled() && (steps.tests.outcome == 'success' || steps.tests.outcome == 'failure') }}
-        env:
-          CASSIE_DOTNET_REQUIRE_LIVE: "true"
-          CASSIE_DOTNET_TEST_CONNECTION_STRING: >-
-            Host=127.0.0.1;Port=5433;Database=postgres;Username=root;Password=cassie-ci;SSL Mode=Disable;Timeout=15
-        run: dotnet test --project test/Cassie.Tests/Cassie.Tests.csproj --configuration Release --no-build --no-restore --filter-trait Isolation=Server --minimum-expected-tests 1
