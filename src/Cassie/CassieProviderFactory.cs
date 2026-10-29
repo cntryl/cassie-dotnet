@@ -22,6 +22,12 @@ namespace Cntryl.Cassie
         }
 
         /// <inheritdoc />
+        public override CassieDataSource CreateDataSource(string connectionString)
+        {
+            return new CassieDataSource(connectionString);
+        }
+
+        /// <inheritdoc />
         public override DbCommand CreateCommand()
         {
             return new CassieCommand();
