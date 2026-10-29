@@ -40,7 +40,5 @@ trim_trailing_whitespace = true
 conventions_test_naming_require_given = true
 conventions_test_naming_require_when = true
 dotnet_diagnostic.CA2007.severity = none
-# xUnit requires public test, fixture, and base types.
-dotnet_diagnostic.CA1515.severity = none
 dotnet_diagnostic.CNTRYL0001.severity = error
 dotnet_diagnostic.CNTRYL0002.severity = error

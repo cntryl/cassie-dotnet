@@ -1,18 +1,37 @@
+using Cntryl.Cassie.Commands;
+using Cntryl.Cassie.Connection;
+using Cntryl.Cassie.Data;
 using System.Data;
 using System.Data.Common;
-using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Xunit;
 
 namespace Cntryl.Cassie.Tests.Live
 {
-    public sealed class LiveDataContractTests(LiveServerFixture server) : LiveTestBase(server)
+    [Collection(LiveEndpoint.CollectionName)]
+    public sealed class LiveDataContractTests : IAsyncLifetime
     {
+        private const string SourceDatabase = "postgres";
+        private const string RestoredDatabase = "cassie_live_restore";
+
+        private readonly LiveSession _live = new();
+
+        public ValueTask InitializeAsync()
+        {
+            return _live.InitializeAsync();
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            return _live.DisposeAsync();
+        }
+
         [Fact]
         public async Task ShouldFillDataTableGivenSelectCommandWhenAdapterFills()
         {
             // Arrange
-            using CassieCommand select = CreateCommand("SELECT 7 AS id, 'seven' AS label");
+            using CassieCommand select = _live.CreateCommand();
+            select.CommandText = "SELECT 7 AS id, 'seven' AS label";
             using CassieDataAdapter adapter = new(select);
             using DataTable rows = new("probe");
 
@@ -29,7 +48,8 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldFillNamedTableGivenSelectCommandWhenAdapterFillsDataSet()
         {
             // Arrange
-            using CassieCommand select = CreateCommand("SELECT 7 AS id, 'seven' AS label");
+            using CassieCommand select = _live.CreateCommand();
+            select.CommandText = "SELECT 7 AS id, 'seven' AS label";
             using CassieDataAdapter adapter = new(select);
             using DataSet dataSet = new();
 
@@ -43,14 +63,14 @@ namespace Cntryl.Cassie.Tests.Live
         }
 
         [Fact]
-        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "The schema is fixed and CassieDataReader reports only CLR types rooted by its OID map.")]
         public async Task ShouldInsertAndAcceptRowGivenParameterizedInsertCommandWhenAdapterUpdates()
         {
             // Arrange
-            string table = await CreateTableAsync("id INT4, label TEXT");
+            await _live.CreateProbeTableAsync();
             using DataTable updates = new("updates");
             using CassieDataAdapter adapter = new();
-            using CassieCommand insert = CreateCommand($"INSERT INTO {table} (id, label) VALUES (@id, @label)");
+            using CassieCommand insert = _live.CreateCommand();
+            insert.CommandText = $"INSERT INTO {LiveSession.ProbeTable} (id, label) VALUES (@id, @label)";
             _ = updates.Columns.Add("id", typeof(int));
             _ = updates.Columns.Add("label", typeof(string));
             DataRow row = updates.Rows.Add(3, "gamma");
@@ -64,15 +84,18 @@ namespace Cntryl.Cassie.Tests.Live
             // Assert
             Assert.Equal(1, updated);
             Assert.Equal(DataRowState.Unchanged, row.RowState);
-            Assert.Equal("gamma", await ExecuteScalarAsync($"SELECT label FROM {table} WHERE id = 3"));
+            using CassieCommand verify = _live.CreateCommand();
+            verify.CommandText = $"SELECT label FROM {LiveSession.ProbeTable} WHERE id = 3";
+            Assert.Equal("gamma", await verify.ExecuteScalarAsync(TestContext.Current.CancellationToken));
         }
 
         [Fact]
         public async Task ShouldInsertRowsGivenCsvStreamWhenCopyFromRuns()
         {
             // Arrange
-            string table = await CreateTableAsync("id INT4, label TEXT");
-            using CassieCommand command = CreateCommand($"COPY {table} FROM STDIN WITH (FORMAT CSV)");
+            await _live.CreateProbeTableAsync();
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = $"COPY {LiveSession.ProbeTable} FROM STDIN WITH (FORMAT CSV)";
             await using MemoryStream source = new("1,alpha\n2,beta\n"u8.ToArray());
 
             // Act
@@ -80,16 +103,21 @@ namespace Cntryl.Cassie.Tests.Live
 
             // Assert
             Assert.Equal(2, copied);
-            Assert.Equal(2L, await ExecuteScalarAsync($"SELECT count(*) FROM {table}"));
+            using CassieCommand countRows = _live.CreateCommand();
+            countRows.CommandText = $"SELECT count(*) FROM {LiveSession.ProbeTable}";
+            Assert.Equal(2L, await countRows.ExecuteScalarAsync(TestContext.Current.CancellationToken));
         }
 
         [Fact]
         public async Task ShouldStreamCsvGivenOrderedQueryWhenCopyToRuns()
         {
             // Arrange
-            string table = await CreateTableAsync("id INT4, label TEXT");
-            _ = await ExecuteNonQueryAsync($"INSERT INTO {table} VALUES (2, 'beta'), (1, 'alpha')");
-            using CassieCommand command = CreateCommand($"COPY (SELECT id, label FROM {table} ORDER BY id) TO STDOUT WITH (FORMAT CSV)");
+            await _live.CreateProbeTableAsync();
+            using CassieCommand seed = _live.CreateCommand();
+            seed.CommandText = $"INSERT INTO {LiveSession.ProbeTable} VALUES (2, 'beta'), (1, 'alpha')";
+            _ = await seed.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = $"COPY (SELECT id, label FROM {LiveSession.ProbeTable} ORDER BY id) TO STDOUT WITH (FORMAT CSV)";
             await using MemoryStream destination = new();
 
             // Act
@@ -104,14 +132,16 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldReturnEveryRowGivenResultLargerThanOnePageWhenPortalIsPaged()
         {
             // Arrange
-            string table = await CreateTableAsync("id INT4");
-            using (CassieCommand copy = CreateCommand($"COPY {table} FROM STDIN WITH (FORMAT CSV)"))
+            await _live.CreatePortalTableAsync();
+            using (CassieCommand copy = _live.CreateCommand())
             {
+                copy.CommandText = $"COPY {LiveSession.PortalTable} FROM STDIN WITH (FORMAT CSV)";
                 await using MemoryStream source = new(Encoding.UTF8.GetBytes(string.Join('\n', Enumerable.Range(1, 260)) + "\n"));
                 Assert.Equal(260, await copy.CopyFromAsync(source, TestContext.Current.CancellationToken));
             }
 
-            using CassieCommand select = CreateCommand($"SELECT id, @marker::int4 AS marker FROM {table} ORDER BY id");
+            using CassieCommand select = _live.CreateCommand();
+            select.CommandText = $"SELECT id, @marker::int4 AS marker FROM {LiveSession.PortalTable} ORDER BY id";
             _ = select.Parameters.Add(new CassieParameter { ParameterName = "marker", Value = 7 });
 
             // Act
@@ -132,49 +162,67 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldDiscardInsertGivenRollbackWhenTransactionEnds()
         {
             // Arrange
-            string table = await CreateTableAsync("id INT4, label TEXT");
-            _ = await ExecuteNonQueryAsync($"INSERT INTO {table} VALUES (1, 'alpha')");
+            await _live.CreateProbeTableAsync();
+            using CassieCommand seed = _live.CreateCommand();
+            seed.CommandText = $"INSERT INTO {LiveSession.ProbeTable} VALUES (1, 'alpha')";
+            _ = await seed.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
 
             // Act
-            await using (DbTransaction transaction = await Connection.BeginTransactionAsync(TestContext.Current.CancellationToken))
+            await using (DbTransaction transaction = await _live.Connection.BeginTransactionAsync(TestContext.Current.CancellationToken))
             {
-                using CassieCommand command = CreateCommand($"INSERT INTO {table} VALUES (3, 'gamma')");
+                using CassieCommand command = _live.CreateCommand();
+                command.CommandText = $"INSERT INTO {LiveSession.ProbeTable} VALUES (3, 'gamma')";
                 command.Transaction = transaction;
                 _ = await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
                 await transaction.RollbackAsync(TestContext.Current.CancellationToken);
             }
 
             // Assert
-            Assert.Equal(1L, await ExecuteScalarAsync($"SELECT count(*) FROM {table}"));
+            using CassieCommand countRows = _live.CreateCommand();
+            countRows.CommandText = $"SELECT count(*) FROM {LiveSession.ProbeTable}";
+            Assert.Equal(1L, await countRows.ExecuteScalarAsync(TestContext.Current.CancellationToken));
         }
 
         [Fact]
-        [SuppressMessage("Security", "CA2100", Justification = "The source database is validated as a simple ASCII identifier and the restore database name is generated locally; identifiers cannot be bound as parameters.")]
+        [Trait("Isolation", "Server")]
         public async Task ShouldRestoreTableRowsGivenBackupImageWhenRestoredIntoNewDatabase()
         {
             // Arrange
-            string sourceDatabase = new CassieConnectionStringBuilder(ConnectionString).Database;
-            Assert.True(IsSimpleDatabaseName(sourceDatabase), "The database image test requires a simple Cassie database name.");
-            string restoredDatabase = UniqueName("cassie_dotnet_restore");
-            string table = await CreateTableAsync("id INT4, label TEXT");
-            _ = await ExecuteNonQueryAsync($"INSERT INTO {table} VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma')");
+            Assert.SkipUnless(
+                string.Equals(new CassieConnectionStringBuilder(_live.ConnectionString).Database, SourceDatabase, StringComparison.Ordinal),
+                $"The database image test is written for Database={SourceDatabase}.");
+            await _live.CreateProbeTableAsync();
+            using CassieCommand seed = _live.CreateCommand();
+            seed.CommandText = $"INSERT INTO {LiveSession.ProbeTable} VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma')";
+            _ = await seed.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
             using MemoryStream image = new();
-            using CassieCommand backup = CreateCommand($"BACKUP DATABASE {sourceDatabase} TO STDOUT");
+            using CassieCommand backup = _live.CreateCommand();
+            backup.CommandText = $"BACKUP DATABASE {SourceDatabase} TO STDOUT";
             int backupRows = await backup.CopyToAsync(image, TestContext.Current.CancellationToken);
             image.Position = 0;
-            using (CassieCommand restore = CreateCommand($"RESTORE DATABASE {restoredDatabase} FROM STDIN"))
+            await _live.DropProbeTableAsync();
+            using CassieCommand restore = _live.CreateCommand();
+            restore.CommandText = $"RESTORE DATABASE {RestoredDatabase} FROM STDIN";
+
+            // Act
+            CassieException? duplicate = null;
+            try
             {
-                // Act
                 _ = await restore.CopyFromAsync(image, TestContext.Current.CancellationToken);
             }
+            catch (CassieException exception) when (exception.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+            {
+                duplicate = exception;
+            }
 
-            // Assert
-            Assert.Equal(0, backupRows);
-            Assert.NotEqual(0, image.Length);
-            CassieConnectionStringBuilder restoredSettings = new(ConnectionString) { Database = restoredDatabase, Pooling = false };
-            await using CassieConnection restored = new() { ConnectionString = restoredSettings.ConnectionString };
+            Assert.SkipWhen(duplicate is not null, $"{RestoredDatabase} already exists and this server cannot drop restored databases; use a fresh server.");
+            await using CassieConnection restored = new()
+            {
+                ConnectionString = new CassieConnectionStringBuilder(_live.ConnectionString) { Database = RestoredDatabase, Pooling = false }.ConnectionString
+            };
             await restored.OpenAsync(TestContext.Current.CancellationToken);
-            using CassieCommand verify = CreateCommand($"SELECT id, label FROM {table} ORDER BY id", connection: restored);
+            using CassieCommand verify = _live.CreateCommand(restored);
+            verify.CommandText = $"SELECT id, label FROM {LiveSession.ProbeTable} ORDER BY id";
             List<(int Id, string Label)> rows = [];
             await using DbDataReader reader = await verify.ExecuteReaderAsync(TestContext.Current.CancellationToken);
             while (await reader.ReadAsync(TestContext.Current.CancellationToken))
@@ -182,14 +230,10 @@ namespace Cntryl.Cassie.Tests.Live
                 rows.Add((reader.GetInt32(0), reader.GetString(1)));
             }
 
+            // Assert
+            Assert.Equal(0, backupRows);
+            Assert.NotEqual(0, image.Length);
             Assert.Equal([(1, "alpha"), (2, "beta"), (3, "gamma")], rows);
-        }
-
-        private static bool IsSimpleDatabaseName(string value)
-        {
-            return value.Length > 0
-                && (char.IsAsciiLetter(value[0]) || value[0] == '_')
-                && value.All(character => char.IsAsciiLetterOrDigit(character) || character == '_');
         }
     }
 }

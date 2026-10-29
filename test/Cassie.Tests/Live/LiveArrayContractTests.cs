@@ -1,3 +1,5 @@
+using Cntryl.Cassie.Commands;
+using Cntryl.Cassie.Types;
 using System.Data;
 using System.Data.Common;
 using System.Net;
@@ -5,8 +7,21 @@ using Xunit;
 
 namespace Cntryl.Cassie.Tests.Live
 {
-    public sealed class LiveArrayContractTests(LiveServerFixture server) : LiveTestBase(server)
+    [Collection(LiveEndpoint.CollectionName)]
+    public sealed class LiveArrayContractTests : IAsyncLifetime
     {
+        private readonly LiveSession _live = new();
+
+        public ValueTask InitializeAsync()
+        {
+            return _live.InitializeAsync();
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            return _live.DisposeAsync();
+        }
+
         private static readonly byte[] Blob = [0, 1, 255];
         private static readonly decimal[] Decimals = [1.25m, 2.5m];
 
@@ -26,7 +41,9 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             LiveFeature.Require("ARRAYS");
-            using CassieCommand command = CreateCommand("SELECT @addresses AS values", binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @addresses AS values";
+            command.BinaryResults = true;
             CassieNetworkAddress[] addresses =
             [
                 new(IPAddress.Parse("192.0.2.9"), 24, false),
@@ -35,7 +52,7 @@ namespace Cntryl.Cassie.Tests.Live
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "addresses", Value = addresses, ParameterFormat = CassieParameterFormat.Text });
 
             // Act
-            await using DbDataReader reader = await ReadFirstRowAsync(command);
+            await using DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             CassieArray values = Assert.IsType<CassieArray>(reader.GetValue(0));
@@ -51,10 +68,12 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             LiveFeature.Require("ARRAYS");
-            using CassieCommand command = CreateCommand("SELECT ARRAY[7,NULL,9]::int4[] AS values", binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT ARRAY[7,NULL,9]::int4[] AS values";
+            command.BinaryResults = true;
 
             // Act
-            await using DbDataReader reader = await ReadFirstRowAsync(command);
+            await using DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             CassieArray values = Assert.IsType<CassieArray>(reader.GetValue(0));
@@ -72,10 +91,12 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             LiveFeature.Require("ARRAYS");
-            using CassieCommand command = CreateCommand("SELECT ARRAY[1.25,NULL,-2.5]::numeric[] AS values", binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT ARRAY[1.25,NULL,-2.5]::numeric[] AS values";
+            command.BinaryResults = true;
 
             // Act
-            await using DbDataReader reader = await ReadFirstRowAsync(command);
+            await using DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             AssertArray(reader.GetValue(0), 1700, new CassieNumeric("1.25"), null, new CassieNumeric("-2.5"));
@@ -87,9 +108,9 @@ namespace Cntryl.Cassie.Tests.Live
             // Arrange
             LiveFeature.Require("ARRAYS");
             Guid id = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
-            using CassieCommand command = CreateCommand(
-                "SELECT @numbers::numeric[] AS numbers, @ids::uuid[] AS ids, @flags::bool[] AS flags, @blobs::bytea[] AS blobs, @labels::text[] AS labels",
-                binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @numbers::numeric[] AS numbers, @ids::uuid[] AS ids, @flags::bool[] AS flags, @blobs::bytea[] AS blobs, @labels::text[] AS labels";
+            command.BinaryResults = true;
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "numbers", DbType = DbType.Decimal, Value = new decimal?[] { 1.25m, null, -2.5m } });
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "ids", DbType = DbType.Guid, Value = new Guid?[] { id, null } });
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "flags", DbType = DbType.Boolean, Value = new bool?[] { true, null, false } });
@@ -97,7 +118,7 @@ namespace Cntryl.Cassie.Tests.Live
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "labels", DbType = DbType.String, Value = new string?[] { "alpha", null, "beta" } });
 
             // Act
-            await using DbDataReader reader = await ReadFirstRowAsync(command);
+            await using DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             AssertArray(reader.GetValue(0), 1700, new CassieNumeric("1.25"), null, new CassieNumeric("-2.5"));
@@ -112,11 +133,13 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             LiveFeature.Require("ARRAYS");
-            using CassieCommand command = CreateCommand("SELECT @values::numeric[] AS values", binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @values::numeric[] AS values";
+            command.BinaryResults = true;
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "values", Value = Decimals });
 
             // Act
-            await using DbDataReader reader = await ReadFirstRowAsync(command);
+            await using DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             AssertArray(reader.GetValue(0), 1700, new CassieNumeric("1.25"), new CassieNumeric("2.5"));
@@ -128,12 +151,14 @@ namespace Cntryl.Cassie.Tests.Live
             // Arrange
             LiveFeature.Require("ARRAYS");
             TimeSpan time = new TimeSpan(1, 2, 3).Add(TimeSpan.FromTicks(4_567_890));
-            using CassieCommand command = CreateCommand("SELECT @numbers::numeric[] AS numbers, @times::time[] AS times", binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @numbers::numeric[] AS numbers, @times::time[] AS times";
+            command.BinaryResults = true;
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "numbers", Value = new ulong?[] { ulong.MaxValue, null } });
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "times", Value = new TimeSpan?[] { time, null } });
 
             // Act
-            await using DbDataReader reader = await ReadFirstRowAsync(command);
+            await using DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             AssertArray(reader.GetValue(0), 1700, new CassieNumeric("18446744073709551615"), null);
@@ -146,11 +171,13 @@ namespace Cntryl.Cassie.Tests.Live
             // Arrange
             LiveFeature.Require("ARRAY_SHAPES");
             CassieArray source = new(23, [2, 2], [0, 4], [1, 2, 3, 4]);
-            using CassieCommand command = CreateCommand("SELECT @values::int[] AS values", binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @values::int[] AS values";
+            command.BinaryResults = true;
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "values", Value = source, ParameterFormat = CassieParameterFormat.Text });
 
             // Act
-            await using DbDataReader reader = await ReadFirstRowAsync(command);
+            await using DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             CassieArray value = Assert.IsType<CassieArray>(reader.GetValue(0));
@@ -164,7 +191,8 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             LiveFeature.Require("ARRAY_SHAPES");
-            using CassieCommand command = CreateCommand("SELECT @values::int[]::text AS values");
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @values::int[]::text AS values";
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "values", Value = new CassieArray(23, [2, 2], [0, 4], [1, 2, 3, 4]) });
 
             // Act
@@ -184,7 +212,8 @@ namespace Cntryl.Cassie.Tests.Live
             clrArray.SetValue(6, 0, 5);
             clrArray.SetValue(7, 1, 4);
             clrArray.SetValue(8, 1, 5);
-            using CassieCommand command = CreateCommand("SELECT @values::int[]::text AS values");
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @values::int[]::text AS values";
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "values", Value = clrArray });
 
             // Act
@@ -199,12 +228,14 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             LiveFeature.Require("NAME_TYPE");
-            using CassieCommand command = CreateCommand("SELECT @value::name AS name, @values::name[] AS names", binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @value::name AS name, @values::name[] AS names";
+            command.BinaryResults = true;
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "value", Value = "catalog_name", PostgresTypeOid = 19 });
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "values", Value = new string?[] { "alpha", null, "βeta", "b,eta", "say \"hi\"", "slash\\name" }, PostgresTypeOid = 1003 });
 
             // Act
-            await using DbDataReader reader = await ReadFirstRowAsync(command);
+            await using DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             Assert.Equal("catalog_name", reader.GetString(0));
@@ -219,7 +250,8 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             LiveFeature.Require("NAME_TYPE");
-            using CassieCommand command = CreateCommand("SELECT @values::name[] AS names");
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @values::name[] AS names";
             _ = command.Parameters.Add(new CassieParameter
             {
                 ParameterName = "values",
@@ -229,10 +261,10 @@ namespace Cntryl.Cassie.Tests.Live
             });
 
             // Act
-            await using DbDataReader reader = await ReadFirstRowAsync(command);
+            await using DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
-            Assert.Equal("[\"alpha\",\"b,eta\",\"say \\\"hi\\\"\",\"slash\\\\name\",null]", reader.GetString(0));
+            Assert.Equal("{alpha,\"b,eta\",\"say \\\"hi\\\"\",\"slash\\\\name\",NULL}", reader.GetString(0));
         }
 
         [Fact]
@@ -240,11 +272,12 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             LiveFeature.Require("NAME_TYPE");
-            using CassieCommand command = CreateCommand("SELECT @value::name AS name");
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @value::name AS name";
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "value", Value = new string('x', 70), PostgresTypeOid = 19, ParameterFormat = CassieParameterFormat.Text });
 
             // Act
-            await using DbDataReader reader = await ReadFirstRowAsync(command);
+            await using DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Assert
             Assert.Equal(new string('x', 63), reader.GetString(0));

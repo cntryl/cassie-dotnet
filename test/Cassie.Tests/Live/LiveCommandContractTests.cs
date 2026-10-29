@@ -1,3 +1,5 @@
+using Cntryl.Cassie.Commands;
+using Cntryl.Cassie.Connection;
 using System.Collections.ObjectModel;
 using System.Data;
 using System.Data.Common;
@@ -5,13 +7,27 @@ using Xunit;
 
 namespace Cntryl.Cassie.Tests.Live
 {
-    public sealed class LiveCommandContractTests(LiveServerFixture server) : LiveTestBase(server)
+    [Collection(LiveEndpoint.CollectionName)]
+    public sealed class LiveCommandContractTests : IAsyncLifetime
     {
+        private readonly LiveSession _live = new();
+
+        public ValueTask InitializeAsync()
+        {
+            return _live.InitializeAsync();
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            return _live.DisposeAsync();
+        }
+
         [Fact]
         public async Task ShouldRebindValueGivenServerPreparedCommandWhenParameterChanges()
         {
             // Arrange
-            using CassieCommand command = CreateCommand("SELECT @value::int AS value");
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @value::int AS value";
             CassieParameter parameter = new() { ParameterName = "value", DbType = DbType.Int32, Value = 17 };
             _ = command.Parameters.Add(parameter);
             await command.PrepareAsync(TestContext.Current.CancellationToken);
@@ -30,14 +46,17 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldRecreatePreparedStatementGivenDeallocateAndReconnectWhenCommandRunsAgain()
         {
             // Arrange
-            using CassieCommand command = CreateCommand("SELECT @value::int AS value");
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @value::int AS value";
             CassieParameter parameter = new() { ParameterName = "value", DbType = DbType.Int32, Value = 17 };
             _ = command.Parameters.Add(parameter);
             await command.PrepareAsync(TestContext.Current.CancellationToken);
             _ = await command.ExecuteScalarAsync(TestContext.Current.CancellationToken);
-            _ = await ExecuteNonQueryAsync("DEALLOCATE ALL");
-            await Connection.CloseAsync();
-            await Connection.OpenAsync(TestContext.Current.CancellationToken);
+            using CassieCommand deallocate = _live.CreateCommand();
+            deallocate.CommandText = "DEALLOCATE ALL";
+            _ = await deallocate.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+            await _live.Connection.CloseAsync();
+            await _live.Connection.OpenAsync(TestContext.Current.CancellationToken);
 
             // Act
             parameter.Value = 37;
@@ -51,11 +70,14 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldRecoverConnectionGivenParseErrorWhenPrepareIsRejected()
         {
             // Arrange
-            using CassieCommand invalid = CreateCommand("SELECT FROM");
+            using CassieCommand invalid = _live.CreateCommand();
+            invalid.CommandText = "SELECT FROM";
 
             // Act
             CassieException exception = await Assert.ThrowsAsync<CassieException>(() => invalid.PrepareAsync(TestContext.Current.CancellationToken));
-            object? recovered = await ExecuteScalarAsync("SELECT 1");
+            using CassieCommand recover = _live.CreateCommand();
+            recover.CommandText = "SELECT 1";
+            object? recovered = await recover.ExecuteScalarAsync(TestContext.Current.CancellationToken);
 
             // Assert
             Assert.Equal("42601", exception.SqlState);
@@ -66,29 +88,27 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldRunProcedureBodyGivenBoundInputWhenSqlTextCallIsExecuted()
         {
             // Arrange
-            string table = await CreateTableAsync("title TEXT");
-            string procedure = UniqueName("cassie_live_store");
-            RegisterCleanup("DROP PROCEDURE IF EXISTS " + procedure);
-            _ = await ExecuteNonQueryAsync($"CREATE PROCEDURE {procedure}(title TEXT) AS \"INSERT INTO {table} (title) VALUES ($1)\"");
-            using CassieCommand call = CreateCommand($"CALL {procedure}(@title)");
+            await _live.CreateStoreProcedureAsync();
+            using CassieCommand call = _live.CreateCommand();
+            call.CommandText = $"CALL {LiveSession.StoreProcedure}(@title)";
             _ = call.Parameters.Add(new CassieParameter { ParameterName = "title", Value = "input-bound-call" });
 
             // Act
             _ = await call.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
 
             // Assert
-            Assert.Equal("input-bound-call", await ExecuteScalarAsync($"SELECT title FROM {table}"));
+            using CassieCommand verify = _live.CreateCommand();
+            verify.CommandText = $"SELECT title FROM {LiveSession.CallTable}";
+            Assert.Equal("input-bound-call", await verify.ExecuteScalarAsync(TestContext.Current.CancellationToken));
         }
 
         [Fact]
         public async Task ShouldBindPositionallyGivenPreparedStoredProcedureWhenParameterValueChanges()
         {
             // Arrange
-            string table = await CreateTableAsync("title TEXT");
-            string procedure = UniqueName("cassie_live_store");
-            RegisterCleanup("DROP PROCEDURE IF EXISTS " + procedure);
-            _ = await ExecuteNonQueryAsync($"CREATE PROCEDURE {procedure}(title TEXT) AS \"INSERT INTO {table} (title) VALUES ($1)\"");
-            using CassieCommand call = CreateCommand(procedure);
+            await _live.CreateStoreProcedureAsync();
+            using CassieCommand call = _live.CreateCommand();
+            call.CommandText = LiveSession.StoreProcedure;
             call.CommandType = CommandType.StoredProcedure;
             CassieParameter title = new() { ParameterName = "title", Value = "ado-stored-procedure-call" };
             _ = call.Parameters.Add(title);
@@ -100,18 +120,23 @@ namespace Cntryl.Cassie.Tests.Live
             _ = await call.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
 
             // Assert
-            Assert.Equal("ado-stored-procedure-call", await ExecuteScalarAsync($"SELECT title FROM {table} WHERE title = 'ado-stored-procedure-call'"));
-            Assert.Equal("ado-stored-procedure-call-updated", await ExecuteScalarAsync($"SELECT title FROM {table} WHERE title = 'ado-stored-procedure-call-updated'"));
+            using CassieCommand verifyFirst = _live.CreateCommand();
+            verifyFirst.CommandText = $"SELECT title FROM {LiveSession.CallTable} WHERE title = 'ado-stored-procedure-call'";
+            Assert.Equal("ado-stored-procedure-call", await verifyFirst.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+            using CassieCommand verifyUpdated = _live.CreateCommand();
+            verifyUpdated.CommandText = $"SELECT title FROM {LiveSession.CallTable} WHERE title = 'ado-stored-procedure-call-updated'";
+            Assert.Equal("ado-stored-procedure-call-updated", await verifyUpdated.ExecuteScalarAsync(TestContext.Current.CancellationToken));
         }
 
         [Fact]
         public async Task ShouldExposeStreamsGivenByteaAndTextColumnsWhenReaderOpens()
         {
             // Arrange
-            using CassieCommand command = CreateCommand("SELECT @blob::bytea AS blob, @text::text AS text");
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT @blob::bytea AS blob, @text::text AS text";
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "blob", Value = new byte[] { 0, 1, 255 } });
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "text", Value = "stream access" });
-            await using DbDataReader reader = await ReadFirstRowAsync(command);
+            await using DbDataReader reader = await LiveSession.ReadFirstRowAsync(command);
 
             // Act
             await using Stream stream = reader.GetStream(0);
@@ -130,10 +155,11 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldStopAfterFirstRowGivenSingleRowBehaviorWhenQueryReturnsTwoRows()
         {
             // Arrange
-            using CassieCommand command = CreateCommand("SELECT 1 AS value UNION ALL SELECT 2 AS value");
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT 1 AS value UNION ALL SELECT 2 AS value";
 
             // Act
-            await using DbDataReader reader = await ReadFirstRowAsync(command, CommandBehavior.SingleRow);
+            await using DbDataReader reader = await LiveSession.ReadFirstRowAsync(command, CommandBehavior.SingleRow);
 
             // Assert
             Assert.Equal(1, reader.GetInt32(0));
@@ -144,18 +170,21 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldHideLaterResultsAndKeepConnectionUsableGivenSingleResultBehaviorWhenBatchRuns()
         {
             // Arrange
-            using CassieCommand command = CreateCommand("SELECT 11 AS value; SELECT 12 AS value");
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT 11 AS value; SELECT 12 AS value";
 
             // Act
             bool hasSecondResult;
-            await using (DbDataReader reader = await ReadFirstRowAsync(command, CommandBehavior.SingleResult))
+            await using (DbDataReader reader = await LiveSession.ReadFirstRowAsync(command, CommandBehavior.SingleResult))
             {
                 Assert.Equal(11, reader.GetInt32(0));
                 hasSecondResult = await reader.NextResultAsync(TestContext.Current.CancellationToken);
                 Assert.Equal(0, reader.FieldCount);
             }
 
-            object? reused = await ExecuteScalarAsync("SELECT 13 AS value");
+            using CassieCommand reuse = _live.CreateCommand();
+            reuse.CommandText = "SELECT 13 AS value";
+            object? reused = await reuse.ExecuteScalarAsync(TestContext.Current.CancellationToken);
 
             // Assert
             Assert.False(hasSecondResult);
@@ -166,8 +195,9 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldEnforceColumnOrderGivenSequentialAccessWhenFieldsAreReadBackwards()
         {
             // Arrange
-            using CassieCommand command = CreateCommand("SELECT 1 AS first_value, 2 AS second_value UNION ALL SELECT 3, 4");
-            await using DbDataReader reader = await ReadFirstRowAsync(command, CommandBehavior.SequentialAccess);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT 1 AS first_value, 2 AS second_value UNION ALL SELECT 3, 4";
+            await using DbDataReader reader = await LiveSession.ReadFirstRowAsync(command, CommandBehavior.SequentialAccess);
             Assert.Equal(2, reader.GetInt32(1));
 
             // Act
@@ -183,9 +213,10 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldCloseConnectionGivenCloseConnectionBehaviorWhenReaderCloses()
         {
             // Arrange
-            await using CassieConnection owned = new() { ConnectionString = ConnectionString };
+            await using CassieConnection owned = new() { ConnectionString = _live.ConnectionString };
             await owned.OpenAsync(TestContext.Current.CancellationToken);
-            using CassieCommand command = CreateCommand("SELECT 1 AS value", connection: owned);
+            using CassieCommand command = _live.CreateCommand(owned);
+            command.CommandText = "SELECT 1 AS value";
             await using DbDataReader reader = await command.ExecuteReaderAsync(CommandBehavior.CloseConnection, TestContext.Current.CancellationToken);
 
             // Act
@@ -199,7 +230,8 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldReportNoRowsGivenFilteredQueryWhenReaderOpens()
         {
             // Arrange
-            using CassieCommand command = CreateCommand("SELECT 1 AS no_rows WHERE false");
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT 1 AS no_rows WHERE false";
 
             // Act
             await using DbDataReader reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
@@ -214,8 +246,9 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldDescribeColumnsWithoutRowsGivenSchemaOnlyBehaviorWhenQueryIsParameterized()
         {
             // Arrange
-            string table = await CreateTableAsync("id INT4, label TEXT");
-            using CassieCommand command = CreateCommand($"SELECT id, label, @requested::int4 AS requested FROM {table}");
+            await _live.CreateProbeTableAsync();
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = $"SELECT id, label, @requested::int4 AS requested FROM {LiveSession.ProbeTable}";
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "requested", DbType = DbType.Int32, Value = 7 });
 
             // Act
@@ -248,8 +281,9 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldNotExecuteStatementGivenSchemaOnlyBehaviorWhenCommandIsInsert()
         {
             // Arrange
-            string table = await CreateTableAsync("id INT4, label TEXT");
-            using CassieCommand command = CreateCommand($"INSERT INTO {table} VALUES (99, 'schema-only')");
+            await _live.CreateProbeTableAsync();
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = $"INSERT INTO {LiveSession.ProbeTable} VALUES (99, 'schema-only')";
 
             // Act
             bool read;
@@ -263,22 +297,24 @@ namespace Cntryl.Cassie.Tests.Live
             // Assert
             Assert.Equal(0, fieldCount);
             Assert.False(read);
-            Assert.Equal(0L, await ExecuteScalarAsync($"SELECT count(*) FROM {table}"));
+            using CassieCommand countRows = _live.CreateCommand();
+            countRows.CommandText = $"SELECT count(*) FROM {LiveSession.ProbeTable}";
+            Assert.Equal(0L, await countRows.ExecuteScalarAsync(TestContext.Current.CancellationToken));
         }
 
         [Fact]
         public async Task ShouldDiscoverTableAndColumnsGivenSchemaRestrictionsWhenCollectionsAreRequested()
         {
             // Arrange
-            string table = await CreateTableAsync("id INT4, label TEXT");
+            await _live.CreateProbeTableAsync();
 
             // Act
-            DataTable tables = await Connection.GetSchemaAsync("Tables", [null, "public", table, "BASE TABLE"], TestContext.Current.CancellationToken);
-            DataTable columns = await Connection.GetSchemaAsync("Columns", [null, "public", table], TestContext.Current.CancellationToken);
+            DataTable tables = await _live.Connection.GetSchemaAsync("Tables", [null, "public", LiveSession.ProbeTable, "BASE TABLE"], TestContext.Current.CancellationToken);
+            DataTable columns = await _live.Connection.GetSchemaAsync("Columns", [null, "public", LiveSession.ProbeTable], TestContext.Current.CancellationToken);
 
             // Assert
             DataRow tableRow = Assert.Single(tables.Rows.Cast<DataRow>());
-            Assert.Equal(table, tableRow["TABLE_NAME"]);
+            Assert.Equal(LiveSession.ProbeTable, tableRow["TABLE_NAME"]);
             Assert.Equal(2, columns.Rows.Count);
             Assert.Equal("id", columns.Rows[0]["COLUMN_NAME"]);
             Assert.Equal("label", columns.Rows[1]["COLUMN_NAME"]);
@@ -290,7 +326,8 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             LiveFeature.Require("RECORD_TYPES");
-            using CassieCommand command = CreateCommand("SELECT pg_sleep(0.0) AS waited");
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT pg_sleep(0.0) AS waited";
 
             // Act
             await using DbDataReader reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
@@ -307,7 +344,9 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             LiveFeature.Require("RECORD_TYPES");
-            using CassieCommand command = CreateCommand("SELECT pg_sleep(@seconds) AS waited", binaryResults: true);
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "SELECT pg_sleep(@seconds) AS waited";
+            command.BinaryResults = true;
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "seconds", Value = 0d, PostgresTypeOid = 701 });
             await command.PrepareAsync(TestContext.Current.CancellationToken);
 
@@ -326,7 +365,8 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             LiveFeature.Require("RECORD_TYPES");
-            using CassieCommand command = CreateCommand("WITH RECURSIVE walk(node) AS (SELECT 1::BIGINT UNION ALL SELECT node + 1 FROM walk WHERE node < 3) SEARCH BREADTH FIRST BY node SET sequence SELECT sequence FROM walk ORDER BY sequence");
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = "WITH RECURSIVE walk(node) AS (SELECT 1::BIGINT UNION ALL SELECT node + 1 FROM walk WHERE node < 3) SEARCH BREADTH FIRST BY node SET sequence SELECT sequence FROM walk ORDER BY sequence";
 
             // Act
             await using DbDataReader reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
@@ -343,9 +383,9 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             LiveFeature.Require("RECORD_TYPES");
-            string edges = await CreateTableAsync("source BIGINT, target BIGINT");
-            _ = await ExecuteNonQueryAsync($"INSERT INTO {edges} VALUES (1, 2), (2, 1)");
-            using CassieCommand command = CreateCommand($"WITH RECURSIVE walk(node) AS (SELECT 1::BIGINT UNION ALL SELECT edge.target FROM {edges} AS edge JOIN walk AS parent ON edge.source = parent.node) CYCLE node SET is_cycle USING path SELECT path FROM walk ORDER BY node, is_cycle");
+            await _live.CreateEdgesTableAsync();
+            using CassieCommand command = _live.CreateCommand();
+            command.CommandText = $"WITH RECURSIVE walk(node) AS (SELECT 1::BIGINT UNION ALL SELECT edge.target FROM {LiveSession.EdgesTable} AS edge JOIN walk AS parent ON edge.source = parent.node) CYCLE node SET is_cycle USING path SELECT path FROM walk ORDER BY node, is_cycle";
 
             // Act
             await using DbDataReader reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
@@ -361,7 +401,8 @@ namespace Cntryl.Cassie.Tests.Live
         public async Task ShouldReturnQueryCanceledGivenCancelWhileSleepingWhenSessionIsReused()
         {
             // Arrange
-            using CassieCommand slowQuery = CreateCommand("SELECT pg_sleep(10)");
+            using CassieCommand slowQuery = _live.CreateCommand();
+            slowQuery.CommandText = "SELECT pg_sleep(10)";
             slowQuery.CommandTimeout = 5;
             Task<object?> execution = slowQuery.ExecuteScalarAsync(TestContext.Current.CancellationToken);
             await Task.Delay(200, TestContext.Current.CancellationToken);
@@ -369,7 +410,9 @@ namespace Cntryl.Cassie.Tests.Live
             // Act
             slowQuery.Cancel();
             CassieException exception = await Assert.ThrowsAsync<CassieException>(() => execution);
-            object? recovered = await ExecuteScalarAsync("SELECT 73::int4");
+            using CassieCommand recoverAfterCancel = _live.CreateCommand();
+            recoverAfterCancel.CommandText = "SELECT 73::int4";
+            object? recovered = await recoverAfterCancel.ExecuteScalarAsync(TestContext.Current.CancellationToken);
 
             // Assert
             Assert.Equal("57014", exception.SqlState);

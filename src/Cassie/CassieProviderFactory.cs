@@ -1,3 +1,6 @@
+using Cntryl.Cassie.Commands;
+using Cntryl.Cassie.Connection;
+using Cntryl.Cassie.Data;
 using System.Data.Common;
 
 namespace Cntryl.Cassie
