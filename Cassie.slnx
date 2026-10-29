@@ -6,7 +6,6 @@
     <Project Path="src/Cassie/Cassie.csproj" />
   </Folder>
   <Folder Name="/test/">
-    <Project Path="test/Cassie.LiveQualification/Cassie.LiveQualification.csproj" />
     <Project Path="test/Cassie.Tests/Cassie.Tests.csproj" />
   </Folder>
 </Solution>

@@ -54,17 +54,15 @@ jobs:
       - name: Build
         run: dotnet build Cassie.slnx --configuration Release --no-restore
 
-      - name: Test
-        run: dotnet test Cassie.slnx --configuration Release --no-build --no-restore
-
       - name: Wait for Cassie
         run: >-
           curl --fail --silent --show-error --retry 30 --retry-delay 1
           --retry-connrefused --max-time 2 --output /dev/null
           http://127.0.0.1:8080/healthz
 
-      - name: Run live qualification
+      - name: Test
         env:
+          CASSIE_DOTNET_REQUIRE_LIVE: "true"
           CASSIE_DOTNET_TEST_CONNECTION_STRING: >-
             Host=127.0.0.1;Port=5432;Database=postgres;Username=root;Password=cassie-ci;SSL Mode=Disable;Timeout=15
-        run: dotnet run --project test/Cassie.LiveQualification/Cassie.LiveQualification.csproj --configuration Release --no-build
+        run: dotnet test Cassie.slnx --configuration Release --no-build --no-restore
