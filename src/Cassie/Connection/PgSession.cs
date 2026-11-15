@@ -42,7 +42,7 @@ namespace Cntryl.Cassie.Connection
         /// <summary>Gets whether the server can be asked to cancel the running statement.</summary>
         internal bool CanCancel => BackendProcessId != 0 && BackendSecretKey != 0;
 
-        internal Task<(byte Tag, byte[] Payload)> ReadFrameAsync(CancellationToken cancellationToken)
+        internal ValueTask<(byte Tag, byte[] Payload)> ReadFrameAsync(CancellationToken cancellationToken)
         {
             return PgFraming.ReadBackendFrameAsync(Stream, cancellationToken);
         }

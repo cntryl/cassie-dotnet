@@ -10,7 +10,7 @@ namespace Cntryl.Cassie.Data
         bool IsOpen { get; }
         CassieDateStyle? DateStyle { get; }
         ILogger? Logger { get; }
-        Task<(byte Tag, byte[] Payload)> ReadFrameAsync(CancellationToken cancellationToken);
+        ValueTask<(byte Tag, byte[] Payload)> ReadFrameAsync(CancellationToken cancellationToken);
         Task<bool> CancelCurrentQueryAsync();
         void AbortTransport();
         Task RejectCopyFromAsync();

@@ -10,20 +10,50 @@ namespace Cntryl.Cassie.Protocol
         private const int MaximumFrameLength = 16 * 1024 * 1024;
         private const int PooledFrameLimit = 64 * 1024;
 
-        public static async Task<(byte Tag, byte[] Payload)> ReadBackendFrameAsync(Stream stream, CancellationToken cancellationToken)
+        private const int HeaderLength = 5;
+
+        /// <summary>
+        /// Reads one backend frame. Completes synchronously, without touching the transport, when the
+        /// whole frame is already buffered.
+        /// </summary>
+        public static ValueTask<(byte Tag, byte[] Payload)> ReadBackendFrameAsync(Stream stream, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(stream);
-            byte[] header = new byte[5];
-            await stream.ReadExactlyAsync(header, cancellationToken).ConfigureAwait(false);
-            int length = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(1));
-            if (length is < 4 or > MaximumFrameLength)
+            if (stream is ReadBufferedStream buffered)
             {
-                throw new IOException("Invalid pgwire frame length.");
+                ReadOnlySpan<byte> available = buffered.Buffered;
+                if (available.Length >= HeaderLength)
+                {
+                    byte tag = available[0];
+                    int payloadLength = ReadPayloadLength(available[1..]);
+                    if (available.Length - HeaderLength >= payloadLength)
+                    {
+                        byte[] payload = available.Slice(HeaderLength, payloadLength).ToArray();
+                        buffered.Consume(HeaderLength + payloadLength);
+                        return ValueTask.FromResult((tag, payload));
+                    }
+                }
             }
 
-            byte[] payload = new byte[length - 4];
+            return ReadBackendFrameCoreAsync(stream, cancellationToken);
+        }
+
+        private static async ValueTask<(byte Tag, byte[] Payload)> ReadBackendFrameCoreAsync(Stream stream, CancellationToken cancellationToken)
+        {
+            byte[] header = new byte[HeaderLength];
+            await stream.ReadExactlyAsync(header, cancellationToken).ConfigureAwait(false);
+            byte[] payload = new byte[ReadPayloadLength(header.AsSpan(1))];
             await stream.ReadExactlyAsync(payload, cancellationToken).ConfigureAwait(false);
             return (header[0], payload);
+        }
+
+        /// <summary>Parses the frame length field, which counts itself, and returns the payload length.</summary>
+        private static int ReadPayloadLength(ReadOnlySpan<byte> lengthField)
+        {
+            int length = BinaryPrimitives.ReadInt32BigEndian(lengthField);
+            return length is < 4 or > MaximumFrameLength
+                ? throw new IOException("Invalid pgwire frame length.")
+                : length - 4;
         }
 
         /// <summary>Writes one frame and zeroes any pooled buffer afterwards because payloads can carry credentials.</summary>

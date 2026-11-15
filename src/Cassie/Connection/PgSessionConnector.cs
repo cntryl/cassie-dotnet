@@ -24,6 +24,9 @@ namespace Cntryl.Cassie.Connection
                     session.UseStream(await TlsNegotiator.NegotiateAsync(session.Stream, settings, cancellationToken).ConfigureAwait(false));
                 }
 
+                // Buffer only once the final transport is in place: TLS negotiation must see the raw socket bytes.
+                session.UseStream(new ReadBufferedStream(session.Stream));
+
                 await session.Stream.WriteAsync(SessionMessages.Startup(settings.Username, settings.Database, settings.ApplicationName, settings.Options), cancellationToken).ConfigureAwait(false);
                 (string serverVersion, int processId, int secretKey) = await AuthenticateAsync(session.Stream, settings, session.DateStyle, cancellationToken).ConfigureAwait(false);
                 session.Identify(serverVersion, processId, secretKey);

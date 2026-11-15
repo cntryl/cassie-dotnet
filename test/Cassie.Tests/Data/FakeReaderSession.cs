@@ -30,12 +30,12 @@ namespace Cntryl.Cassie.Tests.Data
             _frames.Enqueue((tag, payload));
         }
 
-        public Task<(byte Tag, byte[] Payload)> ReadFrameAsync(CancellationToken cancellationToken)
+        public ValueTask<(byte Tag, byte[] Payload)> ReadFrameAsync(CancellationToken cancellationToken)
         {
             ReadTokens.Add(cancellationToken);
             return ReadHandler is null
-                ? Task.FromResult(_frames.Dequeue())
-                : ReadHandler(cancellationToken);
+                ? ValueTask.FromResult(_frames.Dequeue())
+                : new ValueTask<(byte Tag, byte[] Payload)>(ReadHandler(cancellationToken));
         }
 
         public Task<bool> CancelCurrentQueryAsync()

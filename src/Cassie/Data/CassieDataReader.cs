@@ -895,14 +895,14 @@ namespace Cntryl.Cassie.Data
             }
         }
 
-        private Task<(byte Tag, byte[] Payload)> ReadQueryFrameAsync(CancellationToken cancellationToken, bool allowAbortOnCancellation = false)
+        private ValueTask<(byte Tag, byte[] Payload)> ReadQueryFrameAsync(CancellationToken cancellationToken, bool allowAbortOnCancellation = false)
         {
             return _resumePortalAsync is null && _sendExtendedSyncAsync is null
                 ? _cancellation.ReadFrameAsync(cancellationToken, allowAbortOnCancellation)
                 : ReadQueryFrameWithProtocolHandlingAsync(allowAbortOnCancellation, cancellationToken);
         }
 
-        private async Task<(byte Tag, byte[] Payload)> ReadQueryFrameWithProtocolHandlingAsync(bool allowAbortOnCancellation, CancellationToken cancellationToken)
+        private async ValueTask<(byte Tag, byte[] Payload)> ReadQueryFrameWithProtocolHandlingAsync(bool allowAbortOnCancellation, CancellationToken cancellationToken)
         {
             while (true)
             {

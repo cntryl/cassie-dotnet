@@ -1,0 +1,173 @@
+namespace Cntryl.Cassie.Protocol
+{
+    /// <summary>
+    /// Buffers reads from a transport stream so many small pgwire frames cost one transport read.
+    /// Writes and flushes pass straight through; the wrapper owns the inner stream.
+    /// </summary>
+    internal sealed class ReadBufferedStream(Stream inner, int bufferSize = ReadBufferedStream.DefaultBufferSize) : Stream
+    {
+        internal const int DefaultBufferSize = 8192;
+        private readonly byte[] _buffer = GC.AllocateUninitializedArray<byte>(bufferSize);
+        private int _offset;
+        private int _count;
+
+        /// <summary>Gets the bytes already read from the transport and not yet consumed.</summary>
+        internal ReadOnlySpan<byte> Buffered => _buffer.AsSpan(_offset, _count);
+
+        /// <summary>Marks buffered bytes as consumed.</summary>
+        internal void Consume(int byteCount)
+        {
+            ArgumentOutOfRangeException.ThrowIfGreaterThan((uint)byteCount, (uint)_count, nameof(byteCount));
+            _offset += byteCount;
+            _count -= byteCount;
+        }
+
+        /// <inheritdoc />
+        public override bool CanRead => inner.CanRead;
+
+        /// <inheritdoc />
+        public override bool CanSeek => false;
+
+        /// <inheritdoc />
+        public override bool CanWrite => inner.CanWrite;
+
+        /// <inheritdoc />
+        public override bool CanTimeout => inner.CanTimeout;
+
+        /// <inheritdoc />
+        public override int ReadTimeout { get => inner.ReadTimeout; set => inner.ReadTimeout = value; }
+
+        /// <inheritdoc />
+        public override int WriteTimeout { get => inner.WriteTimeout; set => inner.WriteTimeout = value; }
+
+        /// <inheritdoc />
+        public override long Length => throw new NotSupportedException();
+
+        /// <inheritdoc />
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+
+        /// <inheritdoc />
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            ValidateBufferArguments(buffer, offset, count);
+            return Read(buffer.AsSpan(offset, count));
+        }
+
+        /// <inheritdoc />
+        public override int Read(Span<byte> buffer)
+        {
+            if (_count == 0)
+            {
+                if (buffer.Length >= _buffer.Length)
+                {
+                    return inner.Read(buffer);
+                }
+
+                _offset = 0;
+                _count = inner.Read(_buffer);
+            }
+
+            return CopyBuffered(buffer);
+        }
+
+        /// <inheritdoc />
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            ValidateBufferArguments(buffer, offset, count);
+            return ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+        }
+
+        /// <inheritdoc />
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            return _count > 0
+                ? ValueTask.FromResult(CopyBuffered(buffer.Span))
+                : buffer.Length >= _buffer.Length
+                    ? inner.ReadAsync(buffer, cancellationToken)
+                    : FillAndCopyAsync(buffer, cancellationToken);
+        }
+
+        private async ValueTask<int> FillAndCopyAsync(Memory<byte> buffer, CancellationToken cancellationToken)
+        {
+            int read = await inner.ReadAsync(_buffer, cancellationToken).ConfigureAwait(false);
+            _offset = 0;
+            _count = read;
+            return CopyBuffered(buffer.Span);
+        }
+
+        private int CopyBuffered(Span<byte> destination)
+        {
+            int copied = Math.Min(destination.Length, _count);
+            _buffer.AsSpan(_offset, copied).CopyTo(destination);
+            _offset += copied;
+            _count -= copied;
+            return copied;
+        }
+
+        /// <inheritdoc />
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            inner.Write(buffer, offset, count);
+        }
+
+        /// <inheritdoc />
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            inner.Write(buffer);
+        }
+
+        /// <inheritdoc />
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            return inner.WriteAsync(buffer, offset, count, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            return inner.WriteAsync(buffer, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public override void Flush()
+        {
+            inner.Flush();
+        }
+
+        /// <inheritdoc />
+        public override Task FlushAsync(CancellationToken cancellationToken)
+        {
+            return inner.FlushAsync(cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            throw new NotSupportedException();
+        }
+
+        /// <inheritdoc />
+        public override void SetLength(long value)
+        {
+            throw new NotSupportedException();
+        }
+
+        /// <inheritdoc />
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                inner.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+
+        /// <inheritdoc />
+        public override async ValueTask DisposeAsync()
+        {
+            await inner.DisposeAsync().ConfigureAwait(false);
+            await base.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+}

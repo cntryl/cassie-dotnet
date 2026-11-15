@@ -26,6 +26,43 @@ namespace Cntryl.Cassie.Tests.Data
         }
 
         [Fact]
+        public async Task ShouldStartCancelRequestGivenTokenAlreadyCanceledWhenFrameIsAlreadyBuffered()
+        {
+            // Arrange
+            FakeReaderSession session = new() { CancelHandler = static () => Task.FromResult(true) };
+            session.Enqueue((byte)'D', [1]);
+            await using ReaderCancellation cancellation = new(session, commandTimeout: 0);
+            using CancellationTokenSource caller = new();
+            await caller.CancelAsync();
+
+            // Act
+            (byte tag, _) = await cancellation.ReadFrameAsync(caller.Token);
+
+            // Assert
+            Assert.Equal((byte)'D', tag);
+            Assert.Equal(1, session.CancelRequests);
+        }
+
+        [Fact]
+        public async Task ShouldSkipCancelRequestGivenLiveTokenWhenFrameIsAlreadyBuffered()
+        {
+            // Arrange
+            FakeReaderSession session = new() { CancelHandler = static () => Task.FromResult(true) };
+            session.Enqueue((byte)'D', [1]);
+            await using ReaderCancellation cancellation = new(session, commandTimeout: 0);
+            using CancellationTokenSource caller = new();
+
+            // Act
+            ValueTask<(byte Tag, byte[] Payload)> reading = cancellation.ReadFrameAsync(caller.Token);
+            bool completedSynchronously = reading.IsCompletedSuccessfully;
+            _ = await reading;
+
+            // Assert
+            Assert.True(completedSynchronously);
+            Assert.Equal(0, session.CancelRequests);
+        }
+
+        [Fact]
         public async Task ShouldFinishCurrentFrameGivenCallerCancellationWhenReadHasStarted()
         {
             // Arrange
@@ -35,7 +72,7 @@ namespace Cntryl.Cassie.Tests.Data
             using CancellationTokenSource caller = new();
 
             // Act
-            Task<(byte Tag, byte[] Payload)> reading = cancellation.ReadFrameAsync(caller.Token);
+            Task<(byte Tag, byte[] Payload)> reading = cancellation.ReadFrameAsync(caller.Token).AsTask();
             await caller.CancelAsync();
             bool frameStillPending = !reading.IsCompleted;
             response.SetResult(((byte)'D', [1, 2, 3]));
