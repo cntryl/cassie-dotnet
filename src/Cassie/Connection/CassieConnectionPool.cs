@@ -13,59 +13,111 @@ namespace Cntryl.Cassie.Connection
         private int _waiters;
         private bool _cleared;
 
-        internal async Task<(PgSession? Session, bool ReservedSlot)> RentAsync(CancellationToken cancellationToken)
+        private enum RentOutcome
+        {
+            /// <summary>An idle session was taken, or a slot was reserved for a new one.</summary>
+            Rented,
+
+            /// <summary>An unusable idle session was removed and must be closed before trying again.</summary>
+            Stale,
+
+            /// <summary>The pool is full; the caller is registered as a waiter.</summary>
+            MustWait
+        }
+
+        internal Task<(PgSession? Session, bool ReservedSlot)> RentAsync(bool synchronous, CancellationToken cancellationToken)
+        {
+            return synchronous ? Task.FromResult(Rent(cancellationToken)) : RentCoreAsync(cancellationToken);
+        }
+
+        private async Task<(PgSession? Session, bool ReservedSlot)> RentCoreAsync(CancellationToken cancellationToken)
         {
             while (true)
             {
-                PgSession? stale = null;
-                lock (_gate)
+                (RentOutcome outcome, PgSession? session) = TryRent();
+                switch (outcome)
                 {
-                    ObjectDisposedException.ThrowIf(_cleared, this);
-                    if (_idle.TryDequeue(out PgSession? available))
-                    {
-                        if (!IsUnusable(available))
+                    case RentOutcome.Rented:
+                        return (session, session is null);
+                    case RentOutcome.Stale:
+                        await session!.DisposeAsync().ConfigureAwait(false);
+                        break;
+                    default:
+                        try
                         {
-                            return (available, false);
+                            await _changed.WaitAsync(cancellationToken).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            StopWaiting();
                         }
 
-                        _physicalCount--;
-                        stale = available;
-                    }
-                    else if (_physicalCount < maximumPoolSize)
+                        break;
+                }
+            }
+        }
+
+        /// <summary>The blocking form, used by synchronous opens: it waits on the calling thread.</summary>
+        private (PgSession? Session, bool ReservedSlot) Rent(CancellationToken cancellationToken)
+        {
+            while (true)
+            {
+                (RentOutcome outcome, PgSession? session) = TryRent();
+                switch (outcome)
+                {
+                    case RentOutcome.Rented:
+                        return (session, session is null);
+                    case RentOutcome.Stale:
+                        session!.Dispose();
+                        break;
+                    default:
+                        try
+                        {
+                            _changed.Wait(cancellationToken);
+                        }
+                        finally
+                        {
+                            StopWaiting();
+                        }
+
+                        break;
+                }
+            }
+        }
+
+        /// <summary>Takes an idle session, reserves a slot for a new one (a null session), or registers a waiter.</summary>
+        private (RentOutcome Outcome, PgSession? Session) TryRent()
+        {
+            lock (_gate)
+            {
+                ObjectDisposedException.ThrowIf(_cleared, this);
+                if (_idle.TryDequeue(out PgSession? available))
+                {
+                    if (!IsUnusable(available))
                     {
-                        _physicalCount++;
-                        return (null, true);
-                    }
-                    else
-                    {
-                        _waiters++;
-                    }
-                }
-
-                if (stale is not null)
-                {
-                    await stale.DisposeAsync().ConfigureAwait(false);
-                    continue;
-                }
-
-                try
-                {
-                    await _changed.WaitAsync(cancellationToken).ConfigureAwait(false);
-                }
-                catch
-                {
-                    lock (_gate)
-                    {
-                        _waiters--;
+                        return (RentOutcome.Rented, available);
                     }
 
-                    throw;
+                    _physicalCount--;
+                    return (RentOutcome.Stale, available);
                 }
 
-                lock (_gate)
+                if (_physicalCount < maximumPoolSize)
                 {
-                    _waiters--;
+                    _physicalCount++;
+                    return (RentOutcome.Rented, null);
                 }
+
+                _waiters++;
+                return (RentOutcome.MustWait, null);
+            }
+        }
+
+        private void StopWaiting()
+        {
+            lock (_gate)
+            {
+                _waiters--;
             }
         }
 

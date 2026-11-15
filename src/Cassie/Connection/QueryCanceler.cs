@@ -8,18 +8,25 @@ namespace Cntryl.Cassie.Connection
     internal static class QueryCanceler
     {
         /// <summary>Returns true when the cancel request reached the server, and false when it could not be sent.</summary>
-        public static async Task<bool> SendAsync(CassieConnectionStringBuilder settings, int backendProcessId, int backendSecretKey)
+        public static async Task<bool> SendAsync(CassieConnectionStringBuilder settings, int backendProcessId, int backendSecretKey, bool synchronous = false)
         {
             ArgumentNullException.ThrowIfNull(settings);
             using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(Math.Clamp(settings.Timeout, 1, 5)));
-            return await SendAsync(settings, backendProcessId, backendSecretKey, timeout.Token).ConfigureAwait(false);
+            return await SendAsync(settings, backendProcessId, backendSecretKey, timeout.Token, synchronous).ConfigureAwait(false);
         }
 
         /// <summary>Sends a cancel request within the caller's existing recovery deadline.</summary>
-        public static async Task<bool> SendAsync(CassieConnectionStringBuilder settings, int backendProcessId, int backendSecretKey, CancellationToken cancellationToken)
+        public static Task<bool> SendAsync(CassieConnectionStringBuilder settings, int backendProcessId, int backendSecretKey, CancellationToken cancellationToken, bool synchronous = false)
         {
             ArgumentNullException.ThrowIfNull(settings);
             byte[] packet = SessionMessages.CancelRequest(backendProcessId, backendSecretKey);
+            return synchronous
+                ? Task.FromResult(Send(settings, packet, cancellationToken))
+                : SendCoreAsync(settings, packet, cancellationToken);
+        }
+
+        private static async Task<bool> SendCoreAsync(CassieConnectionStringBuilder settings, byte[] packet, CancellationToken cancellationToken)
+        {
             try
             {
                 using TcpClient cancelClient = new() { NoDelay = true };
@@ -38,10 +45,45 @@ namespace Cntryl.Cassie.Connection
 
                 return true;
             }
-            catch (Exception exception) when (exception is SocketException or IOException or OperationCanceledException or ObjectDisposedException or InvalidOperationException or AuthenticationException)
+            catch (Exception exception) when (IsSendFailure(exception))
             {
                 return false;
             }
+        }
+
+        /// <summary>The blocking form, used when <c>DbCommand.Cancel</c> is called.</summary>
+        private static bool Send(CassieConnectionStringBuilder settings, byte[] packet, CancellationToken cancellationToken)
+        {
+            try
+            {
+                using TcpClient cancelClient = new() { NoDelay = true };
+                SynchronousCall.RunBlocking(cancelClient, (cancelClient, settings), static target => target.cancelClient.Connect(target.settings.Host, target.settings.Port), cancellationToken);
+                Stream cancelStream = cancelClient.GetStream();
+                if (settings.SslMode != CassieSslMode.Disable)
+                {
+                    cancelStream = TlsNegotiator.NegotiateBlocking(cancelStream, settings, cancellationToken);
+                }
+
+                using (cancelStream)
+                {
+                    SynchronousCall.RunBlocking(cancelStream, (cancelStream, packet), static request =>
+                    {
+                        request.cancelStream.Write(request.packet);
+                        request.cancelStream.Flush();
+                    }, cancellationToken);
+                }
+
+                return true;
+            }
+            catch (Exception exception) when (IsSendFailure(exception))
+            {
+                return false;
+            }
+        }
+
+        private static bool IsSendFailure(Exception exception)
+        {
+            return exception is SocketException or IOException or OperationCanceledException or ObjectDisposedException or InvalidOperationException or AuthenticationException;
         }
     }
 }

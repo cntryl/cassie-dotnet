@@ -25,6 +25,15 @@ namespace Cntryl.Cassie.Tests.Data
         public Func<Task<bool>>? CancelHandler { get; set; }
         public Func<CancellationToken, Task<(byte Tag, byte[] Payload)>>? ReadHandler { get; set; }
 
+        public bool EnterSynchronous()
+        {
+            return false;
+        }
+
+        public void ExitSynchronous()
+        {
+        }
+
         public void Enqueue(byte tag, byte[] payload)
         {
             _frames.Enqueue((tag, payload));

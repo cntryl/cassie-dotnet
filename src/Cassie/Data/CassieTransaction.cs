@@ -120,7 +120,7 @@ namespace Cntryl.Cassie.Data
 
         private void Complete(string sql)
         {
-            CompleteAsync(sql, CancellationToken.None).GetAwaiter().GetResult();
+            _connection.RunSynchronously(() => CompleteAsync(sql, CancellationToken.None));
         }
 
         private async Task CompleteAsync(string sql, CancellationToken cancellationToken)
@@ -132,7 +132,7 @@ namespace Cntryl.Cassie.Data
 
         private void ExecuteSavepoint(string operation, string name)
         {
-            ExecuteSavepointAsync(operation, name, CancellationToken.None).GetAwaiter().GetResult();
+            _connection.RunSynchronously(() => ExecuteSavepointAsync(operation, name, CancellationToken.None));
         }
 
         private async Task ExecuteSavepointAsync(string operation, string name, CancellationToken cancellationToken)

@@ -11,6 +11,12 @@ namespace Cntryl.Cassie.Protocol
         private int _offset;
         private int _count;
 
+        /// <summary>
+        /// Gets or sets whether the asynchronous members block on the calling thread and return completed tasks.
+        /// Set for the duration of a synchronous ADO.NET call so it never waits on the thread pool.
+        /// </summary>
+        internal bool Synchronous { get; set; }
+
         /// <summary>Gets the bytes already read from the transport and not yet consumed.</summary>
         internal ReadOnlySpan<byte> Buffered => _buffer.AsSpan(_offset, _count);
 
@@ -82,9 +88,56 @@ namespace Cntryl.Cassie.Protocol
         {
             return _count > 0
                 ? ValueTask.FromResult(CopyBuffered(buffer.Span))
-                : buffer.Length >= _buffer.Length
-                    ? inner.ReadAsync(buffer, cancellationToken)
-                    : FillAndCopyAsync(buffer, cancellationToken);
+                : Synchronous
+                    ? ValueTask.FromResult(ReadBlocking(buffer.Span, cancellationToken))
+                    : buffer.Length >= _buffer.Length
+                        ? inner.ReadAsync(buffer, cancellationToken)
+                        : FillAndCopyAsync(buffer, cancellationToken);
+        }
+
+        private int ReadBlocking(Span<byte> destination, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            using CancellationTokenRegistration abort = RegisterAbort(cancellationToken);
+            int read;
+            try
+            {
+                read = Read(destination);
+            }
+            catch (Exception exception) when (IsAbortedByCancellation(exception, cancellationToken))
+            {
+                throw new OperationCanceledException("The read was canceled.", exception, cancellationToken);
+            }
+
+            // Closing a socket under a blocked read can surface as end-of-stream instead of an exception.
+            return read == 0 && destination.Length > 0 && cancellationToken.IsCancellationRequested
+                ? throw new OperationCanceledException("The read was canceled.", cancellationToken)
+                : read;
+        }
+
+        private void WriteBlocking(ReadOnlySpan<byte> source, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            using CancellationTokenRegistration abort = RegisterAbort(cancellationToken);
+            try
+            {
+                inner.Write(source);
+            }
+            catch (Exception exception) when (IsAbortedByCancellation(exception, cancellationToken))
+            {
+                throw new OperationCanceledException("The write was canceled.", exception, cancellationToken);
+            }
+        }
+
+        /// <summary>A blocking call cannot observe a token, so cancellation closes the transport underneath it.</summary>
+        private CancellationTokenRegistration RegisterAbort(CancellationToken cancellationToken)
+        {
+            return cancellationToken.UnsafeRegister(static transport => ((Stream)transport!).Dispose(), inner);
+        }
+
+        private static bool IsAbortedByCancellation(Exception exception, CancellationToken cancellationToken)
+        {
+            return cancellationToken.IsCancellationRequested && exception is IOException or ObjectDisposedException;
         }
 
         private async ValueTask<int> FillAndCopyAsync(Memory<byte> buffer, CancellationToken cancellationToken)
@@ -119,13 +172,20 @@ namespace Cntryl.Cassie.Protocol
         /// <inheritdoc />
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-            return inner.WriteAsync(buffer, offset, count, cancellationToken);
+            ValidateBufferArguments(buffer, offset, count);
+            return WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
         }
 
         /// <inheritdoc />
         public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
         {
-            return inner.WriteAsync(buffer, cancellationToken);
+            if (!Synchronous)
+            {
+                return inner.WriteAsync(buffer, cancellationToken);
+            }
+
+            WriteBlocking(buffer.Span, cancellationToken);
+            return ValueTask.CompletedTask;
         }
 
         /// <inheritdoc />
@@ -137,7 +197,14 @@ namespace Cntryl.Cassie.Protocol
         /// <inheritdoc />
         public override Task FlushAsync(CancellationToken cancellationToken)
         {
-            return inner.FlushAsync(cancellationToken);
+            if (!Synchronous)
+            {
+                return inner.FlushAsync(cancellationToken);
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            inner.Flush();
+            return Task.CompletedTask;
         }
 
         /// <inheritdoc />
@@ -164,7 +231,13 @@ namespace Cntryl.Cassie.Protocol
         }
 
         /// <inheritdoc />
-        public override async ValueTask DisposeAsync()
+        public override ValueTask DisposeAsync()
+        {
+            // The base implementation disposes synchronously on the calling thread.
+            return Synchronous ? base.DisposeAsync() : DisposeCoreAsync();
+        }
+
+        private async ValueTask DisposeCoreAsync()
         {
             await inner.DisposeAsync().ConfigureAwait(false);
             await base.DisposeAsync().ConfigureAwait(false);

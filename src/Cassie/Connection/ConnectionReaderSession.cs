@@ -56,5 +56,15 @@ namespace Cntryl.Cassie.Connection
         {
             return connection.CloseAsync();
         }
+
+        public bool EnterSynchronous()
+        {
+            return connection.EnterSynchronous();
+        }
+
+        public void ExitSynchronous()
+        {
+            connection.ExitSynchronous();
+        }
     }
 }

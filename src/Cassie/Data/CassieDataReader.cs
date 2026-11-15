@@ -1,5 +1,6 @@
 using System.Buffers.Text;
 using System.Buffers.Binary;
+using Cntryl.Cassie.Connection;
 using Cntryl.Cassie.Protocol;
 using Cntryl.Cassie.Diagnostics;
 using Cntryl.Cassie.Types;
@@ -88,7 +89,7 @@ namespace Cntryl.Cassie.Data
                     return false;
                 }
 
-                bool hasRow = ReadAsync(CancellationToken.None).GetAwaiter().GetResult();
+                bool hasRow = Read();
                 if (hasRow)
                 {
                     _prefetchedRow = true;
@@ -156,7 +157,18 @@ namespace Cntryl.Cassie.Data
         /// <inheritdoc />
         public override bool Read()
         {
-            return ReadAsync(CancellationToken.None).GetAwaiter().GetResult();
+            bool entered = _session.EnterSynchronous();
+            try
+            {
+                return SynchronousCall.Wait(ReadAsync(CancellationToken.None));
+            }
+            finally
+            {
+                if (entered)
+                {
+                    _session.ExitSynchronous();
+                }
+            }
         }
 
         /// <inheritdoc />
@@ -265,7 +277,18 @@ namespace Cntryl.Cassie.Data
         /// <inheritdoc />
         public override bool NextResult()
         {
-            return NextResultAsync(CancellationToken.None).GetAwaiter().GetResult();
+            bool entered = _session.EnterSynchronous();
+            try
+            {
+                return SynchronousCall.Wait(NextResultAsync(CancellationToken.None));
+            }
+            finally
+            {
+                if (entered)
+                {
+                    _session.ExitSynchronous();
+                }
+            }
         }
 
         /// <inheritdoc />
@@ -603,7 +626,18 @@ namespace Cntryl.Cassie.Data
         /// <inheritdoc />
         public override void Close()
         {
-            CloseAsync().GetAwaiter().GetResult();
+            bool entered = _session.EnterSynchronous();
+            try
+            {
+                SynchronousCall.Wait(CloseAsync());
+            }
+            finally
+            {
+                if (entered)
+                {
+                    _session.ExitSynchronous();
+                }
+            }
         }
 
         /// <inheritdoc />

@@ -19,5 +19,11 @@ namespace Cntryl.Cassie.Data
         void ObserveCommandComplete(CommandTag tag);
         Task ReaderClosedAsync();
         Task CloseAsync();
+
+        /// <summary>Switches the session to blocking I/O; returns false when an enclosing synchronous call already did.</summary>
+        bool EnterSynchronous();
+
+        /// <summary>Switches the session back to asynchronous I/O.</summary>
+        void ExitSynchronous();
     }
 }
