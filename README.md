@@ -65,7 +65,7 @@ CassieRestQueryResult result = await client.Admin.ExecuteQueryAsync(
 
 Create the collection and vector index before searching. Cassie uses its
 configured embedding provider to embed the search text. The REST client uses
-`/v1/...` routes; run it with a server revision that supports them. See the
+the server's `/api/v1/...` routes. See the
 [REST guide] for vectors, administration, and probe endpoints.
 
 ## Dependency injection

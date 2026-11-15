@@ -51,33 +51,33 @@ namespace Cntryl.Cassie.Rest
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(username);
             ArgumentNullException.ThrowIfNull(password);
-            return SendAsync(HttpMethod.Post, "v1/auth/login", CreateJsonContent(new RestLoginRequest(username, password), CassieRestJsonContext.Default.RestLoginRequest), CassieRestJsonContext.Default.CassieRestSession, cancellationToken);
+            return SendAsync(HttpMethod.Post, "api/v1/auth/login", CreateJsonContent(new RestLoginRequest(username, password), CassieRestJsonContext.Default.RestLoginRequest), CassieRestJsonContext.Default.CassieRestSession, cancellationToken);
         }
 
         /// <summary>Gets the authenticated session's user and role.</summary>
         public Task<CassieRestSession> GetSessionAsync(CancellationToken cancellationToken = default)
         {
-            return SendAsync(HttpMethod.Get, "v1/auth/session", null, CassieRestJsonContext.Default.CassieRestSession, cancellationToken);
+            return SendAsync(HttpMethod.Get, "api/v1/auth/session", null, CassieRestJsonContext.Default.CassieRestSession, cancellationToken);
         }
 
         /// <summary>Revokes the current server session and clears its cookie.</summary>
         public async Task LogoutAsync(CancellationToken cancellationToken = default)
         {
-            RestLogoutResponse response = await SendAsync(HttpMethod.Post, "v1/auth/logout", null, CassieRestJsonContext.Default.RestLogoutResponse, cancellationToken).ConfigureAwait(false);
+            RestLogoutResponse response = await SendAsync(HttpMethod.Post, "api/v1/auth/logout", null, CassieRestJsonContext.Default.RestLogoutResponse, cancellationToken).ConfigureAwait(false);
             _ = response.LoggedOut ?? throw new JsonException("Cassie returned no logout acknowledgement.");
         }
 
         /// <summary>Lists the collection names visible through the REST API.</summary>
         public async Task<IReadOnlyList<string>> ListCollectionsAsync(CancellationToken cancellationToken = default)
         {
-            return await SendAsync(HttpMethod.Get, "v1/collections", null, CassieRestJsonContext.Default.StringArray, cancellationToken).ConfigureAwait(false);
+            return await SendAsync(HttpMethod.Get, "api/v1/collections", null, CassieRestJsonContext.Default.StringArray, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>Creates a collection and returns its server-reported name.</summary>
         public async Task<string> CreateCollectionAsync(CassieCollectionDefinition definition, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(definition);
-            RestCollectionResponse response = await SendAsync(HttpMethod.Post, "v1/collections", CreateJsonContent(definition, CassieRestJsonContext.Default.CassieCollectionDefinition), CassieRestJsonContext.Default.RestCollectionResponse, cancellationToken).ConfigureAwait(false);
+            RestCollectionResponse response = await SendAsync(HttpMethod.Post, "api/v1/collections", CreateJsonContent(definition, CassieRestJsonContext.Default.CassieCollectionDefinition), CassieRestJsonContext.Default.RestCollectionResponse, cancellationToken).ConfigureAwait(false);
             return response.Collection ?? throw new JsonException("Cassie returned no collection name.");
         }
 
@@ -155,7 +155,7 @@ namespace Cntryl.Cassie.Rest
 
         private static string CollectionPath(string collection)
         {
-            return "v1/collections/" + EscapePathSegment(collection, nameof(collection));
+            return "api/v1/collections/" + EscapePathSegment(collection, nameof(collection));
         }
 
         private static string DocumentPath(string collection, string id)

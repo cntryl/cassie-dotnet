@@ -145,7 +145,7 @@ namespace Cntryl.Cassie.DependencyInjection.Tests
         private static Task<ScriptedHttpReply> RespondToSession(ScriptedHttpRequest request)
         {
             Assert.DoesNotContain("Authorization", request.Headers.Keys, StringComparer.OrdinalIgnoreCase);
-            if (request.Target == "/v1/auth/login")
+            if (request.Target == "/api/v1/auth/login")
             {
                 Assert.Equal("POST", request.Method);
                 string user = JsonNode.Parse(request.Body)!["username"]!.GetValue<string>();
@@ -157,7 +157,7 @@ namespace Cntryl.Cassie.DependencyInjection.Tests
             }
 
             Assert.Equal("GET", request.Method);
-            Assert.True(request.Target is "/v1/auth/session" or "/metrics");
+            Assert.True(request.Target is "/api/v1/auth/session" or "/metrics");
             string cookie = request.Headers["Cookie"];
             Assert.StartsWith("cassie_session=", cookie, StringComparison.Ordinal);
             Assert.EndsWith("-session", cookie, StringComparison.Ordinal);

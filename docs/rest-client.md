@@ -1,6 +1,6 @@
 # REST client
 
-`Cntryl.Cassie.Rest` adds a REST client alongside the ADO.NET provider. It targets the agreed `/v1/...` server contract. The earlier test server exposed `/api/v1/...`, causing six live-test failures until the server migration lands.
+`Cntryl.Cassie.Rest` adds a REST client alongside the ADO.NET provider. It targets the `/api/v1/...` routes the Cassie server serves, the same routes the server's own administration UI uses. Health probes and `/metrics` are unversioned at the root.
 
 ## Connection and authentication
 
@@ -27,19 +27,19 @@ Paths below are relative to the configured base address. Resource identifiers ar
 
 | Client method | HTTP route |
 | --- | --- |
-| `LoginAsync` / `GetSessionAsync` / `LogoutAsync` | `POST v1/auth/login`, `GET v1/auth/session`, `POST v1/auth/logout` |
-| `ListCollectionsAsync` / `CreateCollectionAsync` | `GET` / `POST v1/collections` |
-| `AddDocumentAsync` | `POST v1/collections/{collection}/documents` |
-| `GetDocumentAsync` / `DeleteDocumentAsync` | `GET` / `DELETE v1/collections/{collection}/documents/{id}` |
-| `CreateVectorIndexAsync` | `POST v1/collections/{collection}/indexes` |
-| `SearchAsync` | `POST v1/collections/{collection}/search` |
-| `Admin.ListDatabasesAsync` / `CreateDatabaseAsync` | `GET` / `POST v1/admin/databases` |
-| `Admin.GetSchemaAsync` | `GET v1/admin/query/schema?database=...` |
-| `Admin.ExecuteQueryAsync` / `ValidateQueryAsync` / `ExplainQueryAsync` | `POST v1/admin/query/execute`, `validate`, or `explain` |
-| `Admin.CancelQueryAsync` | `DELETE v1/admin/query-operations/{operationId}` |
-| `Admin.ExportVerificationManifestAsync` | `POST v1/admin/projections/{projection}/verification-manifests` |
-| `Admin.CompareVerificationManifestsAsync` | `POST v1/admin/projection-consistency-checks` |
-| `Admin.ListProjectionConsistencyReportsAsync` | `GET v1/admin/projection-consistency-reports` |
+| `LoginAsync` / `GetSessionAsync` / `LogoutAsync` | `POST api/v1/auth/login`, `GET api/v1/auth/session`, `POST api/v1/auth/logout` |
+| `ListCollectionsAsync` / `CreateCollectionAsync` | `GET` / `POST api/v1/collections` |
+| `AddDocumentAsync` | `POST api/v1/collections/{collection}/documents` |
+| `GetDocumentAsync` / `DeleteDocumentAsync` | `GET` / `DELETE api/v1/collections/{collection}/documents/{id}` |
+| `CreateVectorIndexAsync` | `POST api/v1/collections/{collection}/indexes` |
+| `SearchAsync` | `POST api/v1/collections/{collection}/search` |
+| `Admin.ListDatabasesAsync` / `CreateDatabaseAsync` | `GET` / `POST api/v1/admin/databases` |
+| `Admin.GetSchemaAsync` | `GET api/v1/admin/query/schema?database=...` |
+| `Admin.ExecuteQueryAsync` / `ValidateQueryAsync` / `ExplainQueryAsync` | `POST api/v1/admin/query/execute`, `validate`, or `explain` |
+| `Admin.CancelQueryAsync` | `DELETE api/v1/admin/query-operations/{operationId}` |
+| `Admin.ExportVerificationManifestAsync` | `POST api/v1/admin/projections/{projection}/verification-manifests` |
+| `Admin.CompareVerificationManifestsAsync` | `POST api/v1/admin/projection-consistency-checks` |
+| `Admin.ListProjectionConsistencyReportsAsync` | `GET api/v1/admin/projection-consistency-reports` |
 | `Admin.GetReadinessAsync` / `GetStartupAsync` / `GetLivenessAsync` | `GET readyz`, `startupz`, or `livez` |
 | `Admin.GetTargetAsync` / `GetMetricsAsync` | `GET targetz` / `GET metrics` |
 
@@ -61,11 +61,9 @@ Unsuccessful responses raise `CassieRestException`, exposing `HttpRequestExcepti
 
 Request and response serialization uses the internal source-generated `CassieRestJsonContext` and explicit `JsonTypeInfo` overloads. Documents and heterogeneous values use `JsonObject`/`JsonElement`; there is no reflection-based object mapper or additional package dependency. AOT compilation and a package-consumer run are separate evidence from live compatibility with the new routes.
 
-The new-prefix scripted contract suite passes **57 tests**. It covers authentication cookies and session isolation, borrowed-client ownership, base paths and identifiers, exact request payloads, HTTP errors, and cancellation before dispatch and during headers/body reads. The pre-cancellation regression was red when the handler was invoked once; the explicit token preflight returns cancellation with zero dispatches.
+The scripted contract suite covers authentication cookies and session isolation, borrowed-client ownership, base paths and identifiers, exact request payloads, HTTP errors, and cancellation before dispatch and during headers/body reads.
 
-All six live REST workflows previously passed against `/api/v1/...` on Cassie `19edf3a36fc9d2a65187d137370b6f164fcdfb2e`. Those results establish historical payload/operation semantics only. They do not qualify `/v1/...`. The six live tests remain enabled and currently expect the future server contract; against the old pinned server they fail at `/v1/auth/login` with HTTP 401. There is no old-prefix fallback, proxy, or conditional skip.
+An earlier revision of this client targeted a planned `/v1/...` prefix that no published server implemented, so the six live REST workflows failed at login with HTTP 401 (the server answers 401 to any route it does not know). The client now uses `/api/v1/...`, and all six pass against `ghcr.io/cntryl/cassie:main`. If the server later moves its REST prefix, the route constants in `CassieRestClient` and `CassieAdminClient` are the only places to change. See [live-test setup](../test/Cassie.Tests/Live/README.md) for required endpoints and embedding configuration.
 
-Final local validation exercised **610 tests: 604 passed, six failed, zero skipped**. All 527 non-live cases and all 77 existing pgwire live cases passed. XML readback confirmed every failure belongs to the new REST live class and occurs during login against the pre-migration server; no unrelated failure was accepted. The fresh local package restored into an isolated consumer and published as macOS ARM64 Native AOT with warnings treated as errors and no warnings. Its new-prefix REST runtime integration remains unqualified while the server routes are pending. Hosted CI, deployment, publication, and production readiness remain separate claims. See [live-test setup](../test/Cassie.Tests/Live/README.md) for required endpoints and embedding configuration.
-
-CI runs the published `ghcr.io/cntryl/cassie:main` image. Updating that image can
-bring in new server routes without weakening or skipping the live contracts.
+CI runs the published `ghcr.io/cntryl/cassie:main` image, so the live REST and pgwire
+contracts run against the current server on every push.
