@@ -52,6 +52,7 @@ namespace Cntryl.Cassie.Data
         private readonly CassieDiagnostics.OperationScope? _operationScope;
         private readonly Func<CancellationToken, Task>? _resumePortalAsync;
         private readonly Func<Task>? _sendExtendedSyncAsync;
+        private readonly Action<CommandTag?>? _statementCompleted;
         private int _rowsReadCurrentResult;
         private int _lastSequentialOrdinal = -1;
         private int _operationFinished;
@@ -64,8 +65,10 @@ namespace Cntryl.Cassie.Data
             CommandBehavior behavior,
             CassieDiagnostics.OperationScope? operationScope = null,
             Func<CancellationToken, Task>? resumePortalAsync = null,
-            Func<Task>? sendExtendedSyncAsync = null)
+            Func<Task>? sendExtendedSyncAsync = null,
+            Action<CommandTag?>? statementCompleted = null)
         {
+            _statementCompleted = statementCompleted;
             _session = session;
             _cancellation = new ReaderCancellation(session, commandTimeout);
             _operationScope = operationScope;
@@ -131,7 +134,7 @@ namespace Cntryl.Cassie.Data
 
         private async Task InitializeCoreAsync(CancellationToken cancellationToken)
         {
-            while (_columns.Count == 0 && !_complete)
+            while (_columns.Count == 0 && !_complete && !_resultEnded)
             {
                 (byte tag, byte[] payload) = await ReadQueryFrameAsync(cancellationToken).ConfigureAwait(false);
                 if (tag == (byte)'T')
@@ -142,6 +145,12 @@ namespace Cntryl.Cassie.Data
                 else if (tag == (byte)'C')
                 {
                     ParseCommandComplete(payload);
+                    _ = BeginStatementResultWithoutRows();
+                }
+                else if (tag == (byte)'I')
+                {
+                    ObserveEmptyStatement();
+                    _ = BeginStatementResultWithoutRows();
                 }
                 else if (tag == (byte)'S')
                 {
@@ -348,8 +357,22 @@ namespace Cntryl.Cassie.Data
                             _hasCurrentResult = true;
                             return true;
                         case (byte)'S': ParseParameterStatus(payload); break;
-                        case (byte)'C': ParseCommandComplete(payload); break;
-                        case (byte)'I': break;
+                        case (byte)'C':
+                            ParseCommandComplete(payload);
+                            if (BeginStatementResultWithoutRows())
+                            {
+                                return true;
+                            }
+
+                            break;
+                        case (byte)'I':
+                            ObserveEmptyStatement();
+                            if (BeginStatementResultWithoutRows())
+                            {
+                                return true;
+                            }
+
+                            break;
                         case (byte)'E':
                             throw await ReadServerErrorAsync(payload, cancellationToken).ConfigureAwait(false);
                         case (byte)'G': await _session.RejectCopyFromAsync().ConfigureAwait(false); break;
@@ -1326,6 +1349,31 @@ namespace Cntryl.Cassie.Data
             {
                 _recordsAffected = _recordsAffected < 0 ? tag.RowCount : checked(_recordsAffected + tag.RowCount);
             }
+
+            _statementCompleted?.Invoke(tag);
+        }
+
+        /// <summary>Reports an EmptyQueryResponse to a pipelined batch, which counts it as a statement.</summary>
+        private void ObserveEmptyStatement()
+        {
+            _statementCompleted?.Invoke(null);
+        }
+
+        /// <summary>
+        /// A pipelined batch yields one result per statement, including statements that return no rows, so a
+        /// completed statement with no preceding RowDescription becomes a result of its own. A plain command skips it.
+        /// </summary>
+        private bool BeginStatementResultWithoutRows()
+        {
+            if (_statementCompleted is null)
+            {
+                return false;
+            }
+
+            _hasCurrentResult = true;
+            _resultEnded = true;
+            _hasRowsKnown = true;
+            return true;
         }
 
         private static long CopyFieldData<T>(T[] source, long dataOffset, T[]? destination, int destinationOffset, int length)
