@@ -25,7 +25,7 @@ namespace Cntryl.Cassie.Tests.Data
                 ConnectionString = $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;Password=secret;SSL Mode=Disable;Timeout=3;Pooling=false"
             };
             await connection.OpenAsync(TestContext.Current.CancellationToken);
-            using CassieCommand command = (CassieCommand)connection.CreateCommand();
+            using CassieCommand command = connection.CreateCommand();
             command.CommandText = "SELECT @value::int AS value";
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "value", Value = 7 });
 
@@ -63,7 +63,7 @@ namespace Cntryl.Cassie.Tests.Data
                 ConnectionString = $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;Password=secret;SSL Mode=Disable;Timeout=3;Pooling=false"
             };
             await connection.OpenAsync(TestContext.Current.CancellationToken);
-            using CassieCommand command = (CassieCommand)connection.CreateCommand();
+            using CassieCommand command = connection.CreateCommand();
             command.CommandText = "SELECT @value::int AS value";
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "value", Value = 7 });
             DbDataReader reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
@@ -96,7 +96,7 @@ namespace Cntryl.Cassie.Tests.Data
                 ConnectionString = $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;Password=secret;SSL Mode=Disable;Timeout=3;Pooling=false"
             };
             await connection.OpenAsync(TestContext.Current.CancellationToken);
-            using CassieCommand command = (CassieCommand)connection.CreateCommand();
+            using CassieCommand command = connection.CreateCommand();
             command.CommandText = "SELECT @value::int AS value";
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "value", Value = 7 });
             await using DbDataReader reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);

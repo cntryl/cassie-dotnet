@@ -979,7 +979,7 @@ namespace Cntryl.Cassie.Tests.Commands
                 ConnectionString = $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;SSL Mode=Disable;Timeout=3;Pooling=false"
             };
             await connection.OpenAsync(TestContext.Current.CancellationToken);
-            using CassieCommand command = (CassieCommand)connection.CreateCommand();
+            using CassieCommand command = connection.CreateCommand();
 
             // Act
             command.CommandText = "SET DateStyle = 'SQL, DMY'";
@@ -1065,7 +1065,7 @@ namespace Cntryl.Cassie.Tests.Commands
                 ConnectionString = $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;SSL Mode=Disable;Timeout=3;Pooling=false"
             };
             await connection.OpenAsync(TestContext.Current.CancellationToken);
-            using CassieCommand command = (CassieCommand)connection.CreateCommand();
+            using CassieCommand command = connection.CreateCommand();
 
             // Act
             command.CommandText = "SET DateStyle = 'SQL, DMY'";
@@ -1933,7 +1933,7 @@ namespace Cntryl.Cassie.Tests.Commands
                 ConnectionString = $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;Password=secret;SSL Mode=Disable;Timeout=3;Pooling=false"
             };
             await connection.OpenAsync(TestContext.Current.CancellationToken);
-            using CassieCommand command = (CassieCommand)connection.CreateCommand();
+            using CassieCommand command = connection.CreateCommand();
             command.CommandText = "SELECT @value";
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "value", Value = 42 });
 
@@ -2094,7 +2094,7 @@ namespace Cntryl.Cassie.Tests.Commands
                 ConnectionString = $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;Password=secret;SSL Mode=Disable;Timeout=3;Pooling=false"
             };
             await connection.OpenAsync(TestContext.Current.CancellationToken);
-            using CassieCommand command = (CassieCommand)connection.CreateCommand();
+            using CassieCommand command = connection.CreateCommand();
             command.CommandText = "SELECT @value";
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "value", Value = 42 });
 
@@ -2137,7 +2137,7 @@ namespace Cntryl.Cassie.Tests.Commands
                 ConnectionString = $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;Password=secret;SSL Mode=Disable;Timeout=3;Pooling=false"
             };
             await connection.OpenAsync();
-            using CassieCommand command = (CassieCommand)connection.CreateCommand();
+            using CassieCommand command = connection.CreateCommand();
             command.CommandText = "SELECT @value";
             command.BinaryResults = resultFormat != 0;
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "value", DbType = parameterDbType, Value = value, PostgresTypeOid = parameterOid, ParameterFormat = parameterEncoding });
@@ -2195,7 +2195,7 @@ namespace Cntryl.Cassie.Tests.Commands
                 ConnectionString = $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;Password=secret;SSL Mode=Disable;Timeout=3;Pooling=false"
             };
             await connection.OpenAsync(TestContext.Current.CancellationToken);
-            using CassieCommand command = (CassieCommand)connection.CreateCommand();
+            using CassieCommand command = connection.CreateCommand();
             command.CommandText = "SELECT @value";
             _ = command.Parameters.Add(new CassieParameter { ParameterName = "value", Value = 42 });
             await using DbDataReader reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);

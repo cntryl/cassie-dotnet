@@ -93,7 +93,7 @@ namespace Cntryl.Cassie.Tests.Data
             };
             await connection.OpenAsync(TestContext.Current.CancellationToken);
             using CancellationTokenSource cancellation = new();
-            Task<DbTransaction> begin = Task.Run(async () => await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellation.Token));
+            Task<Cassie.Data.CassieTransaction> begin = Task.Run(async () => await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellation.Token));
             _ = await beginReceived.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
 
             // Act

@@ -10,7 +10,6 @@ namespace Cntryl.Cassie.Commands
     /// <summary>Represents a command to execute against Cassie.</summary>
     public sealed class CassieCommand : DbCommand
     {
-        private readonly CassieParameterCollection _parameters = [];
         private string _commandText = string.Empty;
         private int _commandTimeout = 30;
         private readonly PreparedStatementLease _preparedStatement = new();
@@ -33,19 +32,44 @@ namespace Cntryl.Cassie.Commands
         public bool BinaryResults { get; set; }
         /// <inheritdoc />
         public override UpdateRowSource UpdatedRowSource { get; set; }
+        /// <summary>Gets or sets the Cassie connection this command runs on.</summary>
+        public new CassieConnection? Connection { get; set; }
+
+        /// <summary>Gets the parameters bound to this command.</summary>
+        public new CassieParameterCollection Parameters { get; } = [];
+
+        /// <summary>Gets or sets the Cassie transaction this command runs in.</summary>
+        public new CassieTransaction? Transaction { get; set; }
+
         /// <inheritdoc />
-        protected override DbConnection? DbConnection { get; set; }
+        /// <exception cref="InvalidCastException">The value is not a <see cref="CassieConnection"/>.</exception>
+        protected override DbConnection? DbConnection
+        {
+            get => Connection;
+            set => Connection = value is null or CassieConnection
+                ? (CassieConnection?)value
+                : throw new InvalidCastException($"A Cassie command requires a {nameof(CassieConnection)}, not {value.GetType().Name}.");
+        }
+
         /// <inheritdoc />
-        protected override DbParameterCollection DbParameterCollection => _parameters;
+        protected override DbParameterCollection DbParameterCollection => Parameters;
+
         /// <inheritdoc />
-        protected override DbTransaction? DbTransaction { get; set; }
+        /// <exception cref="InvalidCastException">The value is not a <see cref="CassieTransaction"/>.</exception>
+        protected override DbTransaction? DbTransaction
+        {
+            get => Transaction;
+            set => Transaction = value is null or CassieTransaction
+                ? (CassieTransaction?)value
+                : throw new InvalidCastException($"A Cassie command requires a {nameof(CassieTransaction)}, not {value.GetType().Name}.");
+        }
 
         /// <summary>Resolves named text markers or builds a positional stored-procedure call.</summary>
         /// <returns>The SQL text, ordered parameter names, and ordered parameter values.</returns>
         /// <exception cref="InvalidOperationException">A text marker is not bound, or a binding is unused.</exception>
         public CassiePreparedCommand PrepareParameters()
         {
-            CassiePreparedCommand prepared = CommandParameterBinder.Prepare(CommandText, CommandType, _parameters);
+            CassiePreparedCommand prepared = CommandParameterBinder.Prepare(CommandText, CommandType, Parameters);
             ParameterizedQueryBatch.ValidateParameterCount(prepared);
             return prepared;
         }
@@ -104,7 +128,7 @@ namespace Cntryl.Cassie.Commands
                 throw new NotSupportedException("Only text COPY commands are supported.");
             }
 
-            if (_parameters.Count != 0)
+            if (Parameters.Count != 0)
             {
                 throw new NotSupportedException("COPY commands cannot use bound parameters.");
             }
@@ -135,7 +159,7 @@ namespace Cntryl.Cassie.Commands
                 throw new NotSupportedException("Only text COPY commands are supported.");
             }
 
-            if (_parameters.Count != 0)
+            if (Parameters.Count != 0)
             {
                 throw new NotSupportedException("COPY commands cannot use bound parameters.");
             }
@@ -221,6 +245,12 @@ namespace Cntryl.Cassie.Commands
             {
                 await base.DisposeAsync().ConfigureAwait(false);
             }
+        }
+
+        /// <summary>Creates a parameter for this command.</summary>
+        public new CassieParameter CreateParameter()
+        {
+            return new CassieParameter();
         }
 
         /// <inheritdoc />

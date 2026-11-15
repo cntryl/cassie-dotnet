@@ -22,8 +22,12 @@ namespace Cntryl.Cassie.Data
 
         /// <summary>Gets a value indicating that savepoints are available through Save, Rollback and Release.</summary>
         public override bool SupportsSavepoints => true;
+
+        /// <summary>Gets the connection this transaction belongs to, or null once the transaction has ended.</summary>
+        public new CassieConnection? Connection => _completed ? null : _connection;
+
         /// <inheritdoc />
-        protected override DbConnection DbConnection => _connection;
+        protected override DbConnection? DbConnection => Connection;
 
         /// <inheritdoc />
         public override void Commit()

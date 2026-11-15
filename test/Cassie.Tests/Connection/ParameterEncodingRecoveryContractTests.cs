@@ -103,7 +103,7 @@ namespace Cntryl.Cassie.Tests.Connection
             using CassieCommand invalid = new()
             {
                 Connection = connection,
-                Transaction = transaction,
+                Transaction = (Cassie.Data.CassieTransaction?)transaction,
                 CommandText = "SELECT set_config('DateStyle', 'SQL, DMY', false), @value"
             };
             _ = invalid.Parameters.Add(new CassieParameter
@@ -130,7 +130,7 @@ namespace Cntryl.Cassie.Tests.Connection
             Assert.Equal(ConnectionState.Open, connection.State);
             Assert.Equal(sessionIdentity, connection.SessionIdentity);
             Assert.Equal(transactionActive ? "Q"u8.ToArray() : [], receivedTags.ToArray());
-            using CassieCommand valid = new() { Connection = connection, Transaction = transaction, CommandText = "SELECT 7" };
+            using CassieCommand valid = new() { Connection = connection, Transaction = (Cassie.Data.CassieTransaction?)transaction, CommandText = "SELECT 7" };
             Assert.Equal(7, await valid.ExecuteScalarAsync(TestContext.Current.CancellationToken));
             Assert.Equal(transactionActive ? "QQ"u8.ToArray() : "Q"u8.ToArray(), receivedTags.ToArray());
             Assert.Equal(1, server.Accepted);

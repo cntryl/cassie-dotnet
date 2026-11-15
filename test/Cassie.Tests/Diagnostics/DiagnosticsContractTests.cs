@@ -94,13 +94,13 @@ namespace Cntryl.Cassie.Tests.Diagnostics
 
             // Act
             await connection.OpenAsync(TestContext.Current.CancellationToken);
-            using (CassieCommand queryCommand = (CassieCommand)connection.CreateCommand())
+            using (CassieCommand queryCommand = connection.CreateCommand())
             {
                 queryCommand.CommandText = "SELECT 1 AS value";
                 Assert.Equal(1, await queryCommand.ExecuteScalarAsync(TestContext.Current.CancellationToken));
             }
 
-            using (CassieCommand copyCommand = (CassieCommand)connection.CreateCommand())
+            using (CassieCommand copyCommand = connection.CreateCommand())
             {
                 copyCommand.CommandText = "COPY ledger FROM STDIN WITH (FORMAT csv)";
                 await using MemoryStream source = new("1,alpha\n"u8.ToArray());

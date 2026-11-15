@@ -179,6 +179,7 @@ namespace Cntryl.Cassie.Tests.Commands
 
             // Assert
             Assert.Equal("23505", failure.SqlState);
+            Assert.Same(batch.BatchCommands[1], failure.BatchCommand);
             Assert.Equal([2, 0, 0], batch.BatchCommands.Select(static command => command.RecordsAffected));
             Assert.Equal(ConnectionState.Open, connection.State);
             Assert.Equal(sessionIdentity, connection.SessionIdentity);
@@ -288,7 +289,7 @@ namespace Cntryl.Cassie.Tests.Commands
             await using DbTransaction? transaction = transactionActive
                 ? await connection.BeginTransactionAsync(TestContext.Current.CancellationToken)
                 : null;
-            await using CassieBatch batch = new(connection) { Transaction = transaction };
+            await using CassieBatch batch = new(connection) { Transaction = (CassieTransaction?)transaction };
             _ = batch.BatchCommands.Add("INSERT INTO a SELECT 1");
             CassieBatchCommand invalid = batch.BatchCommands.Add("SELECT @value");
             _ = invalid.Parameters.Add(new CassieParameter

@@ -59,6 +59,9 @@ namespace Cntryl.Cassie.Connection
         /// <inheritdoc />
         public override ConnectionState State => _state;
 
+        /// <summary>Gets the provider factory, so <c>DbProviderFactories.GetFactory(connection)</c> resolves Cassie.</summary>
+        protected override DbProviderFactory DbProviderFactory => CassieProviderFactory.Instance;
+
         /// <inheritdoc />
         public override int ConnectionTimeout => new CassieConnectionStringBuilder(_connectionString).Timeout;
 
@@ -484,6 +487,12 @@ namespace Cntryl.Cassie.Connection
             {
                 await _session.DisposeAsync().ConfigureAwait(false);
             }
+        }
+
+        /// <summary>Creates a command associated with this connection.</summary>
+        public new CassieCommand CreateCommand()
+        {
+            return (CassieCommand)CreateDbCommand();
         }
 
         /// <inheritdoc />

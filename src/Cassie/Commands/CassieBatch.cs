@@ -64,10 +64,28 @@ namespace Cntryl.Cassie.Commands
         protected override DbBatchCommandCollection DbBatchCommands => BatchCommands;
 
         /// <inheritdoc />
-        protected override DbConnection? DbConnection { get; set; }
+        protected override DbConnection? DbConnection
+        {
+            get => Connection;
+            set => Connection = value is null or CassieConnection
+                ? (CassieConnection?)value
+                : throw new InvalidCastException($"A Cassie batch requires a {nameof(CassieConnection)}, not {value.GetType().Name}.");
+        }
+
+        /// <summary>Gets or sets the Cassie connection this batch runs on.</summary>
+        public new CassieConnection? Connection { get; set; }
+
+        /// <summary>Gets or sets the Cassie transaction this batch runs in.</summary>
+        public new CassieTransaction? Transaction { get; set; }
 
         /// <inheritdoc />
-        protected override DbTransaction? DbTransaction { get; set; }
+        protected override DbTransaction? DbTransaction
+        {
+            get => Transaction;
+            set => Transaction = value is null or CassieTransaction
+                ? (CassieTransaction?)value
+                : throw new InvalidCastException($"A Cassie batch requires a {nameof(CassieTransaction)}, not {value.GetType().Name}.");
+        }
 
         /// <summary>Creates a command that can be added to <see cref="BatchCommands"/>.</summary>
         /// <returns>A new, empty command.</returns>
@@ -390,6 +408,14 @@ namespace Cntryl.Cassie.Commands
                         }
 
                         completed++;
+                    },
+                    error =>
+                    {
+                        // The statement after the last completed one is the one the server rejected.
+                        if (completed < commands.Length)
+                        {
+                            error.AttachBatchCommand(commands[completed]);
+                        }
                     },
                     cancellationToken).ConfigureAwait(false);
 

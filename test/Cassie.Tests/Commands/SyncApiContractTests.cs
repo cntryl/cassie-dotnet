@@ -72,6 +72,64 @@ namespace Cntryl.Cassie.Tests.Commands
         }
 
         [Fact]
+        public void ShouldExposeProviderTypesGivenOpenConnectionWhenTypedMembersAreUsed()
+        {
+            // Arrange
+            using ScriptedServer server = new(session => session.ServeQueriesAsync(sql => session.WriteCommandCompleteAsync(sql.Split(' ')[0])));
+            using CassieConnection connection = new() { ConnectionString = server.ConnectionString("Pooling=false") };
+            connection.Open();
+
+            // Act
+            using CassieCommand command = connection.CreateCommand();
+            CassieParameter parameter = command.CreateParameter();
+            _ = command.Parameters.Add(parameter);
+            using CassieBatch batch = connection.CreateBatch();
+            using Cassie.Data.CassieTransaction transaction = connection.BeginTransaction();
+            command.Transaction = transaction;
+            batch.Transaction = transaction;
+            CassieConnection? whileActive = transaction.Connection;
+            transaction.Commit();
+
+            // Assert
+            Assert.Same(connection, command.Connection);
+            Assert.Same(connection, batch.Connection);
+            Assert.Same(connection, whileActive);
+            Assert.Same(parameter, command.Parameters[0]);
+            Assert.Same(transaction, command.Transaction);
+            Assert.Same(transaction, batch.Transaction);
+            Assert.Null(transaction.Connection);
+            Assert.Null(((DbTransaction)transaction).Connection);
+            Assert.Same(CassieProviderFactory.Instance, DbProviderFactories.GetFactory(connection));
+        }
+
+        [Fact]
+        public void ShouldRejectForeignObjectsGivenBaseTypedPropertiesWhenNonCassieValuesAreAssigned()
+        {
+            // Arrange
+            using CassieCommand command = new();
+            using CassieBatch batch = new();
+            using System.Data.DataTable unrelated = new();
+            using DbConnection foreignConnection = new ForeignConnection();
+
+            // Act
+            void AssignCommandConnection()
+            {
+                ((DbCommand)command).Connection = foreignConnection;
+            }
+
+            void AssignBatchConnection()
+            {
+                ((DbBatch)batch).Connection = foreignConnection;
+            }
+
+            // Assert
+            _ = Assert.Throws<InvalidCastException>(AssignCommandConnection);
+            _ = Assert.Throws<InvalidCastException>(AssignBatchConnection);
+            Assert.Null(command.Connection);
+            Assert.Null(batch.Connection);
+        }
+
+        [Fact]
         public void ShouldReportFactoryCapabilitiesGivenProviderFactoryWhenCapabilitiesAreQueried()
         {
             // Arrange
@@ -159,6 +217,42 @@ namespace Cntryl.Cassie.Tests.Commands
 
             // Assert
             Assert.Null(exception);
+        }
+
+        private sealed class ForeignConnection : DbConnection
+        {
+            [System.Diagnostics.CodeAnalysis.AllowNull]
+            public override string ConnectionString { get; set; } = string.Empty;
+
+            public override string Database => string.Empty;
+
+            public override string DataSource => string.Empty;
+
+            public override string ServerVersion => string.Empty;
+
+            public override System.Data.ConnectionState State => System.Data.ConnectionState.Closed;
+
+            public override void ChangeDatabase(string databaseName)
+            {
+            }
+
+            public override void Close()
+            {
+            }
+
+            public override void Open()
+            {
+            }
+
+            protected override DbTransaction BeginDbTransaction(System.Data.IsolationLevel isolationLevel)
+            {
+                throw new NotSupportedException();
+            }
+
+            protected override DbCommand CreateDbCommand()
+            {
+                throw new NotSupportedException();
+            }
         }
     }
 }

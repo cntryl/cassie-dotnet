@@ -15,6 +15,12 @@ namespace Cntryl.Cassie.Connection
         /// <inheritdoc />
         public override bool CanCreateBatch => true;
 
+        /// <summary>Creates a batch associated with this connection.</summary>
+        public new CassieBatch CreateBatch()
+        {
+            return (CassieBatch)CreateDbBatch();
+        }
+
         /// <inheritdoc />
         protected override DbBatch CreateDbBatch()
         {
@@ -26,7 +32,7 @@ namespace Cntryl.Cassie.Connection
         /// reader positioned on the first command's result. All parameters are encoded before the session is touched, so
         /// local validation failures (including parameter encoding, done by the caller before this method) leave the connection and its transaction untouched.
         /// </summary>
-        internal async Task<CassieDataReader> ExecuteBatchAsync(IReadOnlyList<CassiePreparedCommand> commands, IReadOnlyList<EncodedParameters> encodedParameters, IReadOnlyList<string?> statementNames, int commandTimeout, CommandBehavior behavior, CassieDiagnostics.OperationScope? operationScope, Action<CommandTag?> statementCompleted, CancellationToken cancellationToken)
+        internal async Task<CassieDataReader> ExecuteBatchAsync(IReadOnlyList<CassiePreparedCommand> commands, IReadOnlyList<EncodedParameters> encodedParameters, IReadOnlyList<string?> statementNames, int commandTimeout, CommandBehavior behavior, CassieDiagnostics.OperationScope? operationScope, Action<CommandTag?> statementCompleted, Action<CassieException> statementFailed, CancellationToken cancellationToken)
         {
             PgSession session = RequireSession("The connection is not open.");
             ThrowIfReaderActive();
@@ -49,7 +55,7 @@ namespace Cntryl.Cassie.Connection
 
                 return await RunReaderAsync(
                     () => session.WriteBatchAsync(request, cancellationToken),
-                    () => new CassieDataReader(new ConnectionReaderSession(this, session.Stream), commandTimeout, behavior, operationScope, statementCompleted: statementCompleted),
+                    () => new CassieDataReader(new ConnectionReaderSession(this, session.Stream), commandTimeout, behavior, operationScope, statementCompleted: statementCompleted, statementFailed: statementFailed),
                     cancelAfterInitialize: false,
                     cancellationToken).ConfigureAwait(false);
             }

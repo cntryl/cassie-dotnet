@@ -61,6 +61,17 @@ namespace Cntryl.Cassie
         /// <summary>Gets the server routine.</summary>
         public string? Routine { get; } = routine;
 
+        private DbBatchCommand? _batchCommand;
+
+        /// <inheritdoc />
+        /// <remarks>Set when the error came from a command of a <see cref="DbBatch"/>; that command is exposed through <see cref="DbException.BatchCommand"/>.</remarks>
+        protected override DbBatchCommand? DbBatchCommand => _batchCommand;
+
+        internal void AttachBatchCommand(DbBatchCommand command)
+        {
+            _batchCommand = command;
+        }
+
         /// <summary>Creates an exception with an inner exception and no SQLSTATE.</summary>
         public CassieException(string message, Exception innerException) : this(message, null, innerException) { }
 

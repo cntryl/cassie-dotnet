@@ -62,7 +62,7 @@ await MeasureAsync("simple_query_scalar", iterations, warmupIterations, async ()
 
 await MeasureAsync("extended_binary_parameter", iterations, warmupIterations, async () =>
 {
-    using CassieCommand command = (CassieCommand)connection.CreateCommand();
+    using CassieCommand command = connection.CreateCommand();
     command.BinaryResults = true;
     command.CommandText = "SELECT @value::int4";
     _ = command.Parameters.Add(new CassieParameter { ParameterName = "value", Value = 42 });
