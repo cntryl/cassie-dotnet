@@ -1,3 +1,4 @@
+using Cntryl.Cassie.Commands;
 using Microsoft.Extensions.Logging;
 using System.Data.Common;
 
@@ -38,6 +39,14 @@ namespace Cntryl.Cassie.Connection
         public new async ValueTask<CassieConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
         {
             return (CassieConnection)await base.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>Creates a batch that opens a pooled connection for each execution and closes it when the result is read.</summary>
+        /// <remarks>A connectionless batch has no <see cref="DbBatch.Connection"/> and cannot be given a transaction.</remarks>
+        protected override DbBatch CreateDbBatch()
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+            return new CassieBatch(this) { Timeout = CassieConnection.CommandTimeoutFrom(ConnectionString) };
         }
 
         /// <inheritdoc />

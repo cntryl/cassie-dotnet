@@ -489,17 +489,7 @@ namespace Cntryl.Cassie.Connection
         /// <inheritdoc />
         protected override DbCommand CreateDbCommand()
         {
-            int commandTimeout = 30;
-            try
-            {
-                commandTimeout = new CassieConnectionStringBuilder(_connectionString).CommandTimeout;
-            }
-            catch (ArgumentException)
-            {
-                // An invalid connection string is reported when the connection opens.
-            }
-
-            return new CassieCommand { Connection = this, CommandTimeout = commandTimeout };
+            return new CassieCommand { Connection = this, CommandTimeout = DefaultCommandTimeout() };
         }
     }
 }

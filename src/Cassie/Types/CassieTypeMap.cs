@@ -208,6 +208,8 @@ namespace Cntryl.Cassie.Types
             return Arrays.ContainsKey(oid);
         }
 
+        internal static IEnumerable<int> ObjectIdentifierOids => Types.Where(static type => type.ObjectIdentifier).Select(static type => type.Oid);
+
         internal static bool IsObjectIdentifierOid(int oid)
         {
             return Scalars.TryGetValue(oid, out BuiltInType? type) && type.ObjectIdentifier;

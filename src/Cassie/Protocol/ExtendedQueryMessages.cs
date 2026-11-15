@@ -48,6 +48,17 @@ namespace Cntryl.Cassie.Protocol
             return frames.ToArray();
         }
 
+        /// <summary>Builds the Execute frame that runs the unnamed portal to completion with no row limit and no Flush.</summary>
+        public static byte[] ExecuteAllFrame()
+        {
+            using MemoryStream frame = new();
+            using MemoryStream execute = new();
+            PgWriter.WriteCString(execute, string.Empty);
+            PgWriter.WriteInt32(execute, 0);
+            PgWriter.AppendFrame(frame, (byte)'E', execute);
+            return frame.ToArray();
+        }
+
         private static MemoryStream Target(byte kind, string name)
         {
             MemoryStream payload = new();

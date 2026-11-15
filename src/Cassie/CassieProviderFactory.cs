@@ -34,6 +34,21 @@ namespace Cntryl.Cassie
         }
 
         /// <inheritdoc />
+        public override bool CanCreateBatch => true;
+
+        /// <inheritdoc />
+        public override DbBatch CreateBatch()
+        {
+            return new CassieBatch();
+        }
+
+        /// <inheritdoc />
+        public override DbBatchCommand CreateBatchCommand()
+        {
+            return new CassieBatchCommand();
+        }
+
+        /// <inheritdoc />
         public override DbParameter CreateParameter()
         {
             return new CassieParameter();

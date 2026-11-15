@@ -4,6 +4,7 @@ using Cntryl.Cassie.Connection;
 using Cntryl.Cassie.Protocol;
 using Cntryl.Cassie.Diagnostics;
 using Cntryl.Cassie.Types;
+using Cntryl.Cassie.Types.Handlers;
 using System.Collections;
 using System.Data;
 using System.Data.Common;
@@ -16,9 +17,17 @@ namespace Cntryl.Cassie.Data
     /// <summary>Streams text- or binary-format rows returned by a Cassie query.</summary>
     public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     {
+        private const int BoolOid = 16;
         private const int Int8Oid = 20;
         private const int Int2Oid = 21;
         private const int Int4Oid = 23;
+        private const int Float4Oid = 700;
+        private const int Float8Oid = 701;
+        private const int DateOid = 1082;
+        private const int TimestampOid = 1114;
+        private const int TimestampTzOid = 1184;
+        private const int NumericOid = 1700;
+        private const int UuidOid = 2950;
         private const string UnexpectedSuspendedPortalMessage = "Cassie returned an unexpected suspended portal response.";
         private readonly IReaderSession _session;
         private readonly ReaderCancellation _cancellation;
@@ -43,6 +52,7 @@ namespace Cntryl.Cassie.Data
         private readonly CassieDiagnostics.OperationScope? _operationScope;
         private readonly Func<CancellationToken, Task>? _resumePortalAsync;
         private readonly Func<Task>? _sendExtendedSyncAsync;
+        private readonly Action<CommandTag?>? _statementCompleted;
         private int _rowsReadCurrentResult;
         private int _lastSequentialOrdinal = -1;
         private int _operationFinished;
@@ -55,8 +65,10 @@ namespace Cntryl.Cassie.Data
             CommandBehavior behavior,
             CassieDiagnostics.OperationScope? operationScope = null,
             Func<CancellationToken, Task>? resumePortalAsync = null,
-            Func<Task>? sendExtendedSyncAsync = null)
+            Func<Task>? sendExtendedSyncAsync = null,
+            Action<CommandTag?>? statementCompleted = null)
         {
+            _statementCompleted = statementCompleted;
             _session = session;
             _cancellation = new ReaderCancellation(session, commandTimeout);
             _operationScope = operationScope;
@@ -122,7 +134,7 @@ namespace Cntryl.Cassie.Data
 
         private async Task InitializeCoreAsync(CancellationToken cancellationToken)
         {
-            while (_columns.Count == 0 && !_complete)
+            while (_columns.Count == 0 && !_complete && !_resultEnded)
             {
                 (byte tag, byte[] payload) = await ReadQueryFrameAsync(cancellationToken).ConfigureAwait(false);
                 if (tag == (byte)'T')
@@ -133,6 +145,12 @@ namespace Cntryl.Cassie.Data
                 else if (tag == (byte)'C')
                 {
                     ParseCommandComplete(payload);
+                    _ = BeginStatementResultWithoutRows();
+                }
+                else if (tag == (byte)'I')
+                {
+                    ObserveEmptyStatement();
+                    _ = BeginStatementResultWithoutRows();
                 }
                 else if (tag == (byte)'S')
                 {
@@ -339,8 +357,22 @@ namespace Cntryl.Cassie.Data
                             _hasCurrentResult = true;
                             return true;
                         case (byte)'S': ParseParameterStatus(payload); break;
-                        case (byte)'C': ParseCommandComplete(payload); break;
-                        case (byte)'I': break;
+                        case (byte)'C':
+                            ParseCommandComplete(payload);
+                            if (BeginStatementResultWithoutRows())
+                            {
+                                return true;
+                            }
+
+                            break;
+                        case (byte)'I':
+                            ObserveEmptyStatement();
+                            if (BeginStatementResultWithoutRows())
+                            {
+                                return true;
+                            }
+
+                            break;
                         case (byte)'E':
                             throw await ReadServerErrorAsync(payload, cancellationToken).ConfigureAwait(false);
                         case (byte)'G': await _session.RejectCopyFromAsync().ConfigureAwait(false); break;
@@ -446,17 +478,9 @@ namespace Cntryl.Cassie.Data
         /// <inheritdoc />
         public override T GetFieldValue<T>(int ordinal)
         {
-            return typeof(T) == typeof(decimal)
-                ? (T)(object)GetDecimal(ordinal)
-                : typeof(T) == typeof(CassieTemporalValue)
-                    ? (T)(object)GetTemporalValue(ordinal)
-                : typeof(T) == typeof(DateTime)
-                    ? (T)(object)GetDateTime(ordinal)
-                    : typeof(T) == typeof(TimeSpan)
-                        ? (T)(object)GetTimeSpanValue(ordinal)
-                        : typeof(T) == typeof(ulong)
-                            ? (T)(object)GetUInt64Value(ordinal)
-                            : base.GetFieldValue<T>(ordinal);
+            return CassieTypeHandlers.FindFieldReader<T>() is { } reader
+                ? reader.Read(this, ordinal)
+                : base.GetFieldValue<T>(ordinal);
         }
 
         /// <inheritdoc />
@@ -501,7 +525,9 @@ namespace Cntryl.Cassie.Data
         /// <inheritdoc />
         public override bool GetBoolean(int ordinal)
         {
-            return Convert.ToBoolean(GetValue(ordinal), CultureInfo.InvariantCulture);
+            return TryGetBooleanField(ordinal, out bool boolean)
+                ? boolean
+                : Convert.ToBoolean(GetValue(ordinal), CultureInfo.InvariantCulture);
         }
 
         /// <inheritdoc />
@@ -519,7 +545,7 @@ namespace Cntryl.Cassie.Data
         /// <inheritdoc />
         public override DateTime GetDateTime(int ordinal)
         {
-            return GetValue(ordinal) switch
+            return TryGetDateTimeField(ordinal, out DateTime fast) ? fast : GetValue(ordinal) switch
             {
                 DateOnly date => date.ToDateTime(TimeOnly.MinValue),
                 DateTime dateTime => dateTime,
@@ -533,7 +559,7 @@ namespace Cntryl.Cassie.Data
         /// <inheritdoc />
         public override decimal GetDecimal(int ordinal)
         {
-            return GetValue(ordinal) switch
+            return TryGetDecimalField(ordinal, out decimal fast) ? fast : GetValue(ordinal) switch
             {
                 CassieNumeric numeric => numeric.ToDecimal(),
                 decimal value => value,
@@ -544,7 +570,7 @@ namespace Cntryl.Cassie.Data
         /// <inheritdoc />
         public override double GetDouble(int ordinal)
         {
-            return GetValue(ordinal) switch
+            return TryGetDoubleField(ordinal, out double fast) ? fast : GetValue(ordinal) switch
             {
                 double value => value,
                 float value => value,
@@ -555,7 +581,7 @@ namespace Cntryl.Cassie.Data
         /// <inheritdoc />
         public override float GetFloat(int ordinal)
         {
-            return GetValue(ordinal) switch
+            return TryGetFloatField(ordinal, out float fast) ? fast : GetValue(ordinal) switch
             {
                 float value => value,
                 _ => float.Parse(GetRequiredString(ordinal), CultureInfo.InvariantCulture)
@@ -565,7 +591,7 @@ namespace Cntryl.Cassie.Data
         /// <inheritdoc />
         public override Guid GetGuid(int ordinal)
         {
-            return GetValue(ordinal) switch
+            return TryGetGuidField(ordinal, out Guid fast) ? fast : GetValue(ordinal) switch
             {
                 Guid value => value,
                 _ => Guid.Parse(GetRequiredString(ordinal))
@@ -792,6 +818,188 @@ namespace Cntryl.Cassie.Data
             }
         }
 
+        /// <summary>
+        /// Exposes a non-null field of the current row as raw bytes with its type and wire format.
+        /// Returns false for NULL and for format codes other than text or binary, so the general path reports them.
+        /// </summary>
+        private bool TryGetFieldBytes(int ordinal, out int typeOid, out bool binary, out ReadOnlySpan<byte> field)
+        {
+            int length = GetFieldLength(ordinal);
+            short format = length < 0 ? (short)-1 : _formatCodes[ordinal];
+            typeOid = _columns[ordinal].TypeOid;
+            binary = format == 1;
+            field = format is 0 or 1 ? _rowPayload.AsSpan(_fieldOffsets[ordinal], length) : default;
+            return format is 0 or 1;
+        }
+
+        private bool TryGetBooleanField(int ordinal, out bool value)
+        {
+            value = false;
+            if (!TryGetFieldBytes(ordinal, out int typeOid, out bool binary, out ReadOnlySpan<byte> field) || typeOid != BoolOid)
+            {
+                return false;
+            }
+
+            if (binary)
+            {
+                value = field.Length == 1 && field[0] == 1;
+                return field.Length == 1 && field[0] <= 1;
+            }
+
+            if (field.SequenceEqual("t"u8) || field.SequenceEqual("true"u8) || field.SequenceEqual("TRUE"u8))
+            {
+                value = true;
+                return true;
+            }
+
+            return field.SequenceEqual("f"u8) || field.SequenceEqual("false"u8) || field.SequenceEqual("FALSE"u8);
+        }
+
+        private bool TryGetDoubleField(int ordinal, out double value)
+        {
+            value = 0;
+            if (!TryGetFieldBytes(ordinal, out int typeOid, out bool binary, out ReadOnlySpan<byte> field))
+            {
+                return false;
+            }
+
+            switch (typeOid)
+            {
+                case Float8Oid when binary:
+                    if (field.Length != sizeof(double))
+                    {
+                        return false;
+                    }
+
+                    value = BitConverter.Int64BitsToDouble(BinaryPrimitives.ReadInt64BigEndian(field));
+                    return true;
+                case Float8Oid:
+                    return double.TryParse(field, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out value);
+                case Float4Oid:
+                    if (!TryReadSingle(field, binary, out float single))
+                    {
+                        return false;
+                    }
+
+                    value = single;
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private bool TryGetFloatField(int ordinal, out float value)
+        {
+            value = 0;
+            return TryGetFieldBytes(ordinal, out int typeOid, out bool binary, out ReadOnlySpan<byte> field)
+                && typeOid == Float4Oid
+                && TryReadSingle(field, binary, out value);
+        }
+
+        private static bool TryReadSingle(ReadOnlySpan<byte> field, bool binary, out float value)
+        {
+            if (!binary)
+            {
+                return float.TryParse(field, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out value);
+            }
+
+            value = field.Length == sizeof(float) ? BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32BigEndian(field)) : 0;
+            return field.Length == sizeof(float);
+        }
+
+        private bool TryGetGuidField(int ordinal, out Guid value)
+        {
+            value = Guid.Empty;
+            if (!TryGetFieldBytes(ordinal, out int typeOid, out bool binary, out ReadOnlySpan<byte> field) || typeOid != UuidOid)
+            {
+                return false;
+            }
+
+            if (!binary)
+            {
+                return Guid.TryParse(field, out value);
+            }
+
+            if (field.Length != 16)
+            {
+                return false;
+            }
+
+            value = new Guid(field, bigEndian: true);
+            return true;
+        }
+
+        private bool TryGetDecimalField(int ordinal, out decimal value)
+        {
+            value = 0;
+            return TryGetFieldBytes(ordinal, out int typeOid, out bool binary, out ReadOnlySpan<byte> field)
+                && typeOid == NumericOid
+                && !binary
+                && IsPlainDecimalText(field)
+                && decimal.TryParse(field, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+        }
+
+        /// <summary>Accepts only an optional minus sign, digits, and an optional fraction, a form every numeric parser agrees on.</summary>
+        private static bool IsPlainDecimalText(ReadOnlySpan<byte> text)
+        {
+            int index = text.Length > 0 && text[0] == (byte)'-' ? 1 : 0;
+            int integerStart = index;
+            while (index < text.Length && char.IsAsciiDigit((char)text[index]))
+            {
+                index++;
+            }
+
+            if (index == integerStart)
+            {
+                return false;
+            }
+
+            if (index == text.Length)
+            {
+                return true;
+            }
+
+            if (text[index] != (byte)'.')
+            {
+                return false;
+            }
+
+            int fractionStart = ++index;
+            while (index < text.Length && char.IsAsciiDigit((char)text[index]))
+            {
+                index++;
+            }
+
+            return index > fractionStart && index == text.Length;
+        }
+
+        private bool TryGetDateTimeField(int ordinal, out DateTime value)
+        {
+            value = default;
+            if (!TryGetFieldBytes(ordinal, out int typeOid, out bool binary, out ReadOnlySpan<byte> field) || !binary)
+            {
+                return false;
+            }
+
+            switch (typeOid)
+            {
+                case DateOid when field.Length == sizeof(int):
+                    if (!DateHandler.TryReadBinaryDate(field, out DateOnly date))
+                    {
+                        return false;
+                    }
+
+                    value = date.ToDateTime(TimeOnly.MinValue);
+                    return true;
+                case TimestampOid when field.Length == sizeof(long):
+                    return TimestampHandler.TryReadBinaryTimestamp(field, out value);
+                case TimestampTzOid when field.Length == sizeof(long):
+                    return TimestampTzHandler.TryReadBinaryTimestampTz(field, out value);
+                default:
+                    return false;
+            }
+        }
+
         private string GetRequiredString(int ordinal)
         {
             object value = GetValue(ordinal);
@@ -803,7 +1011,7 @@ namespace Cntryl.Cassie.Data
             };
         }
 
-        private TimeSpan GetTimeSpanValue(int ordinal)
+        internal TimeSpan GetTimeSpanValue(int ordinal)
         {
             return GetValue(ordinal) switch
             {
@@ -814,7 +1022,7 @@ namespace Cntryl.Cassie.Data
             };
         }
 
-        private CassieTemporalValue GetTemporalValue(int ordinal)
+        internal CassieTemporalValue GetTemporalValue(int ordinal)
         {
             object value = GetValue(ordinal);
             return value switch
@@ -830,7 +1038,7 @@ namespace Cntryl.Cassie.Data
             };
         }
 
-        private ulong GetUInt64Value(int ordinal)
+        internal ulong GetUInt64Value(int ordinal)
         {
             return GetValue(ordinal) switch
             {
@@ -1141,6 +1349,31 @@ namespace Cntryl.Cassie.Data
             {
                 _recordsAffected = _recordsAffected < 0 ? tag.RowCount : checked(_recordsAffected + tag.RowCount);
             }
+
+            _statementCompleted?.Invoke(tag);
+        }
+
+        /// <summary>Reports an EmptyQueryResponse to a pipelined batch, which counts it as a statement.</summary>
+        private void ObserveEmptyStatement()
+        {
+            _statementCompleted?.Invoke(null);
+        }
+
+        /// <summary>
+        /// A pipelined batch yields one result per statement, including statements that return no rows, so a
+        /// completed statement with no preceding RowDescription becomes a result of its own. A plain command skips it.
+        /// </summary>
+        private bool BeginStatementResultWithoutRows()
+        {
+            if (_statementCompleted is null)
+            {
+                return false;
+            }
+
+            _hasCurrentResult = true;
+            _resultEnded = true;
+            _hasRowsKnown = true;
+            return true;
         }
 
         private static long CopyFieldData<T>(T[] source, long dataOffset, T[]? destination, int destinationOffset, int length)

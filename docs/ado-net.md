@@ -48,6 +48,56 @@ stream individual fields directly from the socket.
 metadata Cassie reports. Base-table origin, nullability, and key constraints
 remain unknown when they are absent from the server's row description.
 
+## Batches
+
+`CassieBatch` (`connection.CreateBatch()`, `CassieProviderFactory.CreateBatch()`,
+or `CassieDataSource.CreateBatch()`) runs several commands in one network round
+trip. Each command is sent as Parse, Bind, Describe, and Execute, and one Sync
+ends the pipeline, so the batch is written once and the responses are read
+afterwards. Parameters bind as they do for `CassieCommand`. Batch commands are
+not paged: each streams its whole result.
+
+```csharp
+await using CassieBatch batch = new(connection, transaction);
+batch.BatchCommands.Add("INSERT INTO ledger (name) VALUES (@name)")
+    .Parameters.Add(new CassieParameter { ParameterName = "name", Value = "alpha" });
+batch.BatchCommands.Add("SELECT count(*) FROM ledger");
+await using DbDataReader reader = await batch.ExecuteReaderAsync();
+do { while (await reader.ReadAsync()) { /* rows of this command */ } }
+while (await reader.NextResultAsync());
+```
+
+- `ExecuteReader` yields one result per command, including commands that return
+  no rows (zero columns), in order. `reader.RecordsAffected` is the sum.
+  `ExecuteNonQuery` returns that sum. `ExecuteScalar` returns the first column of
+  the first row of the first result that has columns; the rest of the batch still
+  runs and is read.
+- `CassieBatchCommand.RecordsAffected` is set per command as the server reports
+  it: the row count, or -1 for a completed statement without one such as
+  `SELECT`. It is 0 for a command that affected no rows, failed, or was skipped.
+- Every parameter of every command is validated and encoded before anything is
+  sent (and before a connectionless batch opens a connection), so a bad parameter
+  fails without closing the connection or its transaction.
+- With one Sync, the server skips the commands after the first error. That error
+  is thrown as `CassieException` when the reader reaches the failing command (or
+  from the `Execute` method), after the response has been read to
+  ReadyForQuery, so the connection stays usable. Commands that completed before
+  the failure keep their `RecordsAffected`; the failing and skipped commands
+  report 0. Outside an explicit transaction the server may treat the pipeline as one
+  implicit transaction and undo the completed commands, so use a transaction
+  when the commands must succeed or fail together.
+- `Timeout`, `Cancel`, and cancellation tokens work as for commands and cover the
+  whole batch. Synchronous members use blocking I/O on the calling thread.
+- `Prepare` and `PrepareAsync` validate the batch (connection, transaction, and
+  parameter binding) and then prepare each command as a server statement. Later
+  executions bind to those statements instead of parsing the SQL again, and a
+  command is prepared again when its SQL, parameter types, or session changes.
+  Disposing the batch closes the statements. A batch from a data source is only
+  validated, because each execution uses a new connection.
+- A batch from a `DbDataSource` has no connection: each execution opens a pooled
+  connection and closes it when the reader is closed. It cannot take a
+  transaction. `CommandBehavior.SchemaOnly` is not supported for batches.
+
 ## Values and COPY
 
 The provider uses binary parameters when a matching codec exists and otherwise
