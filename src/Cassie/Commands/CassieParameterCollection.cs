@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Data.Common;
+using System.Runtime.InteropServices;
 
 namespace Cntryl.Cassie.Commands
 {
@@ -112,7 +113,8 @@ namespace Cntryl.Cassie.Commands
         /// <inheritdoc />
         protected override DbParameter GetParameter(int index)
         {
-            return _items[index];
+            // ADO.NET specifies IndexOutOfRangeException for a missing index; span indexing raises it.
+            return CollectionsMarshal.AsSpan(_items)[index];
         }
 
         /// <inheritdoc />
@@ -124,7 +126,7 @@ namespace Cntryl.Cassie.Commands
         /// <inheritdoc />
         protected override void SetParameter(int index, DbParameter value)
         {
-            _items[index] = value;
+            CollectionsMarshal.AsSpan(_items)[index] = value;
         }
 
         /// <inheritdoc />

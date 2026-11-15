@@ -136,8 +136,8 @@ namespace Cntryl.Cassie.Tests.Data
             }
 
             // Assert
-            _ = Assert.Throws<ArgumentOutOfRangeException>(ReadDecimal);
-            _ = Assert.Throws<ArgumentOutOfRangeException>(ReadString);
+            _ = Assert.Throws<IndexOutOfRangeException>(ReadDecimal);
+            _ = Assert.Throws<IndexOutOfRangeException>(ReadString);
         }
 
         private static string Run(CassieDataReader reader, string requested)

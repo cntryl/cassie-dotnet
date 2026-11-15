@@ -52,6 +52,43 @@ namespace Cntryl.Cassie.Tests.Commands
         }
 
         [Fact]
+        public void ShouldReportSavepointSupportGivenOpenTransactionWhenCapabilityIsQueried()
+        {
+            // Arrange
+            using ScriptedServer server = new(session => session.ServeQueriesAsync(sql => session.WriteCommandCompleteAsync(sql.Split(' ')[0])));
+            using CassieConnection connection = new() { ConnectionString = server.ConnectionString("Pooling=false") };
+            connection.Open();
+
+            // Act
+            using DbTransaction transaction = connection.BeginTransaction();
+            bool supported = transaction.SupportsSavepoints;
+            transaction.Save("before_change");
+            transaction.Rollback("before_change");
+            transaction.Release("before_change");
+            transaction.Commit();
+
+            // Assert
+            Assert.True(supported);
+        }
+
+        [Fact]
+        public void ShouldReportFactoryCapabilitiesGivenProviderFactoryWhenCapabilitiesAreQueried()
+        {
+            // Arrange
+            DbProviderFactory factory = CassieProviderFactory.Instance;
+
+            // Act
+            using DbDataAdapter? adapter = factory.CanCreateDataAdapter ? factory.CreateDataAdapter() : null;
+
+            // Assert
+            Assert.True(factory.CanCreateDataAdapter);
+            Assert.NotNull(adapter);
+            Assert.True(factory.CanCreateBatch);
+            Assert.False(factory.CanCreateCommandBuilder);
+            Assert.False(factory.CanCreateDataSourceEnumerator);
+        }
+
+        [Fact]
         public void ShouldCommitGivenSyncTransactionWhenCommitIsCalled()
         {
             // Arrange

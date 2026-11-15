@@ -249,7 +249,7 @@ namespace Cntryl.Cassie.Tests.Data
             }
 
             // Assert
-            _ = Assert.Throws<ArgumentOutOfRangeException>(Read);
+            _ = Assert.Throws<IndexOutOfRangeException>(Read);
         }
 
         private static string Run(CassieDataReader reader, string getter)
