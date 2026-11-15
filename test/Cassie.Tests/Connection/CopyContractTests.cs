@@ -51,7 +51,7 @@ namespace Cntryl.Cassie.Tests.Connection
 
             await using CassieConnection connection = CreateConnection(port);
             await connection.OpenAsync(TestContext.Current.CancellationToken);
-            await using CassieCommand command = (CassieCommand)connection.CreateCommand();
+            await using CassieCommand command = connection.CreateCommand();
             command.CommandText = "COPY ledger FROM STDIN WITH (FORMAT csv)";
 
             await using MemoryStream source = new(input);
@@ -93,7 +93,7 @@ namespace Cntryl.Cassie.Tests.Connection
 
             await using CassieConnection connection = CreateConnection(port);
             await connection.OpenAsync(TestContext.Current.CancellationToken);
-            await using CassieCommand command = (CassieCommand)connection.CreateCommand();
+            await using CassieCommand command = connection.CreateCommand();
             command.CommandText = "BACKUP DATABASE ledger TO STDOUT";
             using MemoryStream destination = new();
 
@@ -139,7 +139,7 @@ namespace Cntryl.Cassie.Tests.Connection
 
             await using CassieConnection connection = CreateConnection(port);
             await connection.OpenAsync(TestContext.Current.CancellationToken);
-            await using CassieCommand copyCommand = (CassieCommand)connection.CreateCommand();
+            await using CassieCommand copyCommand = connection.CreateCommand();
             copyCommand.CommandText = "COPY ledger FROM STDIN WITH (FORMAT csv)";
             using FailingMemoryStream source = new();
 
@@ -148,7 +148,7 @@ namespace Cntryl.Cassie.Tests.Connection
 
             // Assert
             Assert.Equal("input failed", error.Message);
-            await using CassieCommand nextCommand = (CassieCommand)connection.CreateCommand();
+            await using CassieCommand nextCommand = connection.CreateCommand();
             nextCommand.CommandText = "UPDATE ledger SET value = 'ok'";
             int affected = await nextCommand.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
 

@@ -103,6 +103,7 @@ namespace Cntryl.Cassie.Tests.Live
 
             // Assert
             Assert.False(string.IsNullOrEmpty(error.SqlState));
+            Assert.Same(failing, error.BatchCommand);
             Assert.Equal(ConnectionState.Open, _live.Connection.State);
             Assert.Equal(0L, skippedRows);
             Assert.Equal(0, failing.RecordsAffected);

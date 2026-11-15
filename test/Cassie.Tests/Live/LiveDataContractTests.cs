@@ -172,7 +172,7 @@ namespace Cntryl.Cassie.Tests.Live
             {
                 using CassieCommand command = _live.CreateCommand();
                 command.CommandText = $"INSERT INTO {LiveSession.ProbeTable} VALUES (3, 'gamma')";
-                command.Transaction = transaction;
+                command.Transaction = (CassieTransaction?)transaction;
                 _ = await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
                 await transaction.RollbackAsync(TestContext.Current.CancellationToken);
             }

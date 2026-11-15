@@ -25,7 +25,7 @@ namespace Cntryl.Cassie.Tests.Commands
                 ConnectionString = $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;Password=secret;SSL Mode=Disable;Timeout=3;Pooling=false"
             };
             await connection.OpenAsync(TestContext.Current.CancellationToken);
-            await using CassieCommand command = (CassieCommand)connection.CreateCommand();
+            await using CassieCommand command = connection.CreateCommand();
             command.CommandText = "SELECT 1";
             await command.PrepareAsync(TestContext.Current.CancellationToken);
 

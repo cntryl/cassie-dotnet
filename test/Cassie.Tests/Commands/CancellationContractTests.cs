@@ -83,7 +83,7 @@ namespace Cntryl.Cassie.Tests.Commands
                 ConnectionString = $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;Password=secret;SSL Mode=Disable;Timeout=3;Pooling=false"
             };
             await connection.OpenAsync(TestContext.Current.CancellationToken);
-            using CassieCommand command = (CassieCommand)connection.CreateCommand();
+            using CassieCommand command = connection.CreateCommand();
             command.CommandText = "SELECT 1";
             using CancellationTokenSource cancellation = new();
             Func<Task> execute = executeScalar

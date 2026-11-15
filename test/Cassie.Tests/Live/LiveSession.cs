@@ -56,7 +56,7 @@ namespace Cntryl.Cassie.Tests.Live
 
         public CassieCommand CreateCommand(CassieConnection? connection = null)
         {
-            return (CassieCommand)(connection ?? Connection).CreateCommand();
+            return (connection ?? Connection).CreateCommand();
         }
 
         /// <summary>Creates the probe table with integer and text columns.</summary>

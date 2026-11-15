@@ -61,6 +61,14 @@ procedures use `CommandType.StoredProcedure`; the provider quotes the procedure
 name and sends positional input values in a `CALL`. Output parameters and result
 rows from a procedure body are not part of Cassie's contract.
 
+The provider's own types are available without casts: `connection.CreateCommand()`
+returns a `CassieCommand`, `command.Parameters` is a `CassieParameterCollection`,
+and `command.Connection`, `command.Transaction`, `connection.BeginTransaction()`,
+and `connection.CreateBatch()` are typed the same way. Assigning a connection or
+transaction from another provider through the base-class properties throws
+`InvalidCastException`. `DbProviderFactories.GetFactory(connection)` returns
+`CassieProviderFactory.Instance`.
+
 `Prepare` and `PrepareAsync` register a server statement for reuse. Changing SQL,
 parameter types, or the underlying server session triggers re-preparation.
 `BinaryResults` requests binary results where the provider has a matching codec;
@@ -86,7 +94,8 @@ and a command that names a transaction must name the connection's active one.
 Savepoints are supported (`SupportsSavepoints` is `true`) through `Save`,
 `Rollback(name)`, and `Release`, with async counterparts. Disposing a transaction
 that was neither committed nor rolled back rolls it back, and closing or
-returning a pooled connection does the same.
+returning a pooled connection does the same. `Connection` returns `null` once
+the transaction has ended.
 
 ## Contract details
 
@@ -160,7 +169,8 @@ while (await reader.NextResultAsync());
 - With one Sync, the server skips the commands after the first error. That error
   is thrown as `CassieException` when the reader reaches the failing command (or
   from the `Execute` method), after the response has been read to
-  ReadyForQuery, so the connection stays usable. Commands that completed before
+  ReadyForQuery, so the connection stays usable. `CassieException.BatchCommand`
+  is the command that failed. Commands that completed before
   the failure keep their `RecordsAffected`; the failing and skipped commands
   report 0. Outside an explicit transaction the server may treat the pipeline as one
   implicit transaction and undo the completed commands, so use a transaction

@@ -54,6 +54,7 @@ namespace Cntryl.Cassie.Data
         private readonly Func<CancellationToken, Task>? _resumePortalAsync;
         private readonly Func<Task>? _sendExtendedSyncAsync;
         private readonly Action<CommandTag?>? _statementCompleted;
+        private readonly Action<CassieException>? _statementFailed;
         private int _rowsReadCurrentResult;
         private int _lastSequentialOrdinal = -1;
         private int _operationFinished;
@@ -67,9 +68,11 @@ namespace Cntryl.Cassie.Data
             CassieDiagnostics.OperationScope? operationScope = null,
             Func<CancellationToken, Task>? resumePortalAsync = null,
             Func<Task>? sendExtendedSyncAsync = null,
-            Action<CommandTag?>? statementCompleted = null)
+            Action<CommandTag?>? statementCompleted = null,
+            Action<CassieException>? statementFailed = null)
         {
             _statementCompleted = statementCompleted;
+            _statementFailed = statementFailed;
             _session = session;
             _cancellation = new ReaderCancellation(session, commandTimeout);
             _operationScope = operationScope;
@@ -1408,6 +1411,7 @@ namespace Cntryl.Cassie.Data
         private async Task<Exception> ReadServerErrorAsync(byte[] payload, CancellationToken cancellationToken)
         {
             CassieException error = ServerErrorParser.Parse(payload);
+            _statementFailed?.Invoke(error);
             MarkOperationFailed(error);
             await DrainToReadyAsync(cancellationToken).ConfigureAwait(false);
             return TranslateServerError(error, cancellationToken);
