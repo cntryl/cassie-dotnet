@@ -34,8 +34,26 @@ namespace Cntryl.Cassie.Connection
             return RunSynchronously(() => GetSchemaAsync(collectionName, restrictionValues, CancellationToken.None));
         }
 
+        /// <summary>Returns the list of schema collections this connection can describe.</summary>
+        public Task<DataTable> GetSchemaAsync()
+        {
+            return GetSchemaAsync("MetaDataCollections", null, CancellationToken.None);
+        }
+
+        /// <summary>Returns schema information for the named collection.</summary>
+        public Task<DataTable> GetSchemaAsync(string collectionName)
+        {
+            return GetSchemaAsync(collectionName, null, CancellationToken.None);
+        }
+
+        /// <summary>Returns schema information for the named collection, filtered by restriction values.</summary>
+        public Task<DataTable> GetSchemaAsync(string collectionName, string?[]? restrictionValues)
+        {
+            return GetSchemaAsync(collectionName, restrictionValues, CancellationToken.None);
+        }
+
         /// <inheritdoc />
-        public override Task<DataTable> GetSchemaAsync(CancellationToken cancellationToken = default)
+        public override Task<DataTable> GetSchemaAsync(CancellationToken cancellationToken)
         {
             return GetSchemaAsync("MetaDataCollections", null, cancellationToken);
         }

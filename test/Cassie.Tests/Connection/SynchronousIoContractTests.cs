@@ -113,6 +113,82 @@ namespace Cntryl.Cassie.Tests.Connection
         }
 
         [Fact]
+        public void ShouldStayOnCallingThreadGivenSynchronousPreparedCommandWhenExecutedRepeatedly()
+        {
+            // Arrange
+            int parses = 0;
+            int closes = 0;
+            using ScriptedServer server = new(async session =>
+            {
+                while (true)
+                {
+                    (byte tag, byte[] payload) = await session.ReadFrameAsync();
+                    switch ((char)tag)
+                    {
+                        case 'X':
+                            return;
+                        case 'P':
+                            _ = Interlocked.Increment(ref parses);
+                            await session.WriteAsync((byte)'1', []);
+                            break;
+                        case 'D' when payload[0] == (byte)'S':
+                            await session.WriteAsync((byte)'t', [0, 1, 0, 0, 0, 23]);
+                            await session.WriteAsync((byte)'n', []);
+                            break;
+                        case 'D':
+                            await session.WriteAsync((byte)'n', []);
+                            break;
+                        case 'B':
+                            await session.WriteAsync((byte)'2', []);
+                            break;
+                        case 'E':
+                            await session.WriteCommandCompleteAsync("INSERT 0 1");
+                            break;
+                        case 'C':
+                            _ = Interlocked.Increment(ref closes);
+                            await session.WriteAsync((byte)'3', []);
+                            break;
+                        case 'S':
+                            await session.WriteReadyAsync();
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            });
+            using CassieConnection connection = new() { ConnectionString = server.ConnectionString("Pooling=false") };
+            int before = SynchronousCall.PendingWaitsOnThisThread;
+
+            // Act
+            connection.Open();
+            int affected = 0;
+            using (Cassie.Commands.CassieCommand command = connection.CreateCommand())
+            {
+                command.CommandText = "INSERT INTO numbers VALUES (@value)";
+                Cassie.Commands.CassieParameter value = command.CreateParameter();
+                value.ParameterName = "value";
+                value.DbType = DbType.Int32;
+                value.Value = 1;
+                _ = command.Parameters.Add(value);
+                command.Prepare();
+                for (int execution = 0; execution < 3; execution++)
+                {
+                    value.Value = execution;
+                    affected += command.ExecuteNonQuery();
+                }
+            }
+
+            connection.Close();
+            int pendingWaits = SynchronousCall.PendingWaitsOnThisThread - before;
+
+            // Assert
+            Assert.Equal(3, affected);
+            Assert.Equal(1, Volatile.Read(ref parses));
+            Assert.Equal(1, Volatile.Read(ref closes));
+            Assert.Equal(0, pendingWaits);
+        }
+
+        [Fact]
         public void ShouldWaitOnCallingThreadGivenFullPoolWhenSynchronousOpenWaitsForSlot()
         {
             // Arrange

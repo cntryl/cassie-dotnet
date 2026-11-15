@@ -52,7 +52,8 @@ allowed range, fails when the connection opens rather than being ignored.
 
 Time values accept 0 to 2147483 seconds. Connections that use identical settings
 share one pool for the process. `CassieConnection.ClearPool` and
-`CassieConnection.ClearAllPools` close idle pooled sessions.
+`CassieConnection.ClearAllPools` close idle pooled sessions. `CassieConnectionStringBuilder.ValidateKeywords`
+runs the same keyword and range checks without opening a connection.
 
 ## Commands and readers
 
@@ -73,6 +74,11 @@ transaction from another provider through the base-class properties throws
 parameter types, or the underlying server session triggers re-preparation.
 `BinaryResults` requests binary results where the provider has a matching codec;
 results use text format by default.
+
+Parameter values are sent in binary when the provider has a binary codec for the
+type and in text otherwise. `CassieParameter.ParameterFormat` overrides that
+choice for one parameter: `Auto` (the default), `Text`, or `Binary`. Requesting
+`Binary` for a type without a binary codec fails before anything is sent.
 
 Async connection, command, reader, transaction, and COPY methods support
 cancellation. The reader drains results when it closes so the connection can be
@@ -239,3 +245,12 @@ SQL text, parameter values, credentials, and server error details.
 For vectors, REST administration, and authenticated session setup, see the
 [REST guide](rest-client.md). For runnable integration-test configuration, see
 the [live test setup](../test/Cassie.Tests/Live/README.md).
+
+## API stability
+
+The public API is locked. Every public type and member of `Cntryl.Cassie` and
+`Cntryl.Cassie.DependencyInjection` is listed in `PublicAPI.Shipped.txt` next to
+its project, and the build fails if the code and the list disagree. Adding to
+the API means adding the new member to `PublicAPI.Unshipped.txt` in the same
+change; removing or altering a listed member is a breaking change and shows up
+as an edit to the shipped list.

@@ -67,7 +67,7 @@ namespace Cntryl.Cassie.Commands
         /// <summary>Resolves named text markers or builds a positional stored-procedure call.</summary>
         /// <returns>The SQL text, ordered parameter names, and ordered parameter values.</returns>
         /// <exception cref="InvalidOperationException">A text marker is not bound, or a binding is unused.</exception>
-        public CassiePreparedCommand PrepareParameters()
+        internal CassiePreparedCommand PrepareParameters()
         {
             CassiePreparedCommand prepared = CommandParameterBinder.Prepare(CommandText, CommandType, Parameters);
             ParameterizedQueryBatch.ValidateParameterCount(prepared);

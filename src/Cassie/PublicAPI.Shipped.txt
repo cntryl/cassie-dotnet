@@ -1,0 +1,962 @@
+#nullable enable
+Cntryl.Cassie.CassieException
+Cntryl.Cassie.CassieException.CassieException() -> void
+Cntryl.Cassie.CassieException.CassieException(string! message, System.Exception! innerException) -> void
+Cntryl.Cassie.CassieException.CassieException(string! message, string? sqlState = null, System.Exception? innerException = null, string? severity = null, string? detail = null, string? hint = null, string? position = null, string? schemaName = null, string? tableName = null, string? columnName = null, string? constraintName = null, string? file = null, string? line = null, string? routine = null) -> void
+Cntryl.Cassie.CassieException.ColumnName.get -> string?
+Cntryl.Cassie.CassieException.ConstraintName.get -> string?
+Cntryl.Cassie.CassieException.Detail.get -> string?
+Cntryl.Cassie.CassieException.File.get -> string?
+Cntryl.Cassie.CassieException.Hint.get -> string?
+Cntryl.Cassie.CassieException.Line.get -> string?
+Cntryl.Cassie.CassieException.Position.get -> string?
+Cntryl.Cassie.CassieException.Routine.get -> string?
+Cntryl.Cassie.CassieException.SchemaName.get -> string?
+Cntryl.Cassie.CassieException.Severity.get -> string?
+Cntryl.Cassie.CassieException.TableName.get -> string?
+Cntryl.Cassie.CassieProviderFactory
+Cntryl.Cassie.Commands.CassieBatch
+Cntryl.Cassie.Commands.CassieBatch.BatchCommands.get -> Cntryl.Cassie.Commands.CassieBatchCommandCollection!
+Cntryl.Cassie.Commands.CassieBatch.CassieBatch() -> void
+Cntryl.Cassie.Commands.CassieBatch.CassieBatch(Cntryl.Cassie.Connection.CassieConnection? connection, Cntryl.Cassie.Data.CassieTransaction? transaction = null) -> void
+Cntryl.Cassie.Commands.CassieBatch.Connection.get -> Cntryl.Cassie.Connection.CassieConnection?
+Cntryl.Cassie.Commands.CassieBatch.Connection.set -> void
+Cntryl.Cassie.Commands.CassieBatch.CreateBatchCommand() -> Cntryl.Cassie.Commands.CassieBatchCommand!
+Cntryl.Cassie.Commands.CassieBatch.Transaction.get -> Cntryl.Cassie.Data.CassieTransaction?
+Cntryl.Cassie.Commands.CassieBatch.Transaction.set -> void
+Cntryl.Cassie.Commands.CassieBatchCommand
+Cntryl.Cassie.Commands.CassieBatchCommand.CassieBatchCommand() -> void
+Cntryl.Cassie.Commands.CassieBatchCommand.CassieBatchCommand(string! commandText) -> void
+Cntryl.Cassie.Commands.CassieBatchCommand.Parameters.get -> Cntryl.Cassie.Commands.CassieParameterCollection!
+Cntryl.Cassie.Commands.CassieBatchCommandCollection
+Cntryl.Cassie.Commands.CassieBatchCommandCollection.Add(string! commandText) -> Cntryl.Cassie.Commands.CassieBatchCommand!
+Cntryl.Cassie.Commands.CassieBatchCommandCollection.CassieBatchCommandCollection() -> void
+Cntryl.Cassie.Commands.CassieBatchCommandCollection.this[int index].get -> Cntryl.Cassie.Commands.CassieBatchCommand!
+Cntryl.Cassie.Commands.CassieBatchCommandCollection.this[int index].set -> void
+Cntryl.Cassie.Commands.CassieCommand
+Cntryl.Cassie.Commands.CassieCommand.BinaryResults.get -> bool
+Cntryl.Cassie.Commands.CassieCommand.BinaryResults.set -> void
+Cntryl.Cassie.Commands.CassieCommand.CassieCommand() -> void
+Cntryl.Cassie.Commands.CassieCommand.Connection.get -> Cntryl.Cassie.Connection.CassieConnection?
+Cntryl.Cassie.Commands.CassieCommand.Connection.set -> void
+Cntryl.Cassie.Commands.CassieCommand.CopyFromAsync(System.IO.Stream! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Cntryl.Cassie.Commands.CassieCommand.CopyToAsync(System.IO.Stream! destination, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Cntryl.Cassie.Commands.CassieCommand.CreateParameter() -> Cntryl.Cassie.Commands.CassieParameter!
+Cntryl.Cassie.Commands.CassieCommand.Parameters.get -> Cntryl.Cassie.Commands.CassieParameterCollection!
+Cntryl.Cassie.Commands.CassieCommand.Transaction.get -> Cntryl.Cassie.Data.CassieTransaction?
+Cntryl.Cassie.Commands.CassieCommand.Transaction.set -> void
+Cntryl.Cassie.Commands.CassieParameter
+Cntryl.Cassie.Commands.CassieParameter.CassieParameter() -> void
+Cntryl.Cassie.Commands.CassieParameter.ParameterFormat.get -> Cntryl.Cassie.Commands.CassieParameterFormat
+Cntryl.Cassie.Commands.CassieParameter.ParameterFormat.set -> void
+Cntryl.Cassie.Commands.CassieParameter.PostgresTypeOid.get -> int
+Cntryl.Cassie.Commands.CassieParameter.PostgresTypeOid.set -> void
+Cntryl.Cassie.Commands.CassieParameterCollection
+Cntryl.Cassie.Commands.CassieParameterCollection.CassieParameterCollection() -> void
+Cntryl.Cassie.Commands.CassieParameterFormat
+Cntryl.Cassie.Commands.CassieParameterFormat.Auto = 0 -> Cntryl.Cassie.Commands.CassieParameterFormat
+Cntryl.Cassie.Commands.CassieParameterFormat.Binary = 2 -> Cntryl.Cassie.Commands.CassieParameterFormat
+Cntryl.Cassie.Commands.CassieParameterFormat.Text = 1 -> Cntryl.Cassie.Commands.CassieParameterFormat
+Cntryl.Cassie.Connection.CassieConnection
+Cntryl.Cassie.Connection.CassieConnection.BeginTransaction() -> Cntryl.Cassie.Data.CassieTransaction!
+Cntryl.Cassie.Connection.CassieConnection.BeginTransaction(System.Data.IsolationLevel isolationLevel) -> Cntryl.Cassie.Data.CassieTransaction!
+Cntryl.Cassie.Connection.CassieConnection.BeginTransactionAsync() -> System.Threading.Tasks.ValueTask<Cntryl.Cassie.Data.CassieTransaction!>
+Cntryl.Cassie.Connection.CassieConnection.BeginTransactionAsync(System.Data.IsolationLevel isolationLevel) -> System.Threading.Tasks.ValueTask<Cntryl.Cassie.Data.CassieTransaction!>
+Cntryl.Cassie.Connection.CassieConnection.BeginTransactionAsync(System.Data.IsolationLevel isolationLevel, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Cntryl.Cassie.Data.CassieTransaction!>
+Cntryl.Cassie.Connection.CassieConnection.BeginTransactionAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Cntryl.Cassie.Data.CassieTransaction!>
+Cntryl.Cassie.Connection.CassieConnection.CassieConnection() -> void
+Cntryl.Cassie.Connection.CassieConnection.CreateBatch() -> Cntryl.Cassie.Commands.CassieBatch!
+Cntryl.Cassie.Connection.CassieConnection.CreateCommand() -> Cntryl.Cassie.Commands.CassieCommand!
+Cntryl.Cassie.Connection.CassieConnection.GetSchemaAsync() -> System.Threading.Tasks.Task<System.Data.DataTable!>!
+Cntryl.Cassie.Connection.CassieConnection.GetSchemaAsync(string! collectionName) -> System.Threading.Tasks.Task<System.Data.DataTable!>!
+Cntryl.Cassie.Connection.CassieConnection.GetSchemaAsync(string! collectionName, string?[]? restrictionValues) -> System.Threading.Tasks.Task<System.Data.DataTable!>!
+Cntryl.Cassie.Connection.CassieConnection.LoggerFactory.get -> Microsoft.Extensions.Logging.ILoggerFactory?
+Cntryl.Cassie.Connection.CassieConnection.LoggerFactory.set -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.ApplicationName.get -> string!
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.ApplicationName.set -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.CassieConnectionStringBuilder() -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.CassieConnectionStringBuilder(string! connectionString) -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.CommandTimeout.get -> int
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.CommandTimeout.set -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.ConnectionIdleLifetime.get -> int
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.ConnectionIdleLifetime.set -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.ConnectionLifetime.get -> int
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.ConnectionLifetime.set -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.Database.get -> string!
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.Database.set -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.FetchSize.get -> int
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.FetchSize.set -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.Host.get -> string!
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.Host.set -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.MaxPoolSize.get -> int
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.MaxPoolSize.set -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.Options.get -> string!
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.Options.set -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.Password.get -> string!
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.Password.set -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.Pooling.get -> bool
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.Pooling.set -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.Port.get -> int
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.Port.set -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.SslMode.get -> Cntryl.Cassie.Connection.CassieSslMode
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.SslMode.set -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.SslRootCertificate.get -> string!
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.SslRootCertificate.set -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.Timeout.get -> int
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.Timeout.set -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.Username.get -> string!
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.Username.set -> void
+Cntryl.Cassie.Connection.CassieConnectionStringBuilder.ValidateKeywords() -> void
+Cntryl.Cassie.Connection.CassieDataSource
+Cntryl.Cassie.Connection.CassieDataSource.CassieDataSource(string! connectionString) -> void
+Cntryl.Cassie.Connection.CassieDataSource.CreateConnection() -> Cntryl.Cassie.Connection.CassieConnection!
+Cntryl.Cassie.Connection.CassieDataSource.LoggerFactory.get -> Microsoft.Extensions.Logging.ILoggerFactory?
+Cntryl.Cassie.Connection.CassieDataSource.LoggerFactory.init -> void
+Cntryl.Cassie.Connection.CassieDataSource.OpenConnection() -> Cntryl.Cassie.Connection.CassieConnection!
+Cntryl.Cassie.Connection.CassieDataSource.OpenConnectionAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Cassie.Connection.CassieConnection!>
+Cntryl.Cassie.Connection.CassieSslMode
+Cntryl.Cassie.Connection.CassieSslMode.Disable = 2 -> Cntryl.Cassie.Connection.CassieSslMode
+Cntryl.Cassie.Connection.CassieSslMode.Prefer = 1 -> Cntryl.Cassie.Connection.CassieSslMode
+Cntryl.Cassie.Connection.CassieSslMode.Require = 0 -> Cntryl.Cassie.Connection.CassieSslMode
+Cntryl.Cassie.Data.CassieDataAdapter
+Cntryl.Cassie.Data.CassieDataAdapter.CassieDataAdapter() -> void
+Cntryl.Cassie.Data.CassieDataAdapter.CassieDataAdapter(Cntryl.Cassie.Commands.CassieCommand! selectCommand) -> void
+Cntryl.Cassie.Data.CassieDataAdapter.DeleteCommand.get -> Cntryl.Cassie.Commands.CassieCommand?
+Cntryl.Cassie.Data.CassieDataAdapter.DeleteCommand.set -> void
+Cntryl.Cassie.Data.CassieDataAdapter.InsertCommand.get -> Cntryl.Cassie.Commands.CassieCommand?
+Cntryl.Cassie.Data.CassieDataAdapter.InsertCommand.set -> void
+Cntryl.Cassie.Data.CassieDataAdapter.SelectCommand.get -> Cntryl.Cassie.Commands.CassieCommand?
+Cntryl.Cassie.Data.CassieDataAdapter.SelectCommand.set -> void
+Cntryl.Cassie.Data.CassieDataAdapter.UpdateCommand.get -> Cntryl.Cassie.Commands.CassieCommand?
+Cntryl.Cassie.Data.CassieDataAdapter.UpdateCommand.set -> void
+Cntryl.Cassie.Data.CassieDataReader
+Cntryl.Cassie.Data.CassieDataReader.GetColumnSchema() -> System.Collections.ObjectModel.ReadOnlyCollection<System.Data.Common.DbColumn!>!
+Cntryl.Cassie.Data.CassieTransaction
+Cntryl.Cassie.Data.CassieTransaction.Connection.get -> Cntryl.Cassie.Connection.CassieConnection?
+Cntryl.Cassie.Data.CassieTransaction.RollbackAsync() -> System.Threading.Tasks.Task!
+Cntryl.Cassie.Data.CassieTransaction.RollbackAsync(string! savepointName) -> System.Threading.Tasks.Task!
+Cntryl.Cassie.Diagnostics.CassieDiagnostics
+Cntryl.Cassie.Rest.CassieAdminClient
+Cntryl.Cassie.Rest.CassieAdminClient.CancelQueryAsync(System.Guid operationId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Cntryl.Cassie.Rest.CassieQueryCancellation!>!
+Cntryl.Cassie.Rest.CassieAdminClient.CompareVerificationManifestsAsync(System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieProjectionVerificationManifest!>! manifests, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Cntryl.Cassie.Rest.CassieProjectionConsistencyReport!>!
+Cntryl.Cassie.Rest.CassieAdminClient.CreateDatabaseAsync(string! name, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Cntryl.Cassie.Rest.CassieDatabaseInfo!>!
+Cntryl.Cassie.Rest.CassieAdminClient.ExecuteQueryAsync(Cntryl.Cassie.Rest.CassieAdminQueryRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Cntryl.Cassie.Rest.CassieRestQueryResult!>!
+Cntryl.Cassie.Rest.CassieAdminClient.ExplainQueryAsync(Cntryl.Cassie.Rest.CassieAdminQueryRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Cntryl.Cassie.Rest.CassieQueryExplanation!>!
+Cntryl.Cassie.Rest.CassieAdminClient.ExportVerificationManifestAsync(string! projection, Cntryl.Cassie.Rest.CassieManifestExportOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Cntryl.Cassie.Rest.CassieProjectionVerificationManifest!>!
+Cntryl.Cassie.Rest.CassieAdminClient.GetLivenessAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Text.Json.Nodes.JsonObject!>!
+Cntryl.Cassie.Rest.CassieAdminClient.GetMetricsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Text.Json.Nodes.JsonObject!>!
+Cntryl.Cassie.Rest.CassieAdminClient.GetReadinessAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Text.Json.Nodes.JsonObject!>!
+Cntryl.Cassie.Rest.CassieAdminClient.GetSchemaAsync(string! database, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Cntryl.Cassie.Rest.CassieCatalogSchema!>!
+Cntryl.Cassie.Rest.CassieAdminClient.GetStartupAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Text.Json.Nodes.JsonObject!>!
+Cntryl.Cassie.Rest.CassieAdminClient.GetTargetAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Text.Json.Nodes.JsonObject!>!
+Cntryl.Cassie.Rest.CassieAdminClient.ListDatabasesAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieDatabaseInfo!>!>!
+Cntryl.Cassie.Rest.CassieAdminClient.ListProjectionConsistencyReportsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieProjectionConsistencyReport!>!>!
+Cntryl.Cassie.Rest.CassieAdminClient.ValidateQueryAsync(Cntryl.Cassie.Rest.CassieAdminQueryRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Cntryl.Cassie.Rest.CassieQueryValidationResult!>!
+Cntryl.Cassie.Rest.CassieAdminQueryRequest
+Cntryl.Cassie.Rest.CassieAdminQueryRequest.<Clone>$() -> Cntryl.Cassie.Rest.CassieAdminQueryRequest!
+Cntryl.Cassie.Rest.CassieAdminQueryRequest.CassieAdminQueryRequest(string! Database, string! Sql, System.Guid? OperationId = null) -> void
+Cntryl.Cassie.Rest.CassieAdminQueryRequest.Database.get -> string!
+Cntryl.Cassie.Rest.CassieAdminQueryRequest.Database.init -> void
+Cntryl.Cassie.Rest.CassieAdminQueryRequest.Deconstruct(out string! Database, out string! Sql, out System.Guid? OperationId) -> void
+Cntryl.Cassie.Rest.CassieAdminQueryRequest.Equals(Cntryl.Cassie.Rest.CassieAdminQueryRequest? other) -> bool
+Cntryl.Cassie.Rest.CassieAdminQueryRequest.OperationId.get -> System.Guid?
+Cntryl.Cassie.Rest.CassieAdminQueryRequest.OperationId.init -> void
+Cntryl.Cassie.Rest.CassieAdminQueryRequest.Sql.get -> string!
+Cntryl.Cassie.Rest.CassieAdminQueryRequest.Sql.init -> void
+Cntryl.Cassie.Rest.CassieCatalogColumn
+Cntryl.Cassie.Rest.CassieCatalogColumn.<Clone>$() -> Cntryl.Cassie.Rest.CassieCatalogColumn!
+Cntryl.Cassie.Rest.CassieCatalogColumn.CassieCatalogColumn(string! Id, string! Name, string! DataType, bool PrimaryKey) -> void
+Cntryl.Cassie.Rest.CassieCatalogColumn.DataType.get -> string!
+Cntryl.Cassie.Rest.CassieCatalogColumn.DataType.init -> void
+Cntryl.Cassie.Rest.CassieCatalogColumn.Deconstruct(out string! Id, out string! Name, out string! DataType, out bool PrimaryKey) -> void
+Cntryl.Cassie.Rest.CassieCatalogColumn.Equals(Cntryl.Cassie.Rest.CassieCatalogColumn? other) -> bool
+Cntryl.Cassie.Rest.CassieCatalogColumn.Id.get -> string!
+Cntryl.Cassie.Rest.CassieCatalogColumn.Id.init -> void
+Cntryl.Cassie.Rest.CassieCatalogColumn.Name.get -> string!
+Cntryl.Cassie.Rest.CassieCatalogColumn.Name.init -> void
+Cntryl.Cassie.Rest.CassieCatalogColumn.PrimaryKey.get -> bool
+Cntryl.Cassie.Rest.CassieCatalogColumn.PrimaryKey.init -> void
+Cntryl.Cassie.Rest.CassieCatalogItem
+Cntryl.Cassie.Rest.CassieCatalogItem.<Clone>$() -> Cntryl.Cassie.Rest.CassieCatalogItem!
+Cntryl.Cassie.Rest.CassieCatalogItem.CassieCatalogItem(string! Id, string! Kind, string! Label, string! Database, string! Schema, string! Name, System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieCatalogColumn!>! Columns, string? Metadata = null) -> void
+Cntryl.Cassie.Rest.CassieCatalogItem.Columns.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieCatalogColumn!>!
+Cntryl.Cassie.Rest.CassieCatalogItem.Columns.init -> void
+Cntryl.Cassie.Rest.CassieCatalogItem.Database.get -> string!
+Cntryl.Cassie.Rest.CassieCatalogItem.Database.init -> void
+Cntryl.Cassie.Rest.CassieCatalogItem.Deconstruct(out string! Id, out string! Kind, out string! Label, out string! Database, out string! Schema, out string! Name, out System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieCatalogColumn!>! Columns, out string? Metadata) -> void
+Cntryl.Cassie.Rest.CassieCatalogItem.Equals(Cntryl.Cassie.Rest.CassieCatalogItem? other) -> bool
+Cntryl.Cassie.Rest.CassieCatalogItem.Id.get -> string!
+Cntryl.Cassie.Rest.CassieCatalogItem.Id.init -> void
+Cntryl.Cassie.Rest.CassieCatalogItem.Kind.get -> string!
+Cntryl.Cassie.Rest.CassieCatalogItem.Kind.init -> void
+Cntryl.Cassie.Rest.CassieCatalogItem.Label.get -> string!
+Cntryl.Cassie.Rest.CassieCatalogItem.Label.init -> void
+Cntryl.Cassie.Rest.CassieCatalogItem.Metadata.get -> string?
+Cntryl.Cassie.Rest.CassieCatalogItem.Metadata.init -> void
+Cntryl.Cassie.Rest.CassieCatalogItem.Name.get -> string!
+Cntryl.Cassie.Rest.CassieCatalogItem.Name.init -> void
+Cntryl.Cassie.Rest.CassieCatalogItem.Schema.get -> string!
+Cntryl.Cassie.Rest.CassieCatalogItem.Schema.init -> void
+Cntryl.Cassie.Rest.CassieCatalogSchema
+Cntryl.Cassie.Rest.CassieCatalogSchema.<Clone>$() -> Cntryl.Cassie.Rest.CassieCatalogSchema!
+Cntryl.Cassie.Rest.CassieCatalogSchema.CassieCatalogSchema(System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieCatalogSection!>! Sections) -> void
+Cntryl.Cassie.Rest.CassieCatalogSchema.Deconstruct(out System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieCatalogSection!>! Sections) -> void
+Cntryl.Cassie.Rest.CassieCatalogSchema.Equals(Cntryl.Cassie.Rest.CassieCatalogSchema? other) -> bool
+Cntryl.Cassie.Rest.CassieCatalogSchema.Sections.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieCatalogSection!>!
+Cntryl.Cassie.Rest.CassieCatalogSchema.Sections.init -> void
+Cntryl.Cassie.Rest.CassieCatalogSection
+Cntryl.Cassie.Rest.CassieCatalogSection.<Clone>$() -> Cntryl.Cassie.Rest.CassieCatalogSection!
+Cntryl.Cassie.Rest.CassieCatalogSection.CassieCatalogSection(string! Id, string! Label, System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieCatalogItem!>! Items) -> void
+Cntryl.Cassie.Rest.CassieCatalogSection.Deconstruct(out string! Id, out string! Label, out System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieCatalogItem!>! Items) -> void
+Cntryl.Cassie.Rest.CassieCatalogSection.Equals(Cntryl.Cassie.Rest.CassieCatalogSection? other) -> bool
+Cntryl.Cassie.Rest.CassieCatalogSection.Id.get -> string!
+Cntryl.Cassie.Rest.CassieCatalogSection.Id.init -> void
+Cntryl.Cassie.Rest.CassieCatalogSection.Items.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieCatalogItem!>!
+Cntryl.Cassie.Rest.CassieCatalogSection.Items.init -> void
+Cntryl.Cassie.Rest.CassieCatalogSection.Label.get -> string!
+Cntryl.Cassie.Rest.CassieCatalogSection.Label.init -> void
+Cntryl.Cassie.Rest.CassieCollectionDefinition
+Cntryl.Cassie.Rest.CassieCollectionDefinition.<Clone>$() -> Cntryl.Cassie.Rest.CassieCollectionDefinition!
+Cntryl.Cassie.Rest.CassieCollectionDefinition.CassieCollectionDefinition(string! Name, System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieRestField!>! Fields, string? Description = null) -> void
+Cntryl.Cassie.Rest.CassieCollectionDefinition.Deconstruct(out string! Name, out System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieRestField!>! Fields, out string? Description) -> void
+Cntryl.Cassie.Rest.CassieCollectionDefinition.Description.get -> string?
+Cntryl.Cassie.Rest.CassieCollectionDefinition.Description.init -> void
+Cntryl.Cassie.Rest.CassieCollectionDefinition.Equals(Cntryl.Cassie.Rest.CassieCollectionDefinition? other) -> bool
+Cntryl.Cassie.Rest.CassieCollectionDefinition.Fields.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieRestField!>!
+Cntryl.Cassie.Rest.CassieCollectionDefinition.Fields.init -> void
+Cntryl.Cassie.Rest.CassieCollectionDefinition.Name.get -> string!
+Cntryl.Cassie.Rest.CassieCollectionDefinition.Name.init -> void
+Cntryl.Cassie.Rest.CassieDatabaseInfo
+Cntryl.Cassie.Rest.CassieDatabaseInfo.<Clone>$() -> Cntryl.Cassie.Rest.CassieDatabaseInfo!
+Cntryl.Cassie.Rest.CassieDatabaseInfo.CassieDatabaseInfo(string! Name, string? Description = null) -> void
+Cntryl.Cassie.Rest.CassieDatabaseInfo.Deconstruct(out string! Name, out string? Description) -> void
+Cntryl.Cassie.Rest.CassieDatabaseInfo.Description.get -> string?
+Cntryl.Cassie.Rest.CassieDatabaseInfo.Description.init -> void
+Cntryl.Cassie.Rest.CassieDatabaseInfo.Equals(Cntryl.Cassie.Rest.CassieDatabaseInfo? other) -> bool
+Cntryl.Cassie.Rest.CassieDatabaseInfo.Name.get -> string!
+Cntryl.Cassie.Rest.CassieDatabaseInfo.Name.init -> void
+Cntryl.Cassie.Rest.CassieManifestExportOptions
+Cntryl.Cassie.Rest.CassieManifestExportOptions.<Clone>$() -> Cntryl.Cassie.Rest.CassieManifestExportOptions!
+Cntryl.Cassie.Rest.CassieManifestExportOptions.CassieManifestExportOptions(string? InstanceId = null, ulong? GeneratedMs = null, ulong? TtlMs = null, bool IncludeRowHashes = false) -> void
+Cntryl.Cassie.Rest.CassieManifestExportOptions.Deconstruct(out string? InstanceId, out ulong? GeneratedMs, out ulong? TtlMs, out bool IncludeRowHashes) -> void
+Cntryl.Cassie.Rest.CassieManifestExportOptions.Equals(Cntryl.Cassie.Rest.CassieManifestExportOptions? other) -> bool
+Cntryl.Cassie.Rest.CassieManifestExportOptions.GeneratedMs.get -> ulong?
+Cntryl.Cassie.Rest.CassieManifestExportOptions.GeneratedMs.init -> void
+Cntryl.Cassie.Rest.CassieManifestExportOptions.IncludeRowHashes.get -> bool
+Cntryl.Cassie.Rest.CassieManifestExportOptions.IncludeRowHashes.init -> void
+Cntryl.Cassie.Rest.CassieManifestExportOptions.InstanceId.get -> string?
+Cntryl.Cassie.Rest.CassieManifestExportOptions.InstanceId.init -> void
+Cntryl.Cassie.Rest.CassieManifestExportOptions.TtlMs.get -> ulong?
+Cntryl.Cassie.Rest.CassieManifestExportOptions.TtlMs.init -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.<Clone>$() -> Cntryl.Cassie.Rest.CassieProjectionConsistencyReport!
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.CassieProjectionConsistencyReport(string! ReportId, ulong CreatedMs, string! ProjectionId, string? ProjectionVersionId, string! State, string! CompatibilityStatus, ulong ManifestCount, System.Collections.Generic.IReadOnlyList<string!>! InstanceIds, string? RootDigest, string? ManifestDigest, ulong MismatchCount, ulong DivergentRangeCount, ulong DivergentRowCount, ulong StaleManifestCount, ulong IncompatibleManifestCount, ulong UnverifiableCount, System.Collections.Generic.IReadOnlyList<string!>! DiagnosticSample, string? LastError) -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.CompatibilityStatus.get -> string!
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.CompatibilityStatus.init -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.CreatedMs.get -> ulong
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.CreatedMs.init -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.Deconstruct(out string! ReportId, out ulong CreatedMs, out string! ProjectionId, out string? ProjectionVersionId, out string! State, out string! CompatibilityStatus, out ulong ManifestCount, out System.Collections.Generic.IReadOnlyList<string!>! InstanceIds, out string? RootDigest, out string? ManifestDigest, out ulong MismatchCount, out ulong DivergentRangeCount, out ulong DivergentRowCount, out ulong StaleManifestCount, out ulong IncompatibleManifestCount, out ulong UnverifiableCount, out System.Collections.Generic.IReadOnlyList<string!>! DiagnosticSample, out string? LastError) -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.DiagnosticSample.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.DiagnosticSample.init -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.DivergentRangeCount.get -> ulong
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.DivergentRangeCount.init -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.DivergentRowCount.get -> ulong
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.DivergentRowCount.init -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.Equals(Cntryl.Cassie.Rest.CassieProjectionConsistencyReport? other) -> bool
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.IncompatibleManifestCount.get -> ulong
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.IncompatibleManifestCount.init -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.InstanceIds.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.InstanceIds.init -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.LastError.get -> string?
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.LastError.init -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.ManifestCount.get -> ulong
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.ManifestCount.init -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.ManifestDigest.get -> string?
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.ManifestDigest.init -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.MismatchCount.get -> ulong
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.MismatchCount.init -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.ProjectionId.get -> string!
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.ProjectionId.init -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.ProjectionVersionId.get -> string?
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.ProjectionVersionId.init -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.ReportId.get -> string!
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.ReportId.init -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.RootDigest.get -> string?
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.RootDigest.init -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.StaleManifestCount.get -> ulong
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.StaleManifestCount.init -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.State.get -> string!
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.State.init -> void
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.UnverifiableCount.get -> ulong
+Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.UnverifiableCount.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata
+Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.<Clone>$() -> Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata!
+Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.Algorithm.get -> string!
+Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.Algorithm.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.CanonicalEncoderVersion.get -> ushort
+Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.CanonicalEncoderVersion.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.CassieProjectionManifestHashMetadata(string! Algorithm, ushort DigestLength, ushort CanonicalEncoderVersion, ushort RowHashVersion, ushort RangeHashVersion, ushort RootHashVersion) -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.Deconstruct(out string! Algorithm, out ushort DigestLength, out ushort CanonicalEncoderVersion, out ushort RowHashVersion, out ushort RangeHashVersion, out ushort RootHashVersion) -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.DigestLength.get -> ushort
+Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.DigestLength.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.Equals(Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata? other) -> bool
+Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.RangeHashVersion.get -> ushort
+Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.RangeHashVersion.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.RootHashVersion.get -> ushort
+Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.RootHashVersion.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.RowHashVersion.get -> ushort
+Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.RowHashVersion.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.<Clone>$() -> Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary!
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.CassieProjectionManifestRangeSummary(ulong RangeId, string? FirstRowId, string? LastRowId, ulong RowCount, string! Digest, string! State, ulong ComputedMs) -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.ComputedMs.get -> ulong
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.ComputedMs.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.Deconstruct(out ulong RangeId, out string? FirstRowId, out string? LastRowId, out ulong RowCount, out string! Digest, out string! State, out ulong ComputedMs) -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.Digest.get -> string!
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.Digest.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.Equals(Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary? other) -> bool
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.FirstRowId.get -> string?
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.FirstRowId.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.LastRowId.get -> string?
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.LastRowId.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.RangeId.get -> ulong
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.RangeId.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.RowCount.get -> ulong
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.RowCount.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.State.get -> string!
+Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.State.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary
+Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.<Clone>$() -> Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary!
+Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.CassieProjectionManifestRootSummary(string! Digest, ulong RowCount, ulong RangeCount, string! State, ulong ComputedMs) -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.ComputedMs.get -> ulong
+Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.ComputedMs.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.Deconstruct(out string! Digest, out ulong RowCount, out ulong RangeCount, out string! State, out ulong ComputedMs) -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.Digest.get -> string!
+Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.Digest.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.Equals(Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary? other) -> bool
+Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.RangeCount.get -> ulong
+Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.RangeCount.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.RowCount.get -> ulong
+Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.RowCount.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.State.get -> string!
+Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.State.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary
+Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary.<Clone>$() -> Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary!
+Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary.CassieProjectionManifestRowHashSummary(string! RowId, string! Digest, string! State, ulong ComputedMs) -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary.ComputedMs.get -> ulong
+Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary.ComputedMs.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary.Deconstruct(out string! RowId, out string! Digest, out string! State, out ulong ComputedMs) -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary.Digest.get -> string!
+Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary.Digest.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary.Equals(Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary? other) -> bool
+Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary.RowId.get -> string!
+Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary.RowId.init -> void
+Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary.State.get -> string!
+Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary.State.init -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.<Clone>$() -> Cntryl.Cassie.Rest.CassieProjectionVerificationManifest!
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.CassieProjectionVerificationManifest(ushort ManifestVersion, string! InstanceId, string! ProjectionId, string? ProjectionVersionId, string! ProjectionKind, ulong SchemaEpoch, ulong? ProjectionDefinitionHash, string? SourceIdentity, string? SourceCheckpoint, ulong? SourcePosition, ulong GeneratedMs, ulong ExpiresAtMs, Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata! Hash, Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary? Root, System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary!>! Ranges, System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary!>! RowHashes, string! ManifestDigest) -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.Deconstruct(out ushort ManifestVersion, out string! InstanceId, out string! ProjectionId, out string? ProjectionVersionId, out string! ProjectionKind, out ulong SchemaEpoch, out ulong? ProjectionDefinitionHash, out string? SourceIdentity, out string? SourceCheckpoint, out ulong? SourcePosition, out ulong GeneratedMs, out ulong ExpiresAtMs, out Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata! Hash, out Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary? Root, out System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary!>! Ranges, out System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary!>! RowHashes, out string! ManifestDigest) -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.Equals(Cntryl.Cassie.Rest.CassieProjectionVerificationManifest? other) -> bool
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.ExpiresAtMs.get -> ulong
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.ExpiresAtMs.init -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.GeneratedMs.get -> ulong
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.GeneratedMs.init -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.Hash.get -> Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata!
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.Hash.init -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.InstanceId.get -> string!
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.InstanceId.init -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.ManifestDigest.get -> string!
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.ManifestDigest.init -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.ManifestVersion.get -> ushort
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.ManifestVersion.init -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.ProjectionDefinitionHash.get -> ulong?
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.ProjectionDefinitionHash.init -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.ProjectionId.get -> string!
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.ProjectionId.init -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.ProjectionKind.get -> string!
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.ProjectionKind.init -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.ProjectionVersionId.get -> string?
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.ProjectionVersionId.init -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.Ranges.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary!>!
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.Ranges.init -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.Root.get -> Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary?
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.Root.init -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.RowHashes.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary!>!
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.RowHashes.init -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.SchemaEpoch.get -> ulong
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.SchemaEpoch.init -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.SourceCheckpoint.get -> string?
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.SourceCheckpoint.init -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.SourceIdentity.get -> string?
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.SourceIdentity.init -> void
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.SourcePosition.get -> ulong?
+Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.SourcePosition.init -> void
+Cntryl.Cassie.Rest.CassieQueryCancellation
+Cntryl.Cassie.Rest.CassieQueryCancellation.<Clone>$() -> Cntryl.Cassie.Rest.CassieQueryCancellation!
+Cntryl.Cassie.Rest.CassieQueryCancellation.Cancelled.get -> bool
+Cntryl.Cassie.Rest.CassieQueryCancellation.Cancelled.init -> void
+Cntryl.Cassie.Rest.CassieQueryCancellation.CassieQueryCancellation(System.Guid OperationId, bool Cancelled) -> void
+Cntryl.Cassie.Rest.CassieQueryCancellation.Deconstruct(out System.Guid OperationId, out bool Cancelled) -> void
+Cntryl.Cassie.Rest.CassieQueryCancellation.Equals(Cntryl.Cassie.Rest.CassieQueryCancellation? other) -> bool
+Cntryl.Cassie.Rest.CassieQueryCancellation.OperationId.get -> System.Guid
+Cntryl.Cassie.Rest.CassieQueryCancellation.OperationId.init -> void
+Cntryl.Cassie.Rest.CassieQueryExplanation
+Cntryl.Cassie.Rest.CassieQueryExplanation.<Clone>$() -> Cntryl.Cassie.Rest.CassieQueryExplanation!
+Cntryl.Cassie.Rest.CassieQueryExplanation.CassieQueryExplanation(System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieRestColumn!>! Columns, System.Collections.Generic.IReadOnlyList<System.Collections.Generic.IReadOnlyList<System.Text.Json.JsonElement>!>! Rows, string! Command, System.Text.Json.Nodes.JsonObject! Plan) -> void
+Cntryl.Cassie.Rest.CassieQueryExplanation.Columns.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieRestColumn!>!
+Cntryl.Cassie.Rest.CassieQueryExplanation.Columns.init -> void
+Cntryl.Cassie.Rest.CassieQueryExplanation.Command.get -> string!
+Cntryl.Cassie.Rest.CassieQueryExplanation.Command.init -> void
+Cntryl.Cassie.Rest.CassieQueryExplanation.Deconstruct(out System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieRestColumn!>! Columns, out System.Collections.Generic.IReadOnlyList<System.Collections.Generic.IReadOnlyList<System.Text.Json.JsonElement>!>! Rows, out string! Command, out System.Text.Json.Nodes.JsonObject! Plan) -> void
+Cntryl.Cassie.Rest.CassieQueryExplanation.Equals(Cntryl.Cassie.Rest.CassieQueryExplanation? other) -> bool
+Cntryl.Cassie.Rest.CassieQueryExplanation.Plan.get -> System.Text.Json.Nodes.JsonObject!
+Cntryl.Cassie.Rest.CassieQueryExplanation.Plan.init -> void
+Cntryl.Cassie.Rest.CassieQueryExplanation.Rows.get -> System.Collections.Generic.IReadOnlyList<System.Collections.Generic.IReadOnlyList<System.Text.Json.JsonElement>!>!
+Cntryl.Cassie.Rest.CassieQueryExplanation.Rows.init -> void
+Cntryl.Cassie.Rest.CassieQueryValidationResult
+Cntryl.Cassie.Rest.CassieQueryValidationResult.<Clone>$() -> Cntryl.Cassie.Rest.CassieQueryValidationResult!
+Cntryl.Cassie.Rest.CassieQueryValidationResult.CassieQueryValidationResult(bool Valid, string! Command, System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieRestColumn!>? Columns = null) -> void
+Cntryl.Cassie.Rest.CassieQueryValidationResult.Columns.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieRestColumn!>?
+Cntryl.Cassie.Rest.CassieQueryValidationResult.Columns.init -> void
+Cntryl.Cassie.Rest.CassieQueryValidationResult.Command.get -> string!
+Cntryl.Cassie.Rest.CassieQueryValidationResult.Command.init -> void
+Cntryl.Cassie.Rest.CassieQueryValidationResult.Deconstruct(out bool Valid, out string! Command, out System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieRestColumn!>? Columns) -> void
+Cntryl.Cassie.Rest.CassieQueryValidationResult.Equals(Cntryl.Cassie.Rest.CassieQueryValidationResult? other) -> bool
+Cntryl.Cassie.Rest.CassieQueryValidationResult.Valid.get -> bool
+Cntryl.Cassie.Rest.CassieQueryValidationResult.Valid.init -> void
+Cntryl.Cassie.Rest.CassieRestClient
+Cntryl.Cassie.Rest.CassieRestClient.AddDocumentAsync(string! collection, System.Text.Json.Nodes.JsonObject! document, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<string!>!
+Cntryl.Cassie.Rest.CassieRestClient.Admin.get -> Cntryl.Cassie.Rest.CassieAdminClient!
+Cntryl.Cassie.Rest.CassieRestClient.CassieRestClient(System.Net.Http.HttpClient! httpClient) -> void
+Cntryl.Cassie.Rest.CassieRestClient.CassieRestClient(System.Uri! baseAddress) -> void
+Cntryl.Cassie.Rest.CassieRestClient.CreateCollectionAsync(Cntryl.Cassie.Rest.CassieCollectionDefinition! definition, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<string!>!
+Cntryl.Cassie.Rest.CassieRestClient.CreateVectorIndexAsync(string! collection, Cntryl.Cassie.Rest.CassieVectorIndexDefinition! definition, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Cntryl.Cassie.Rest.CassieVectorIndexResult!>!
+Cntryl.Cassie.Rest.CassieRestClient.DeleteDocumentAsync(string! collection, string! id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Cntryl.Cassie.Rest.CassieRestClient.Dispose() -> void
+Cntryl.Cassie.Rest.CassieRestClient.GetDocumentAsync(string! collection, string! id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Text.Json.Nodes.JsonObject!>!
+Cntryl.Cassie.Rest.CassieRestClient.GetSessionAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Cntryl.Cassie.Rest.CassieRestSession!>!
+Cntryl.Cassie.Rest.CassieRestClient.ListCollectionsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<string!>!>!
+Cntryl.Cassie.Rest.CassieRestClient.LoginAsync(string! username, string! password, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Cntryl.Cassie.Rest.CassieRestSession!>!
+Cntryl.Cassie.Rest.CassieRestClient.LogoutAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Cntryl.Cassie.Rest.CassieRestClient.SearchAsync(string! collection, Cntryl.Cassie.Rest.CassieVectorSearchRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Cntryl.Cassie.Rest.CassieRestQueryResult!>!
+Cntryl.Cassie.Rest.CassieRestColumn
+Cntryl.Cassie.Rest.CassieRestColumn.<Clone>$() -> Cntryl.Cassie.Rest.CassieRestColumn!
+Cntryl.Cassie.Rest.CassieRestColumn.CassieRestColumn(string! Name, string! DataType, long TypeOid, short TypeLength, int TypeModifier, short FormatCode, bool IsNullable) -> void
+Cntryl.Cassie.Rest.CassieRestColumn.DataType.get -> string!
+Cntryl.Cassie.Rest.CassieRestColumn.DataType.init -> void
+Cntryl.Cassie.Rest.CassieRestColumn.Deconstruct(out string! Name, out string! DataType, out long TypeOid, out short TypeLength, out int TypeModifier, out short FormatCode, out bool IsNullable) -> void
+Cntryl.Cassie.Rest.CassieRestColumn.Equals(Cntryl.Cassie.Rest.CassieRestColumn? other) -> bool
+Cntryl.Cassie.Rest.CassieRestColumn.FormatCode.get -> short
+Cntryl.Cassie.Rest.CassieRestColumn.FormatCode.init -> void
+Cntryl.Cassie.Rest.CassieRestColumn.IsNullable.get -> bool
+Cntryl.Cassie.Rest.CassieRestColumn.IsNullable.init -> void
+Cntryl.Cassie.Rest.CassieRestColumn.Name.get -> string!
+Cntryl.Cassie.Rest.CassieRestColumn.Name.init -> void
+Cntryl.Cassie.Rest.CassieRestColumn.TypeLength.get -> short
+Cntryl.Cassie.Rest.CassieRestColumn.TypeLength.init -> void
+Cntryl.Cassie.Rest.CassieRestColumn.TypeModifier.get -> int
+Cntryl.Cassie.Rest.CassieRestColumn.TypeModifier.init -> void
+Cntryl.Cassie.Rest.CassieRestColumn.TypeOid.get -> long
+Cntryl.Cassie.Rest.CassieRestColumn.TypeOid.init -> void
+Cntryl.Cassie.Rest.CassieRestException
+Cntryl.Cassie.Rest.CassieRestException.CassieRestException(System.Net.HttpStatusCode statusCode, string! error) -> void
+Cntryl.Cassie.Rest.CassieRestException.Error.get -> string!
+Cntryl.Cassie.Rest.CassieRestField
+Cntryl.Cassie.Rest.CassieRestField.<Clone>$() -> Cntryl.Cassie.Rest.CassieRestField!
+Cntryl.Cassie.Rest.CassieRestField.CassieRestField(string! Name, string! DataType) -> void
+Cntryl.Cassie.Rest.CassieRestField.DataType.get -> string!
+Cntryl.Cassie.Rest.CassieRestField.DataType.init -> void
+Cntryl.Cassie.Rest.CassieRestField.Deconstruct(out string! Name, out string! DataType) -> void
+Cntryl.Cassie.Rest.CassieRestField.Equals(Cntryl.Cassie.Rest.CassieRestField? other) -> bool
+Cntryl.Cassie.Rest.CassieRestField.Name.get -> string!
+Cntryl.Cassie.Rest.CassieRestField.Name.init -> void
+Cntryl.Cassie.Rest.CassieRestQueryResult
+Cntryl.Cassie.Rest.CassieRestQueryResult.<Clone>$() -> Cntryl.Cassie.Rest.CassieRestQueryResult!
+Cntryl.Cassie.Rest.CassieRestQueryResult.CassieRestQueryResult(System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieRestColumn!>! Columns, System.Collections.Generic.IReadOnlyList<System.Collections.Generic.IReadOnlyList<System.Text.Json.JsonElement>!>! Rows, string! Command) -> void
+Cntryl.Cassie.Rest.CassieRestQueryResult.Columns.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieRestColumn!>!
+Cntryl.Cassie.Rest.CassieRestQueryResult.Columns.init -> void
+Cntryl.Cassie.Rest.CassieRestQueryResult.Command.get -> string!
+Cntryl.Cassie.Rest.CassieRestQueryResult.Command.init -> void
+Cntryl.Cassie.Rest.CassieRestQueryResult.Deconstruct(out System.Collections.Generic.IReadOnlyList<Cntryl.Cassie.Rest.CassieRestColumn!>! Columns, out System.Collections.Generic.IReadOnlyList<System.Collections.Generic.IReadOnlyList<System.Text.Json.JsonElement>!>! Rows, out string! Command) -> void
+Cntryl.Cassie.Rest.CassieRestQueryResult.Equals(Cntryl.Cassie.Rest.CassieRestQueryResult? other) -> bool
+Cntryl.Cassie.Rest.CassieRestQueryResult.Rows.get -> System.Collections.Generic.IReadOnlyList<System.Collections.Generic.IReadOnlyList<System.Text.Json.JsonElement>!>!
+Cntryl.Cassie.Rest.CassieRestQueryResult.Rows.init -> void
+Cntryl.Cassie.Rest.CassieRestSession
+Cntryl.Cassie.Rest.CassieRestSession.<Clone>$() -> Cntryl.Cassie.Rest.CassieRestSession!
+Cntryl.Cassie.Rest.CassieRestSession.CassieRestSession(string! User, string? Role = null) -> void
+Cntryl.Cassie.Rest.CassieRestSession.Deconstruct(out string! User, out string? Role) -> void
+Cntryl.Cassie.Rest.CassieRestSession.Equals(Cntryl.Cassie.Rest.CassieRestSession? other) -> bool
+Cntryl.Cassie.Rest.CassieRestSession.Role.get -> string?
+Cntryl.Cassie.Rest.CassieRestSession.Role.init -> void
+Cntryl.Cassie.Rest.CassieRestSession.User.get -> string!
+Cntryl.Cassie.Rest.CassieRestSession.User.init -> void
+Cntryl.Cassie.Rest.CassieVectorIndexDefinition
+Cntryl.Cassie.Rest.CassieVectorIndexDefinition.<Clone>$() -> Cntryl.Cassie.Rest.CassieVectorIndexDefinition!
+Cntryl.Cassie.Rest.CassieVectorIndexDefinition.CassieVectorIndexDefinition(string! Field, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Options, string! Kind = "vector") -> void
+Cntryl.Cassie.Rest.CassieVectorIndexDefinition.Deconstruct(out string! Field, out System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Options, out string! Kind) -> void
+Cntryl.Cassie.Rest.CassieVectorIndexDefinition.Equals(Cntryl.Cassie.Rest.CassieVectorIndexDefinition? other) -> bool
+Cntryl.Cassie.Rest.CassieVectorIndexDefinition.Field.get -> string!
+Cntryl.Cassie.Rest.CassieVectorIndexDefinition.Field.init -> void
+Cntryl.Cassie.Rest.CassieVectorIndexDefinition.Kind.get -> string!
+Cntryl.Cassie.Rest.CassieVectorIndexDefinition.Kind.init -> void
+Cntryl.Cassie.Rest.CassieVectorIndexDefinition.Options.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Cntryl.Cassie.Rest.CassieVectorIndexDefinition.Options.init -> void
+Cntryl.Cassie.Rest.CassieVectorIndexResult
+Cntryl.Cassie.Rest.CassieVectorIndexResult.<Clone>$() -> Cntryl.Cassie.Rest.CassieVectorIndexResult!
+Cntryl.Cassie.Rest.CassieVectorIndexResult.CassieVectorIndexResult(string! Collection, string! Field, string! SourceField, string! Provider, string! Model, int Dimensions, string! Metric, string! IndexType, string! Status) -> void
+Cntryl.Cassie.Rest.CassieVectorIndexResult.Collection.get -> string!
+Cntryl.Cassie.Rest.CassieVectorIndexResult.Collection.init -> void
+Cntryl.Cassie.Rest.CassieVectorIndexResult.Deconstruct(out string! Collection, out string! Field, out string! SourceField, out string! Provider, out string! Model, out int Dimensions, out string! Metric, out string! IndexType, out string! Status) -> void
+Cntryl.Cassie.Rest.CassieVectorIndexResult.Dimensions.get -> int
+Cntryl.Cassie.Rest.CassieVectorIndexResult.Dimensions.init -> void
+Cntryl.Cassie.Rest.CassieVectorIndexResult.Equals(Cntryl.Cassie.Rest.CassieVectorIndexResult? other) -> bool
+Cntryl.Cassie.Rest.CassieVectorIndexResult.Field.get -> string!
+Cntryl.Cassie.Rest.CassieVectorIndexResult.Field.init -> void
+Cntryl.Cassie.Rest.CassieVectorIndexResult.IndexType.get -> string!
+Cntryl.Cassie.Rest.CassieVectorIndexResult.IndexType.init -> void
+Cntryl.Cassie.Rest.CassieVectorIndexResult.Metric.get -> string!
+Cntryl.Cassie.Rest.CassieVectorIndexResult.Metric.init -> void
+Cntryl.Cassie.Rest.CassieVectorIndexResult.Model.get -> string!
+Cntryl.Cassie.Rest.CassieVectorIndexResult.Model.init -> void
+Cntryl.Cassie.Rest.CassieVectorIndexResult.Provider.get -> string!
+Cntryl.Cassie.Rest.CassieVectorIndexResult.Provider.init -> void
+Cntryl.Cassie.Rest.CassieVectorIndexResult.SourceField.get -> string!
+Cntryl.Cassie.Rest.CassieVectorIndexResult.SourceField.init -> void
+Cntryl.Cassie.Rest.CassieVectorIndexResult.Status.get -> string!
+Cntryl.Cassie.Rest.CassieVectorIndexResult.Status.init -> void
+Cntryl.Cassie.Rest.CassieVectorSearchRequest
+Cntryl.Cassie.Rest.CassieVectorSearchRequest.<Clone>$() -> Cntryl.Cassie.Rest.CassieVectorSearchRequest!
+Cntryl.Cassie.Rest.CassieVectorSearchRequest.CassieVectorSearchRequest(string! Field, string! Query, string? Metric = null, int? Limit = null, int? Offset = null) -> void
+Cntryl.Cassie.Rest.CassieVectorSearchRequest.Deconstruct(out string! Field, out string! Query, out string? Metric, out int? Limit, out int? Offset) -> void
+Cntryl.Cassie.Rest.CassieVectorSearchRequest.Equals(Cntryl.Cassie.Rest.CassieVectorSearchRequest? other) -> bool
+Cntryl.Cassie.Rest.CassieVectorSearchRequest.Field.get -> string!
+Cntryl.Cassie.Rest.CassieVectorSearchRequest.Field.init -> void
+Cntryl.Cassie.Rest.CassieVectorSearchRequest.Limit.get -> int?
+Cntryl.Cassie.Rest.CassieVectorSearchRequest.Limit.init -> void
+Cntryl.Cassie.Rest.CassieVectorSearchRequest.Metric.get -> string?
+Cntryl.Cassie.Rest.CassieVectorSearchRequest.Metric.init -> void
+Cntryl.Cassie.Rest.CassieVectorSearchRequest.Offset.get -> int?
+Cntryl.Cassie.Rest.CassieVectorSearchRequest.Offset.init -> void
+Cntryl.Cassie.Rest.CassieVectorSearchRequest.Query.get -> string!
+Cntryl.Cassie.Rest.CassieVectorSearchRequest.Query.init -> void
+Cntryl.Cassie.Types.CassieArray
+Cntryl.Cassie.Types.CassieArray.CassieArray(int elementTypeOid, int[]! dimensions, int[]! lowerBounds, object?[]! elements) -> void
+Cntryl.Cassie.Types.CassieArray.Count.get -> int
+Cntryl.Cassie.Types.CassieArray.Dimensions.get -> System.Collections.Generic.IReadOnlyList<int>!
+Cntryl.Cassie.Types.CassieArray.ElementTypeOid.get -> int
+Cntryl.Cassie.Types.CassieArray.Elements.get -> System.Collections.Generic.IReadOnlyList<object?>!
+Cntryl.Cassie.Types.CassieArray.GetEnumerator() -> System.Collections.Generic.IEnumerator<object?>!
+Cntryl.Cassie.Types.CassieArray.GetValue(params int[]! subscripts) -> object?
+Cntryl.Cassie.Types.CassieArray.LowerBounds.get -> System.Collections.Generic.IReadOnlyList<int>!
+Cntryl.Cassie.Types.CassieArray.Rank.get -> int
+Cntryl.Cassie.Types.CassieArray.ToArray() -> System.Array!
+Cntryl.Cassie.Types.CassieArray.this[int index].get -> object?
+Cntryl.Cassie.Types.CassieBitString
+Cntryl.Cassie.Types.CassieBitString.CassieBitString() -> void
+Cntryl.Cassie.Types.CassieBitString.CassieBitString(string! value, bool isVarying) -> void
+Cntryl.Cassie.Types.CassieBitString.Equals(Cntryl.Cassie.Types.CassieBitString other) -> bool
+Cntryl.Cassie.Types.CassieBitString.IsVarying.get -> bool
+Cntryl.Cassie.Types.CassieBitString.Value.get -> string!
+Cntryl.Cassie.Types.CassieInterval
+Cntryl.Cassie.Types.CassieInterval.CassieInterval() -> void
+Cntryl.Cassie.Types.CassieInterval.CassieInterval(int Months, int Days, long Microseconds) -> void
+Cntryl.Cassie.Types.CassieInterval.Days.get -> int
+Cntryl.Cassie.Types.CassieInterval.Days.init -> void
+Cntryl.Cassie.Types.CassieInterval.Deconstruct(out int Months, out int Days, out long Microseconds) -> void
+Cntryl.Cassie.Types.CassieInterval.Equals(Cntryl.Cassie.Types.CassieInterval other) -> bool
+Cntryl.Cassie.Types.CassieInterval.Microseconds.get -> long
+Cntryl.Cassie.Types.CassieInterval.Microseconds.init -> void
+Cntryl.Cassie.Types.CassieInterval.Months.get -> int
+Cntryl.Cassie.Types.CassieInterval.Months.init -> void
+Cntryl.Cassie.Types.CassieLsn
+Cntryl.Cassie.Types.CassieLsn.CassieLsn() -> void
+Cntryl.Cassie.Types.CassieLsn.CassieLsn(ulong Value) -> void
+Cntryl.Cassie.Types.CassieLsn.Deconstruct(out ulong Value) -> void
+Cntryl.Cassie.Types.CassieLsn.Equals(Cntryl.Cassie.Types.CassieLsn other) -> bool
+Cntryl.Cassie.Types.CassieLsn.High.get -> uint
+Cntryl.Cassie.Types.CassieLsn.Low.get -> uint
+Cntryl.Cassie.Types.CassieLsn.Value.get -> ulong
+Cntryl.Cassie.Types.CassieLsn.Value.init -> void
+Cntryl.Cassie.Types.CassieNetworkAddress
+Cntryl.Cassie.Types.CassieNetworkAddress.Address.get -> System.Net.IPAddress!
+Cntryl.Cassie.Types.CassieNetworkAddress.CassieNetworkAddress() -> void
+Cntryl.Cassie.Types.CassieNetworkAddress.CassieNetworkAddress(System.Net.IPAddress! address, int prefixLength, bool isCidr) -> void
+Cntryl.Cassie.Types.CassieNetworkAddress.Equals(Cntryl.Cassie.Types.CassieNetworkAddress other) -> bool
+Cntryl.Cassie.Types.CassieNetworkAddress.IsCidr.get -> bool
+Cntryl.Cassie.Types.CassieNetworkAddress.PrefixLength.get -> int
+Cntryl.Cassie.Types.CassieNumeric
+Cntryl.Cassie.Types.CassieNumeric.CassieNumeric() -> void
+Cntryl.Cassie.Types.CassieNumeric.CassieNumeric(string! value) -> void
+Cntryl.Cassie.Types.CassieNumeric.Equals(Cntryl.Cassie.Types.CassieNumeric other) -> bool
+Cntryl.Cassie.Types.CassieNumeric.ToDecimal() -> decimal
+Cntryl.Cassie.Types.CassieNumeric.ToString(string? format, System.IFormatProvider? formatProvider) -> string!
+Cntryl.Cassie.Types.CassieNumeric.Value.get -> string!
+Cntryl.Cassie.Types.CassieTemporalKind
+Cntryl.Cassie.Types.CassieTemporalKind.Date = 0 -> Cntryl.Cassie.Types.CassieTemporalKind
+Cntryl.Cassie.Types.CassieTemporalKind.Time = 1 -> Cntryl.Cassie.Types.CassieTemporalKind
+Cntryl.Cassie.Types.CassieTemporalKind.TimeWithTimeZone = 2 -> Cntryl.Cassie.Types.CassieTemporalKind
+Cntryl.Cassie.Types.CassieTemporalKind.Timestamp = 3 -> Cntryl.Cassie.Types.CassieTemporalKind
+Cntryl.Cassie.Types.CassieTemporalKind.TimestampWithTimeZone = 4 -> Cntryl.Cassie.Types.CassieTemporalKind
+Cntryl.Cassie.Types.CassieTemporalValue
+Cntryl.Cassie.Types.CassieTemporalValue.CassieTemporalValue() -> void
+Cntryl.Cassie.Types.CassieTemporalValue.Equals(Cntryl.Cassie.Types.CassieTemporalValue other) -> bool
+Cntryl.Cassie.Types.CassieTemporalValue.HasRawValue.get -> bool
+Cntryl.Cassie.Types.CassieTemporalValue.IsInfinity.get -> bool
+Cntryl.Cassie.Types.CassieTemporalValue.Kind.get -> Cntryl.Cassie.Types.CassieTemporalKind
+Cntryl.Cassie.Types.CassieTemporalValue.OffsetSeconds.get -> int
+Cntryl.Cassie.Types.CassieTemporalValue.PostgresTypeOid.get -> int
+Cntryl.Cassie.Types.CassieTemporalValue.TextValue.get -> string?
+Cntryl.Cassie.Types.CassieTemporalValue.Value.get -> long
+Cntryl.Cassie.Types.CassieTimeWithTimeZone
+Cntryl.Cassie.Types.CassieTimeWithTimeZone.CassieTimeWithTimeZone() -> void
+Cntryl.Cassie.Types.CassieTimeWithTimeZone.CassieTimeWithTimeZone(System.TimeOnly Time, int OffsetSeconds) -> void
+Cntryl.Cassie.Types.CassieTimeWithTimeZone.Deconstruct(out System.TimeOnly Time, out int OffsetSeconds) -> void
+Cntryl.Cassie.Types.CassieTimeWithTimeZone.Equals(Cntryl.Cassie.Types.CassieTimeWithTimeZone other) -> bool
+Cntryl.Cassie.Types.CassieTimeWithTimeZone.OffsetSeconds.get -> int
+Cntryl.Cassie.Types.CassieTimeWithTimeZone.OffsetSeconds.init -> void
+Cntryl.Cassie.Types.CassieTimeWithTimeZone.Time.get -> System.TimeOnly
+Cntryl.Cassie.Types.CassieTimeWithTimeZone.Time.init -> void
+Cntryl.Cassie.Types.CassieVector
+Cntryl.Cassie.Types.CassieVector.CassieVector(params float[]! values) -> void
+Cntryl.Cassie.Types.CassieVector.Count.get -> int
+Cntryl.Cassie.Types.CassieVector.Dimension.get -> int
+Cntryl.Cassie.Types.CassieVector.GetEnumerator() -> System.Collections.Generic.IEnumerator<float>!
+Cntryl.Cassie.Types.CassieVector.ToArray() -> float[]!
+Cntryl.Cassie.Types.CassieVector.Values.get -> System.Collections.Generic.IReadOnlyList<float>!
+Cntryl.Cassie.Types.CassieVector.this[int index].get -> float
+const Cntryl.Cassie.Diagnostics.CassieDiagnostics.Name = "Cntryl.Cassie" -> string!
+override Cntryl.Cassie.CassieException.IsTransient.get -> bool
+override Cntryl.Cassie.CassieException.SqlState.get -> string?
+override Cntryl.Cassie.CassieProviderFactory.CanCreateBatch.get -> bool
+override Cntryl.Cassie.CassieProviderFactory.CanCreateDataAdapter.get -> bool
+override Cntryl.Cassie.CassieProviderFactory.CreateBatch() -> System.Data.Common.DbBatch!
+override Cntryl.Cassie.CassieProviderFactory.CreateBatchCommand() -> System.Data.Common.DbBatchCommand!
+override Cntryl.Cassie.CassieProviderFactory.CreateCommand() -> System.Data.Common.DbCommand!
+override Cntryl.Cassie.CassieProviderFactory.CreateConnection() -> System.Data.Common.DbConnection!
+override Cntryl.Cassie.CassieProviderFactory.CreateConnectionStringBuilder() -> System.Data.Common.DbConnectionStringBuilder!
+override Cntryl.Cassie.CassieProviderFactory.CreateDataAdapter() -> System.Data.Common.DbDataAdapter!
+override Cntryl.Cassie.CassieProviderFactory.CreateDataSource(string! connectionString) -> Cntryl.Cassie.Connection.CassieDataSource!
+override Cntryl.Cassie.CassieProviderFactory.CreateParameter() -> System.Data.Common.DbParameter!
+override Cntryl.Cassie.Commands.CassieBatch.Cancel() -> void
+override Cntryl.Cassie.Commands.CassieBatch.Dispose() -> void
+override Cntryl.Cassie.Commands.CassieBatch.DisposeAsync() -> System.Threading.Tasks.ValueTask
+override Cntryl.Cassie.Commands.CassieBatch.ExecuteNonQuery() -> int
+override Cntryl.Cassie.Commands.CassieBatch.ExecuteNonQueryAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+override Cntryl.Cassie.Commands.CassieBatch.ExecuteScalar() -> object?
+override Cntryl.Cassie.Commands.CassieBatch.ExecuteScalarAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<object?>!
+override Cntryl.Cassie.Commands.CassieBatch.Prepare() -> void
+override Cntryl.Cassie.Commands.CassieBatch.PrepareAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+override Cntryl.Cassie.Commands.CassieBatch.Timeout.get -> int
+override Cntryl.Cassie.Commands.CassieBatch.Timeout.set -> void
+override Cntryl.Cassie.Commands.CassieBatchCommand.CanCreateParameter.get -> bool
+override Cntryl.Cassie.Commands.CassieBatchCommand.CommandText.get -> string!
+override Cntryl.Cassie.Commands.CassieBatchCommand.CommandText.set -> void
+override Cntryl.Cassie.Commands.CassieBatchCommand.CommandType.get -> System.Data.CommandType
+override Cntryl.Cassie.Commands.CassieBatchCommand.CommandType.set -> void
+override Cntryl.Cassie.Commands.CassieBatchCommand.CreateParameter() -> System.Data.Common.DbParameter!
+override Cntryl.Cassie.Commands.CassieBatchCommand.RecordsAffected.get -> int
+override Cntryl.Cassie.Commands.CassieBatchCommandCollection.Add(System.Data.Common.DbBatchCommand! item) -> void
+override Cntryl.Cassie.Commands.CassieBatchCommandCollection.Clear() -> void
+override Cntryl.Cassie.Commands.CassieBatchCommandCollection.Contains(System.Data.Common.DbBatchCommand! item) -> bool
+override Cntryl.Cassie.Commands.CassieBatchCommandCollection.CopyTo(System.Data.Common.DbBatchCommand![]! array, int arrayIndex) -> void
+override Cntryl.Cassie.Commands.CassieBatchCommandCollection.Count.get -> int
+override Cntryl.Cassie.Commands.CassieBatchCommandCollection.GetEnumerator() -> System.Collections.Generic.IEnumerator<System.Data.Common.DbBatchCommand!>!
+override Cntryl.Cassie.Commands.CassieBatchCommandCollection.IndexOf(System.Data.Common.DbBatchCommand! item) -> int
+override Cntryl.Cassie.Commands.CassieBatchCommandCollection.Insert(int index, System.Data.Common.DbBatchCommand! item) -> void
+override Cntryl.Cassie.Commands.CassieBatchCommandCollection.IsReadOnly.get -> bool
+override Cntryl.Cassie.Commands.CassieBatchCommandCollection.Remove(System.Data.Common.DbBatchCommand! item) -> bool
+override Cntryl.Cassie.Commands.CassieBatchCommandCollection.RemoveAt(int index) -> void
+override Cntryl.Cassie.Commands.CassieCommand.Cancel() -> void
+override Cntryl.Cassie.Commands.CassieCommand.CommandText.get -> string!
+override Cntryl.Cassie.Commands.CassieCommand.CommandText.set -> void
+override Cntryl.Cassie.Commands.CassieCommand.CommandTimeout.get -> int
+override Cntryl.Cassie.Commands.CassieCommand.CommandTimeout.set -> void
+override Cntryl.Cassie.Commands.CassieCommand.CommandType.get -> System.Data.CommandType
+override Cntryl.Cassie.Commands.CassieCommand.CommandType.set -> void
+override Cntryl.Cassie.Commands.CassieCommand.DesignTimeVisible.get -> bool
+override Cntryl.Cassie.Commands.CassieCommand.DesignTimeVisible.set -> void
+override Cntryl.Cassie.Commands.CassieCommand.DisposeAsync() -> System.Threading.Tasks.ValueTask
+override Cntryl.Cassie.Commands.CassieCommand.ExecuteNonQuery() -> int
+override Cntryl.Cassie.Commands.CassieCommand.ExecuteNonQueryAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
+override Cntryl.Cassie.Commands.CassieCommand.ExecuteScalar() -> object?
+override Cntryl.Cassie.Commands.CassieCommand.ExecuteScalarAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<object?>!
+override Cntryl.Cassie.Commands.CassieCommand.Prepare() -> void
+override Cntryl.Cassie.Commands.CassieCommand.PrepareAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+override Cntryl.Cassie.Commands.CassieCommand.UpdatedRowSource.get -> System.Data.UpdateRowSource
+override Cntryl.Cassie.Commands.CassieCommand.UpdatedRowSource.set -> void
+override Cntryl.Cassie.Commands.CassieParameter.DbType.get -> System.Data.DbType
+override Cntryl.Cassie.Commands.CassieParameter.DbType.set -> void
+override Cntryl.Cassie.Commands.CassieParameter.Direction.get -> System.Data.ParameterDirection
+override Cntryl.Cassie.Commands.CassieParameter.Direction.set -> void
+override Cntryl.Cassie.Commands.CassieParameter.IsNullable.get -> bool
+override Cntryl.Cassie.Commands.CassieParameter.IsNullable.set -> void
+override Cntryl.Cassie.Commands.CassieParameter.ParameterName.get -> string!
+override Cntryl.Cassie.Commands.CassieParameter.ParameterName.set -> void
+override Cntryl.Cassie.Commands.CassieParameter.ResetDbType() -> void
+override Cntryl.Cassie.Commands.CassieParameter.Size.get -> int
+override Cntryl.Cassie.Commands.CassieParameter.Size.set -> void
+override Cntryl.Cassie.Commands.CassieParameter.SourceColumn.get -> string!
+override Cntryl.Cassie.Commands.CassieParameter.SourceColumn.set -> void
+override Cntryl.Cassie.Commands.CassieParameter.SourceColumnNullMapping.get -> bool
+override Cntryl.Cassie.Commands.CassieParameter.SourceColumnNullMapping.set -> void
+override Cntryl.Cassie.Commands.CassieParameter.Value.get -> object?
+override Cntryl.Cassie.Commands.CassieParameter.Value.set -> void
+override Cntryl.Cassie.Commands.CassieParameterCollection.Add(object! value) -> int
+override Cntryl.Cassie.Commands.CassieParameterCollection.AddRange(System.Array! values) -> void
+override Cntryl.Cassie.Commands.CassieParameterCollection.Clear() -> void
+override Cntryl.Cassie.Commands.CassieParameterCollection.Contains(object! value) -> bool
+override Cntryl.Cassie.Commands.CassieParameterCollection.Contains(string! value) -> bool
+override Cntryl.Cassie.Commands.CassieParameterCollection.CopyTo(System.Array! array, int index) -> void
+override Cntryl.Cassie.Commands.CassieParameterCollection.Count.get -> int
+override Cntryl.Cassie.Commands.CassieParameterCollection.GetEnumerator() -> System.Collections.IEnumerator!
+override Cntryl.Cassie.Commands.CassieParameterCollection.IndexOf(object! value) -> int
+override Cntryl.Cassie.Commands.CassieParameterCollection.IndexOf(string! parameterName) -> int
+override Cntryl.Cassie.Commands.CassieParameterCollection.Insert(int index, object! value) -> void
+override Cntryl.Cassie.Commands.CassieParameterCollection.Remove(object! value) -> void
+override Cntryl.Cassie.Commands.CassieParameterCollection.RemoveAt(int index) -> void
+override Cntryl.Cassie.Commands.CassieParameterCollection.RemoveAt(string! parameterName) -> void
+override Cntryl.Cassie.Commands.CassieParameterCollection.SyncRoot.get -> object!
+override Cntryl.Cassie.Connection.CassieConnection.CanCreateBatch.get -> bool
+override Cntryl.Cassie.Connection.CassieConnection.ChangeDatabase(string! databaseName) -> void
+override Cntryl.Cassie.Connection.CassieConnection.ChangeDatabaseAsync(string! databaseName, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+override Cntryl.Cassie.Connection.CassieConnection.Close() -> void
+override Cntryl.Cassie.Connection.CassieConnection.CloseAsync() -> System.Threading.Tasks.Task!
+override Cntryl.Cassie.Connection.CassieConnection.ConnectionString.get -> string!
+override Cntryl.Cassie.Connection.CassieConnection.ConnectionString.set -> void
+override Cntryl.Cassie.Connection.CassieConnection.ConnectionTimeout.get -> int
+override Cntryl.Cassie.Connection.CassieConnection.DataSource.get -> string!
+override Cntryl.Cassie.Connection.CassieConnection.Database.get -> string!
+override Cntryl.Cassie.Connection.CassieConnection.DisposeAsync() -> System.Threading.Tasks.ValueTask
+override Cntryl.Cassie.Connection.CassieConnection.GetSchema() -> System.Data.DataTable!
+override Cntryl.Cassie.Connection.CassieConnection.GetSchema(string! collectionName) -> System.Data.DataTable!
+override Cntryl.Cassie.Connection.CassieConnection.GetSchema(string! collectionName, string?[]? restrictionValues) -> System.Data.DataTable!
+override Cntryl.Cassie.Connection.CassieConnection.GetSchemaAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Data.DataTable!>!
+override Cntryl.Cassie.Connection.CassieConnection.GetSchemaAsync(string! collectionName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Data.DataTable!>!
+override Cntryl.Cassie.Connection.CassieConnection.GetSchemaAsync(string! collectionName, string?[]? restrictionValues, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Data.DataTable!>!
+override Cntryl.Cassie.Connection.CassieConnection.Open() -> void
+override Cntryl.Cassie.Connection.CassieConnection.OpenAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+override Cntryl.Cassie.Connection.CassieConnection.ServerVersion.get -> string!
+override Cntryl.Cassie.Connection.CassieConnection.State.get -> System.Data.ConnectionState
+override Cntryl.Cassie.Connection.CassieDataSource.ConnectionString.get -> string!
+override Cntryl.Cassie.Data.CassieDataReader.Close() -> void
+override Cntryl.Cassie.Data.CassieDataReader.CloseAsync() -> System.Threading.Tasks.Task!
+override Cntryl.Cassie.Data.CassieDataReader.Depth.get -> int
+override Cntryl.Cassie.Data.CassieDataReader.DisposeAsync() -> System.Threading.Tasks.ValueTask
+override Cntryl.Cassie.Data.CassieDataReader.FieldCount.get -> int
+override Cntryl.Cassie.Data.CassieDataReader.GetBoolean(int ordinal) -> bool
+override Cntryl.Cassie.Data.CassieDataReader.GetByte(int ordinal) -> byte
+override Cntryl.Cassie.Data.CassieDataReader.GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length) -> long
+override Cntryl.Cassie.Data.CassieDataReader.GetChar(int ordinal) -> char
+override Cntryl.Cassie.Data.CassieDataReader.GetChars(int ordinal, long dataOffset, char[]? buffer, int bufferOffset, int length) -> long
+override Cntryl.Cassie.Data.CassieDataReader.GetDataTypeName(int ordinal) -> string!
+override Cntryl.Cassie.Data.CassieDataReader.GetDateTime(int ordinal) -> System.DateTime
+override Cntryl.Cassie.Data.CassieDataReader.GetDecimal(int ordinal) -> decimal
+override Cntryl.Cassie.Data.CassieDataReader.GetDouble(int ordinal) -> double
+override Cntryl.Cassie.Data.CassieDataReader.GetEnumerator() -> System.Collections.IEnumerator!
+override Cntryl.Cassie.Data.CassieDataReader.GetFieldType(int ordinal) -> System.Type!
+override Cntryl.Cassie.Data.CassieDataReader.GetFieldValue<T>(int ordinal) -> T
+override Cntryl.Cassie.Data.CassieDataReader.GetFloat(int ordinal) -> float
+override Cntryl.Cassie.Data.CassieDataReader.GetGuid(int ordinal) -> System.Guid
+override Cntryl.Cassie.Data.CassieDataReader.GetInt16(int ordinal) -> short
+override Cntryl.Cassie.Data.CassieDataReader.GetInt32(int ordinal) -> int
+override Cntryl.Cassie.Data.CassieDataReader.GetInt64(int ordinal) -> long
+override Cntryl.Cassie.Data.CassieDataReader.GetName(int ordinal) -> string!
+override Cntryl.Cassie.Data.CassieDataReader.GetOrdinal(string! name) -> int
+override Cntryl.Cassie.Data.CassieDataReader.GetSchemaTable() -> System.Data.DataTable?
+override Cntryl.Cassie.Data.CassieDataReader.GetStream(int ordinal) -> System.IO.Stream!
+override Cntryl.Cassie.Data.CassieDataReader.GetString(int ordinal) -> string!
+override Cntryl.Cassie.Data.CassieDataReader.GetTextReader(int ordinal) -> System.IO.TextReader!
+override Cntryl.Cassie.Data.CassieDataReader.GetValue(int ordinal) -> object!
+override Cntryl.Cassie.Data.CassieDataReader.GetValues(object![]! values) -> int
+override Cntryl.Cassie.Data.CassieDataReader.HasRows.get -> bool
+override Cntryl.Cassie.Data.CassieDataReader.IsClosed.get -> bool
+override Cntryl.Cassie.Data.CassieDataReader.IsDBNull(int ordinal) -> bool
+override Cntryl.Cassie.Data.CassieDataReader.NextResult() -> bool
+override Cntryl.Cassie.Data.CassieDataReader.NextResultAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<bool>!
+override Cntryl.Cassie.Data.CassieDataReader.Read() -> bool
+override Cntryl.Cassie.Data.CassieDataReader.ReadAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<bool>!
+override Cntryl.Cassie.Data.CassieDataReader.RecordsAffected.get -> int
+override Cntryl.Cassie.Data.CassieDataReader.this[int ordinal].get -> object!
+override Cntryl.Cassie.Data.CassieDataReader.this[string! name].get -> object!
+override Cntryl.Cassie.Data.CassieTransaction.Commit() -> void
+override Cntryl.Cassie.Data.CassieTransaction.CommitAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+override Cntryl.Cassie.Data.CassieTransaction.DisposeAsync() -> System.Threading.Tasks.ValueTask
+override Cntryl.Cassie.Data.CassieTransaction.IsolationLevel.get -> System.Data.IsolationLevel
+override Cntryl.Cassie.Data.CassieTransaction.Release(string! savepointName) -> void
+override Cntryl.Cassie.Data.CassieTransaction.ReleaseAsync(string! savepointName, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+override Cntryl.Cassie.Data.CassieTransaction.Rollback() -> void
+override Cntryl.Cassie.Data.CassieTransaction.Rollback(string! savepointName) -> void
+override Cntryl.Cassie.Data.CassieTransaction.RollbackAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+override Cntryl.Cassie.Data.CassieTransaction.RollbackAsync(string! savepointName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+override Cntryl.Cassie.Data.CassieTransaction.Save(string! savepointName) -> void
+override Cntryl.Cassie.Data.CassieTransaction.SaveAsync(string! savepointName, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+override Cntryl.Cassie.Data.CassieTransaction.SupportsSavepoints.get -> bool
+override Cntryl.Cassie.Rest.CassieAdminQueryRequest.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieAdminQueryRequest.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieAdminQueryRequest.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieCatalogColumn.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieCatalogColumn.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieCatalogColumn.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieCatalogItem.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieCatalogItem.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieCatalogItem.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieCatalogSchema.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieCatalogSchema.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieCatalogSchema.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieCatalogSection.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieCatalogSection.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieCatalogSection.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieCollectionDefinition.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieCollectionDefinition.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieCollectionDefinition.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieDatabaseInfo.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieDatabaseInfo.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieDatabaseInfo.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieManifestExportOptions.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieManifestExportOptions.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieManifestExportOptions.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieQueryCancellation.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieQueryCancellation.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieQueryCancellation.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieQueryExplanation.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieQueryExplanation.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieQueryExplanation.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieQueryValidationResult.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieQueryValidationResult.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieQueryValidationResult.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieRestColumn.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieRestColumn.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieRestColumn.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieRestField.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieRestField.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieRestField.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieRestQueryResult.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieRestQueryResult.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieRestQueryResult.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieRestSession.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieRestSession.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieRestSession.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieVectorIndexDefinition.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieVectorIndexDefinition.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieVectorIndexDefinition.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieVectorIndexResult.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieVectorIndexResult.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieVectorIndexResult.ToString() -> string!
+override Cntryl.Cassie.Rest.CassieVectorSearchRequest.Equals(object? obj) -> bool
+override Cntryl.Cassie.Rest.CassieVectorSearchRequest.GetHashCode() -> int
+override Cntryl.Cassie.Rest.CassieVectorSearchRequest.ToString() -> string!
+override Cntryl.Cassie.Types.CassieBitString.GetHashCode() -> int
+override Cntryl.Cassie.Types.CassieBitString.ToString() -> string!
+override Cntryl.Cassie.Types.CassieInterval.GetHashCode() -> int
+override Cntryl.Cassie.Types.CassieLsn.GetHashCode() -> int
+override Cntryl.Cassie.Types.CassieLsn.ToString() -> string!
+override Cntryl.Cassie.Types.CassieNetworkAddress.GetHashCode() -> int
+override Cntryl.Cassie.Types.CassieNetworkAddress.ToString() -> string!
+override Cntryl.Cassie.Types.CassieNumeric.GetHashCode() -> int
+override Cntryl.Cassie.Types.CassieNumeric.ToString() -> string!
+override Cntryl.Cassie.Types.CassieTemporalValue.GetHashCode() -> int
+override Cntryl.Cassie.Types.CassieTemporalValue.ToString() -> string!
+override Cntryl.Cassie.Types.CassieTimeWithTimeZone.GetHashCode() -> int
+static Cntryl.Cassie.CassieProviderFactory.Instance.get -> Cntryl.Cassie.CassieProviderFactory!
+static Cntryl.Cassie.Connection.CassieConnection.ClearAllPools() -> void
+static Cntryl.Cassie.Connection.CassieConnection.ClearPool(Cntryl.Cassie.Connection.CassieConnection! connection) -> void
+static Cntryl.Cassie.Diagnostics.CassieDiagnostics.ActivitySource.get -> System.Diagnostics.ActivitySource!
+static Cntryl.Cassie.Diagnostics.CassieDiagnostics.Meter.get -> System.Diagnostics.Metrics.Meter!
+static Cntryl.Cassie.Rest.CassieAdminQueryRequest.operator !=(Cntryl.Cassie.Rest.CassieAdminQueryRequest? left, Cntryl.Cassie.Rest.CassieAdminQueryRequest? right) -> bool
+static Cntryl.Cassie.Rest.CassieAdminQueryRequest.operator ==(Cntryl.Cassie.Rest.CassieAdminQueryRequest? left, Cntryl.Cassie.Rest.CassieAdminQueryRequest? right) -> bool
+static Cntryl.Cassie.Rest.CassieCatalogColumn.operator !=(Cntryl.Cassie.Rest.CassieCatalogColumn? left, Cntryl.Cassie.Rest.CassieCatalogColumn? right) -> bool
+static Cntryl.Cassie.Rest.CassieCatalogColumn.operator ==(Cntryl.Cassie.Rest.CassieCatalogColumn? left, Cntryl.Cassie.Rest.CassieCatalogColumn? right) -> bool
+static Cntryl.Cassie.Rest.CassieCatalogItem.operator !=(Cntryl.Cassie.Rest.CassieCatalogItem? left, Cntryl.Cassie.Rest.CassieCatalogItem? right) -> bool
+static Cntryl.Cassie.Rest.CassieCatalogItem.operator ==(Cntryl.Cassie.Rest.CassieCatalogItem? left, Cntryl.Cassie.Rest.CassieCatalogItem? right) -> bool
+static Cntryl.Cassie.Rest.CassieCatalogSchema.operator !=(Cntryl.Cassie.Rest.CassieCatalogSchema? left, Cntryl.Cassie.Rest.CassieCatalogSchema? right) -> bool
+static Cntryl.Cassie.Rest.CassieCatalogSchema.operator ==(Cntryl.Cassie.Rest.CassieCatalogSchema? left, Cntryl.Cassie.Rest.CassieCatalogSchema? right) -> bool
+static Cntryl.Cassie.Rest.CassieCatalogSection.operator !=(Cntryl.Cassie.Rest.CassieCatalogSection? left, Cntryl.Cassie.Rest.CassieCatalogSection? right) -> bool
+static Cntryl.Cassie.Rest.CassieCatalogSection.operator ==(Cntryl.Cassie.Rest.CassieCatalogSection? left, Cntryl.Cassie.Rest.CassieCatalogSection? right) -> bool
+static Cntryl.Cassie.Rest.CassieCollectionDefinition.operator !=(Cntryl.Cassie.Rest.CassieCollectionDefinition? left, Cntryl.Cassie.Rest.CassieCollectionDefinition? right) -> bool
+static Cntryl.Cassie.Rest.CassieCollectionDefinition.operator ==(Cntryl.Cassie.Rest.CassieCollectionDefinition? left, Cntryl.Cassie.Rest.CassieCollectionDefinition? right) -> bool
+static Cntryl.Cassie.Rest.CassieDatabaseInfo.operator !=(Cntryl.Cassie.Rest.CassieDatabaseInfo? left, Cntryl.Cassie.Rest.CassieDatabaseInfo? right) -> bool
+static Cntryl.Cassie.Rest.CassieDatabaseInfo.operator ==(Cntryl.Cassie.Rest.CassieDatabaseInfo? left, Cntryl.Cassie.Rest.CassieDatabaseInfo? right) -> bool
+static Cntryl.Cassie.Rest.CassieManifestExportOptions.operator !=(Cntryl.Cassie.Rest.CassieManifestExportOptions? left, Cntryl.Cassie.Rest.CassieManifestExportOptions? right) -> bool
+static Cntryl.Cassie.Rest.CassieManifestExportOptions.operator ==(Cntryl.Cassie.Rest.CassieManifestExportOptions? left, Cntryl.Cassie.Rest.CassieManifestExportOptions? right) -> bool
+static Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.operator !=(Cntryl.Cassie.Rest.CassieProjectionConsistencyReport? left, Cntryl.Cassie.Rest.CassieProjectionConsistencyReport? right) -> bool
+static Cntryl.Cassie.Rest.CassieProjectionConsistencyReport.operator ==(Cntryl.Cassie.Rest.CassieProjectionConsistencyReport? left, Cntryl.Cassie.Rest.CassieProjectionConsistencyReport? right) -> bool
+static Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.operator !=(Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata? left, Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata? right) -> bool
+static Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata.operator ==(Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata? left, Cntryl.Cassie.Rest.CassieProjectionManifestHashMetadata? right) -> bool
+static Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.operator !=(Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary? left, Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary? right) -> bool
+static Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary.operator ==(Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary? left, Cntryl.Cassie.Rest.CassieProjectionManifestRangeSummary? right) -> bool
+static Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.operator !=(Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary? left, Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary? right) -> bool
+static Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary.operator ==(Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary? left, Cntryl.Cassie.Rest.CassieProjectionManifestRootSummary? right) -> bool
+static Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary.operator !=(Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary? left, Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary? right) -> bool
+static Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary.operator ==(Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary? left, Cntryl.Cassie.Rest.CassieProjectionManifestRowHashSummary? right) -> bool
+static Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.operator !=(Cntryl.Cassie.Rest.CassieProjectionVerificationManifest? left, Cntryl.Cassie.Rest.CassieProjectionVerificationManifest? right) -> bool
+static Cntryl.Cassie.Rest.CassieProjectionVerificationManifest.operator ==(Cntryl.Cassie.Rest.CassieProjectionVerificationManifest? left, Cntryl.Cassie.Rest.CassieProjectionVerificationManifest? right) -> bool
+static Cntryl.Cassie.Rest.CassieQueryCancellation.operator !=(Cntryl.Cassie.Rest.CassieQueryCancellation? left, Cntryl.Cassie.Rest.CassieQueryCancellation? right) -> bool
+static Cntryl.Cassie.Rest.CassieQueryCancellation.operator ==(Cntryl.Cassie.Rest.CassieQueryCancellation? left, Cntryl.Cassie.Rest.CassieQueryCancellation? right) -> bool
+static Cntryl.Cassie.Rest.CassieQueryExplanation.operator !=(Cntryl.Cassie.Rest.CassieQueryExplanation? left, Cntryl.Cassie.Rest.CassieQueryExplanation? right) -> bool
+static Cntryl.Cassie.Rest.CassieQueryExplanation.operator ==(Cntryl.Cassie.Rest.CassieQueryExplanation? left, Cntryl.Cassie.Rest.CassieQueryExplanation? right) -> bool
+static Cntryl.Cassie.Rest.CassieQueryValidationResult.operator !=(Cntryl.Cassie.Rest.CassieQueryValidationResult? left, Cntryl.Cassie.Rest.CassieQueryValidationResult? right) -> bool
+static Cntryl.Cassie.Rest.CassieQueryValidationResult.operator ==(Cntryl.Cassie.Rest.CassieQueryValidationResult? left, Cntryl.Cassie.Rest.CassieQueryValidationResult? right) -> bool
+static Cntryl.Cassie.Rest.CassieRestColumn.operator !=(Cntryl.Cassie.Rest.CassieRestColumn? left, Cntryl.Cassie.Rest.CassieRestColumn? right) -> bool
+static Cntryl.Cassie.Rest.CassieRestColumn.operator ==(Cntryl.Cassie.Rest.CassieRestColumn? left, Cntryl.Cassie.Rest.CassieRestColumn? right) -> bool
+static Cntryl.Cassie.Rest.CassieRestField.operator !=(Cntryl.Cassie.Rest.CassieRestField? left, Cntryl.Cassie.Rest.CassieRestField? right) -> bool
+static Cntryl.Cassie.Rest.CassieRestField.operator ==(Cntryl.Cassie.Rest.CassieRestField? left, Cntryl.Cassie.Rest.CassieRestField? right) -> bool
+static Cntryl.Cassie.Rest.CassieRestQueryResult.operator !=(Cntryl.Cassie.Rest.CassieRestQueryResult? left, Cntryl.Cassie.Rest.CassieRestQueryResult? right) -> bool
+static Cntryl.Cassie.Rest.CassieRestQueryResult.operator ==(Cntryl.Cassie.Rest.CassieRestQueryResult? left, Cntryl.Cassie.Rest.CassieRestQueryResult? right) -> bool
+static Cntryl.Cassie.Rest.CassieRestSession.operator !=(Cntryl.Cassie.Rest.CassieRestSession? left, Cntryl.Cassie.Rest.CassieRestSession? right) -> bool
+static Cntryl.Cassie.Rest.CassieRestSession.operator ==(Cntryl.Cassie.Rest.CassieRestSession? left, Cntryl.Cassie.Rest.CassieRestSession? right) -> bool
+static Cntryl.Cassie.Rest.CassieVectorIndexDefinition.operator !=(Cntryl.Cassie.Rest.CassieVectorIndexDefinition? left, Cntryl.Cassie.Rest.CassieVectorIndexDefinition? right) -> bool
+static Cntryl.Cassie.Rest.CassieVectorIndexDefinition.operator ==(Cntryl.Cassie.Rest.CassieVectorIndexDefinition? left, Cntryl.Cassie.Rest.CassieVectorIndexDefinition? right) -> bool
+static Cntryl.Cassie.Rest.CassieVectorIndexResult.operator !=(Cntryl.Cassie.Rest.CassieVectorIndexResult? left, Cntryl.Cassie.Rest.CassieVectorIndexResult? right) -> bool
+static Cntryl.Cassie.Rest.CassieVectorIndexResult.operator ==(Cntryl.Cassie.Rest.CassieVectorIndexResult? left, Cntryl.Cassie.Rest.CassieVectorIndexResult? right) -> bool
+static Cntryl.Cassie.Rest.CassieVectorSearchRequest.operator !=(Cntryl.Cassie.Rest.CassieVectorSearchRequest? left, Cntryl.Cassie.Rest.CassieVectorSearchRequest? right) -> bool
+static Cntryl.Cassie.Rest.CassieVectorSearchRequest.operator ==(Cntryl.Cassie.Rest.CassieVectorSearchRequest? left, Cntryl.Cassie.Rest.CassieVectorSearchRequest? right) -> bool
+static Cntryl.Cassie.Types.CassieBitString.operator !=(Cntryl.Cassie.Types.CassieBitString left, Cntryl.Cassie.Types.CassieBitString right) -> bool
+static Cntryl.Cassie.Types.CassieBitString.operator ==(Cntryl.Cassie.Types.CassieBitString left, Cntryl.Cassie.Types.CassieBitString right) -> bool
+static Cntryl.Cassie.Types.CassieInterval.operator !=(Cntryl.Cassie.Types.CassieInterval left, Cntryl.Cassie.Types.CassieInterval right) -> bool
+static Cntryl.Cassie.Types.CassieInterval.operator ==(Cntryl.Cassie.Types.CassieInterval left, Cntryl.Cassie.Types.CassieInterval right) -> bool
+static Cntryl.Cassie.Types.CassieLsn.operator !=(Cntryl.Cassie.Types.CassieLsn left, Cntryl.Cassie.Types.CassieLsn right) -> bool
+static Cntryl.Cassie.Types.CassieLsn.operator ==(Cntryl.Cassie.Types.CassieLsn left, Cntryl.Cassie.Types.CassieLsn right) -> bool
+static Cntryl.Cassie.Types.CassieNetworkAddress.operator !=(Cntryl.Cassie.Types.CassieNetworkAddress left, Cntryl.Cassie.Types.CassieNetworkAddress right) -> bool
+static Cntryl.Cassie.Types.CassieNetworkAddress.operator ==(Cntryl.Cassie.Types.CassieNetworkAddress left, Cntryl.Cassie.Types.CassieNetworkAddress right) -> bool
+static Cntryl.Cassie.Types.CassieNumeric.explicit operator decimal(Cntryl.Cassie.Types.CassieNumeric value) -> decimal
+static Cntryl.Cassie.Types.CassieNumeric.operator !=(Cntryl.Cassie.Types.CassieNumeric left, Cntryl.Cassie.Types.CassieNumeric right) -> bool
+static Cntryl.Cassie.Types.CassieNumeric.operator ==(Cntryl.Cassie.Types.CassieNumeric left, Cntryl.Cassie.Types.CassieNumeric right) -> bool
+static Cntryl.Cassie.Types.CassieTemporalValue.FromDateDays(int daysSincePostgresEpoch) -> Cntryl.Cassie.Types.CassieTemporalValue
+static Cntryl.Cassie.Types.CassieTemporalValue.FromText(Cntryl.Cassie.Types.CassieTemporalKind kind, string! textValue) -> Cntryl.Cassie.Types.CassieTemporalValue
+static Cntryl.Cassie.Types.CassieTemporalValue.FromTimeMicroseconds(long microsecondsSinceMidnight) -> Cntryl.Cassie.Types.CassieTemporalValue
+static Cntryl.Cassie.Types.CassieTemporalValue.FromTimeWithTimeZoneMicroseconds(long microsecondsSinceMidnight, int offsetSeconds) -> Cntryl.Cassie.Types.CassieTemporalValue
+static Cntryl.Cassie.Types.CassieTemporalValue.FromTimestampMicroseconds(long microsecondsSincePostgresEpoch) -> Cntryl.Cassie.Types.CassieTemporalValue
+static Cntryl.Cassie.Types.CassieTemporalValue.FromTimestampWithTimeZoneMicroseconds(long microsecondsSincePostgresEpoch) -> Cntryl.Cassie.Types.CassieTemporalValue
+static Cntryl.Cassie.Types.CassieTemporalValue.operator !=(Cntryl.Cassie.Types.CassieTemporalValue left, Cntryl.Cassie.Types.CassieTemporalValue right) -> bool
+static Cntryl.Cassie.Types.CassieTemporalValue.operator ==(Cntryl.Cassie.Types.CassieTemporalValue left, Cntryl.Cassie.Types.CassieTemporalValue right) -> bool
+static Cntryl.Cassie.Types.CassieTimeWithTimeZone.operator !=(Cntryl.Cassie.Types.CassieTimeWithTimeZone left, Cntryl.Cassie.Types.CassieTimeWithTimeZone right) -> bool
+static Cntryl.Cassie.Types.CassieTimeWithTimeZone.operator ==(Cntryl.Cassie.Types.CassieTimeWithTimeZone left, Cntryl.Cassie.Types.CassieTimeWithTimeZone right) -> bool
+~override Cntryl.Cassie.Types.CassieBitString.Equals(object obj) -> bool
+~override Cntryl.Cassie.Types.CassieInterval.Equals(object obj) -> bool
+~override Cntryl.Cassie.Types.CassieInterval.ToString() -> string
+~override Cntryl.Cassie.Types.CassieLsn.Equals(object obj) -> bool
+~override Cntryl.Cassie.Types.CassieNetworkAddress.Equals(object obj) -> bool
+~override Cntryl.Cassie.Types.CassieNumeric.Equals(object obj) -> bool
+~override Cntryl.Cassie.Types.CassieTemporalValue.Equals(object obj) -> bool
+~override Cntryl.Cassie.Types.CassieTimeWithTimeZone.Equals(object obj) -> bool
+~override Cntryl.Cassie.Types.CassieTimeWithTimeZone.ToString() -> string
