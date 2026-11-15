@@ -248,6 +248,23 @@ namespace Cntryl.Cassie.Tests.Data
         }
 
         [Fact]
+        public async Task ShouldReportIndexOutOfRangeGivenUnknownColumnNameWhenColumnIsLookedUp()
+        {
+            // Arrange
+            await using CassieDataReader reader = await OpenAsync([(Int4, 0), (Text, 0)], [Encoding.UTF8.GetBytes("1"), Encoding.UTF8.GetBytes("a")]);
+
+            // Act
+            IndexOutOfRangeException fromOrdinal = Assert.Throws<IndexOutOfRangeException>(() => reader.GetOrdinal("missing"));
+            IndexOutOfRangeException fromIndexer = Assert.Throws<IndexOutOfRangeException>(() => reader["missing"]);
+
+            // Assert
+            Assert.Contains("missing", fromOrdinal.Message, StringComparison.Ordinal);
+            Assert.Contains("missing", fromIndexer.Message, StringComparison.Ordinal);
+            Assert.Equal(1, reader.GetOrdinal("C1"));
+            Assert.Equal(1, reader["c0"]);
+        }
+
+        [Fact]
         public async Task ShouldReturnNoSchemaTableGivenCommandWithoutResultSetWhenSchemaTableIsRequested()
         {
             // Arrange

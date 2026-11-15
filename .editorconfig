@@ -21,6 +21,12 @@ dotnet_diagnostic.CA1032.severity = none
 dotnet_diagnostic.IDE0010.severity = none
 dotnet_diagnostic.IDE0072.severity = none
 
+# ADO.NET documents IndexOutOfRangeException for an unknown column or parameter name, and
+# callers catch that type. CA2201 forbids constructing it, so the rule is off for the one
+# file that creates those exceptions and stays on everywhere else.
+[src/Cassie/AdoContractExceptions.cs]
+dotnet_diagnostic.CA2201.severity = none
+
 [*.csproj]
 indent_style = space
 indent_size = 2
