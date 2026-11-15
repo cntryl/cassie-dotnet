@@ -4,6 +4,7 @@ using Cntryl.Cassie.Connection;
 using Cntryl.Cassie.Protocol;
 using Cntryl.Cassie.Diagnostics;
 using Cntryl.Cassie.Types;
+using Cntryl.Cassie.Types.Handlers;
 using System.Collections;
 using System.Data;
 using System.Data.Common;
@@ -968,7 +969,7 @@ namespace Cntryl.Cassie.Data
             switch (typeOid)
             {
                 case DateOid when field.Length == sizeof(int):
-                    if (!CassieResultCodec.TryReadBinaryDate(field, out DateOnly date))
+                    if (!DateHandler.TryReadBinaryDate(field, out DateOnly date))
                     {
                         return false;
                     }
@@ -976,9 +977,9 @@ namespace Cntryl.Cassie.Data
                     value = date.ToDateTime(TimeOnly.MinValue);
                     return true;
                 case TimestampOid when field.Length == sizeof(long):
-                    return CassieResultCodec.TryReadBinaryTimestamp(field, out value);
+                    return TimestampHandler.TryReadBinaryTimestamp(field, out value);
                 case TimestampTzOid when field.Length == sizeof(long):
-                    return CassieResultCodec.TryReadBinaryTimestampTz(field, out value);
+                    return TimestampTzHandler.TryReadBinaryTimestampTz(field, out value);
                 default:
                     return false;
             }

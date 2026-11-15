@@ -24,6 +24,13 @@ namespace Cntryl.Cassie.Types.Handlers
             Register(handlers, new Float4Handler(), 700);
             Register(handlers, new Float8Handler(), 701);
             Register(handlers, new UuidHandler(), 2950);
+            Register(handlers, new NumericHandler(), 1700);
+            Register(handlers, new DateHandler(), 1082);
+            Register(handlers, new TimeHandler(), 1083);
+            Register(handlers, new TimestampHandler(), 1114);
+            Register(handlers, new TimestampTzHandler(), 1184);
+            Register(handlers, new TimeTzHandler(), 1266);
+            Register(handlers, new IntervalHandler(), 1186);
             Register(handlers, new StringHandler(), 18, 19, 25, 114, 1042, 1043);
             Register(handlers, new JsonbHandler(), 3802);
             Register(handlers, new JsonPathHandler(), 4072);
