@@ -57,7 +57,7 @@ namespace Cntryl.Cassie.Protocol
         {
             get
             {
-                int lastSpace = Text.LastIndexOf(' ');
+                int lastSpace = Text.LastIndexOf(' ', StringComparison.Ordinal);
                 return lastSpace > 0
                     && long.TryParse(Text.AsSpan(lastSpace + 1), NumberStyles.None, CultureInfo.InvariantCulture, out long count)
                     && count <= int.MaxValue

@@ -117,7 +117,7 @@ namespace Cntryl.Cassie.Tests.Connection
             header.CopyTo(packet, 0);
             await stream.ReadExactlyAsync(packet.AsMemory(header.Length));
 
-            Dictionary<string, string> parameters = new(StringComparer.Ordinal);
+            Dictionary<string, string> parameters = [with(StringComparer.Ordinal)];
             int offset = header.Length;
             while (packet[offset] != 0)
             {

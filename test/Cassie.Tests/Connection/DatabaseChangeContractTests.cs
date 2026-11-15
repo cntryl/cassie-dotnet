@@ -203,7 +203,7 @@ namespace Cntryl.Cassie.Tests.Connection
             byte[] payload = new byte[messageLength - sizeof(int)];
             await stream.ReadExactlyAsync(payload);
 
-            Dictionary<string, string> parameters = new(StringComparer.Ordinal);
+            Dictionary<string, string> parameters = [with(StringComparer.Ordinal)];
             int offset = sizeof(int);
             while (offset < payload.Length && payload[offset] != 0)
             {

@@ -79,7 +79,7 @@ namespace Cntryl.Cassie.Tests.Rest
                 throw new IOException("Invalid HTTP request line.");
             }
 
-            Dictionary<string, string> headers = new(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, string> headers = [with(StringComparer.OrdinalIgnoreCase)];
             while (true)
             {
                 string line = await ReadLineAsync(stream, cancellationToken);

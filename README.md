@@ -6,7 +6,7 @@ Two ways to use Cassie from .NET, plus optional dependency injection:
 - **REST** for vector collections, search, and administration.
 - **Dependency injection** through the separate `Cntryl.Cassie.DependencyInjection` package.
 
-Requires .NET 10. Packages are published to GitHub Packages.
+Requires .NET 11. Packages are published to GitHub Packages.
 
 ## Install
 

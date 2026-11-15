@@ -474,7 +474,7 @@ namespace Cntryl.Cassie.Types
             int offsetSeconds;
             if (dateStyle.Output == CassieDateOutput.Postgres)
             {
-                int zoneSeparator = timestampText.LastIndexOf(' ');
+                int zoneSeparator = timestampText.LastIndexOf(' ', StringComparison.Ordinal);
                 if (zoneSeparator <= 0 || !TryParseTextOffsetSeconds(timestampText.AsSpan(zoneSeparator + 1), out offsetSeconds))
                 {
                     timestamp = default;
@@ -542,7 +542,7 @@ namespace Cntryl.Cassie.Types
         {
             if (dateStyle.Output == CassieDateOutput.Postgres)
             {
-                int separator = value.LastIndexOf(' ');
+                int separator = value.LastIndexOf(' ', StringComparison.Ordinal);
                 return separator > 0 && separator < value.Length - 1 && char.IsLetter(value[separator + 1]);
             }
 
@@ -599,7 +599,7 @@ namespace Cntryl.Cassie.Types
         private static object DecodeTextTimeWithTimeZone(string value)
         {
             string trimmed = value.Trim();
-            int zoneStart = Math.Max(trimmed.LastIndexOf('+'), trimmed.LastIndexOf('-'));
+            int zoneStart = Math.Max(trimmed.LastIndexOf('+', StringComparison.Ordinal), trimmed.LastIndexOf('-', StringComparison.Ordinal));
             if (zoneStart <= 0)
             {
                 throw new FormatException("Cassie returned a time-with-time-zone value without an offset.");

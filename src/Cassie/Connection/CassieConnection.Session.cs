@@ -152,7 +152,7 @@ namespace Cntryl.Cassie.Connection
         {
             PgSession? session = _session;
             return _gate.IsActive && session is not null && session.CanCancel
-                && await QueryCanceler.SendAsync(new CassieConnectionStringBuilder(_connectionString), session.BackendProcessId, session.BackendSecretKey).ConfigureAwait(false);
+                && await QueryCanceler.SendAsync([with(_connectionString)], session.BackendProcessId, session.BackendSecretKey).ConfigureAwait(false);
         }
 
         /// <summary>

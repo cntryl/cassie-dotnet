@@ -10,7 +10,7 @@ namespace Cntryl.Cassie.Commands
         {
             ArgumentNullException.ThrowIfNull(sql);
             List<string> names = [];
-            HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> seen = [with(StringComparer.OrdinalIgnoreCase)];
             foreach (SqlToken token in SqlLexicalTraversal.Read(sql))
             {
                 if (token.Kind != SqlTokenKind.Parameter)

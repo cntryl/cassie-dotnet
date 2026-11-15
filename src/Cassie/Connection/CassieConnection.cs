@@ -44,7 +44,7 @@ namespace Cntryl.Cassie.Connection
         {
             get
             {
-                CassieConnectionStringBuilder settings = new(_connectionString);
+                CassieConnectionStringBuilder settings = [with(_connectionString)];
                 return string.IsNullOrWhiteSpace(settings.Database) ? settings.Username : settings.Database;
             }
         }
@@ -126,7 +126,7 @@ namespace Cntryl.Cassie.Connection
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            CassieConnectionStringBuilder settings = new(_connectionString);
+            CassieConnectionStringBuilder settings = [with(_connectionString)];
             string currentDatabase = string.IsNullOrWhiteSpace(settings.Database) ? settings.Username : settings.Database;
             if (string.Equals(currentDatabase, databaseName, StringComparison.Ordinal))
             {
@@ -217,7 +217,7 @@ namespace Cntryl.Cassie.Connection
 
         private CassieConnectionStringBuilder ValidateSettings()
         {
-            CassieConnectionStringBuilder settings = new(_connectionString);
+            CassieConnectionStringBuilder settings = [with(_connectionString)];
             settings.ValidateKeywords();
             ValidateProtocolString(settings.Host, nameof(CassieConnectionStringBuilder.Host));
             ValidateProtocolString(settings.Username, nameof(CassieConnectionStringBuilder.Username));
@@ -391,7 +391,7 @@ namespace Cntryl.Cassie.Connection
         {
             ArgumentNullException.ThrowIfNull(connection);
             string key = connection._poolKey ?? (connection._pool is null
-                ? CassieConnectionPools.GetKey(new CassieConnectionStringBuilder(connection.ConnectionString))
+                ? CassieConnectionPools.GetKey([with(connection.ConnectionString)])
                 : throw new InvalidOperationException("The connection has no pool key."));
             CassieConnectionPools.ClearAsync(key).GetAwaiter().GetResult();
         }

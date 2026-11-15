@@ -210,7 +210,7 @@ namespace Cntryl.Cassie.Connection
 
         private string GetCurrentCatalog()
         {
-            CassieConnectionStringBuilder settings = new(_connectionString);
+            CassieConnectionStringBuilder settings = [with(_connectionString)];
             return string.IsNullOrEmpty(settings.Database) ? settings.Username : settings.Database;
         }
 
