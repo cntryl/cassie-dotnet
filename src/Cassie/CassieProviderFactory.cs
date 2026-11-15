@@ -54,6 +54,10 @@ namespace Cntryl.Cassie
             return new CassieParameter();
         }
 
+        /// <summary>Gets a value indicating that <see cref="CreateDataAdapter"/> is supported.</summary>
+        /// <remarks>Declared explicitly so the answer does not depend on the base class inspecting this type at run time.</remarks>
+        public override bool CanCreateDataAdapter => true;
+
         /// <inheritdoc />
         public override DbDataAdapter CreateDataAdapter()
         {

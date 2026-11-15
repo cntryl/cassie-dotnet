@@ -26,6 +26,34 @@ passes startup settings such as `-c TimeZone=UTC` to Cassie.
 open connection with no active reader or transaction. When the database is
 omitted, the username is used as the startup database.
 
+### Connection string keywords
+
+Keywords are case-insensitive. An unrecognized keyword, or a value outside the
+allowed range, fails when the connection opens rather than being ignored.
+
+| Keyword | Default | Meaning |
+| --- | --- | --- |
+| `Host` | `localhost` | Server host name or address. |
+| `Port` | `5432` | Server port, 1 to 65535. |
+| `Database` | the user name | Startup database. |
+| `Username` | none (required) | User name. |
+| `Password` | empty | Password. |
+| `SSL Mode` | `Require` | `Require`, `Prefer`, or `Disable`. |
+| `SSL Root Certificate` | empty | Path to a PEM bundle of trusted roots; empty uses platform trust. |
+| `Timeout` | `15` | Seconds allowed to open a connection; 0 disables the limit. |
+| `Command Timeout` | `30` | Default command timeout in seconds; 0 disables it. |
+| `Application Name` | `Cassie .NET` | Client application name reported to the server. |
+| `Options` | empty | Startup options, such as `-c TimeZone=UTC`. |
+| `Pooling` | `true` | Whether physical connections are pooled. |
+| `Maximum Pool Size` | `100` | Physical connections per pool, 1 to 1000. |
+| `Connection Idle Lifetime` | `300` | Seconds an idle pooled session is kept; 0 disables the limit. |
+| `Connection Lifetime` | `0` | Maximum age of a pooled session in seconds; 0 disables the limit. |
+| `Fetch Size` | `128` | Rows requested per portal fetch for extended queries. |
+
+Time values accept 0 to 2147483 seconds. Connections that use identical settings
+share one pool for the process. `CassieConnection.ClearPool` and
+`CassieConnection.ClearAllPools` close idle pooled sessions.
+
 ## Commands and readers
 
 Use `CassieCommand` with text commands and bound input parameters. Stored
@@ -47,6 +75,57 @@ stream individual fields directly from the socket.
 `GetSchema`, `GetSchemaAsync`, `GetSchemaTable`, and `GetColumnSchema` expose the
 metadata Cassie reports. Base-table origin, nullability, and key constraints
 remain unknown when they are absent from the server's row description.
+
+## Transactions
+
+`BeginTransaction` and `BeginTransactionAsync` start a `READ COMMITTED`
+transaction; `IsolationLevel.Unspecified` means the same. Other isolation levels
+throw `NotSupportedException`. A connection has at most one active transaction,
+and a command that names a transaction must name the connection's active one.
+
+Savepoints are supported (`SupportsSavepoints` is `true`) through `Save`,
+`Rollback(name)`, and `Release`, with async counterparts. Disposing a transaction
+that was neither committed nor rolled back rolls it back, and closing or
+returning a pooled connection does the same.
+
+## Contract details
+
+The provider follows the documented `System.Data.Common` contracts. These are the
+points where callers most often depend on exact behavior.
+
+- **Synchronous members do real blocking I/O.** `Open`, `Close`, `ExecuteReader`,
+  `Read`, `NextResult`, `Prepare`, and the transaction methods run on the calling
+  thread and do not wait on the thread pool. A blocking call cannot observe a
+  cancellation token, so a timeout or `Cancel` during a synchronous call closes
+  the connection underneath it; the call then fails with the timeout or
+  cancellation error.
+- **Rows are buffered and decoded on demand.** The reader parses frames from a
+  read buffer and decodes a column only when a getter asks for it. `GetInt16`,
+  `GetInt32`, `GetInt64`, `GetBoolean`, `GetDouble`, `GetFloat`, and `GetGuid` read
+  the matching column type without boxing.
+- **Column ordinals.** A getter called with an ordinal outside the result throws
+  `IndexOutOfRangeException`, as ADO.NET specifies. Getters throw
+  `InvalidOperationException` when the reader is closed or not positioned on a
+  row, and when `CommandBehavior.SequentialAccess` columns are read out of order.
+- **Column names.** `GetOrdinal` matches the exact name first and then ignores
+  case. An unknown name throws `ArgumentException`. ADO.NET documents
+  `IndexOutOfRangeException` here; this is a known difference.
+- **Typed getters convert leniently.** `GetInt32` on a text column parses the
+  text. A value that cannot be converted throws `FormatException` or
+  `OverflowException` rather than `InvalidCastException`.
+- **`GetSchemaTable`** returns `null` when the current statement produced no result
+  set, and throws `InvalidOperationException` once the reader is closed.
+- **Parameters.** `CassieParameter.DbType` defaults to `DbType.Object`, which means
+  "infer the type from the value"; ADO.NET documents `String` as the default. An
+  index outside the collection throws `IndexOutOfRangeException`. Reading a
+  parameter by an unknown name throws `ArgumentException`, and assigning one by
+  an unknown name adds it. Parameters are input-only.
+- **`RecordsAffected`** is -1 for statements that report no row count, and the sum
+  of the counts otherwise.
+- **Not supported:** output parameters, XML parameters, binary `COPY`,
+  `System.Transactions` enlistment, and `CommandBehavior.SchemaOnly` for batches.
+  Unsupported operations throw `NotSupportedException` with a message naming the
+  feature.
 
 ## Batches
 
@@ -97,6 +176,26 @@ while (await reader.NextResultAsync());
 - A batch from a `DbDataSource` has no connection: each execution opens a pooled
   connection and closes it when the reader is closed. It cannot take a
   transaction. `CommandBehavior.SchemaOnly` is not supported for batches.
+
+## Observability
+
+The provider reports through the standard .NET diagnostics types, all named
+`Cntryl.Cassie` (`CassieDiagnostics.Name`).
+
+- **Tracing.** `CassieDiagnostics.ActivitySource` starts a client activity named
+  `cassie.<operation>` for `connection.open`, `connection.close`, `query`, `batch`,
+  `copy.from`, and `copy.to`. Activities carry `db.system` and `db.operation`
+  tags; a failed operation sets the error status with the exception type name.
+- **Metrics.** `CassieDiagnostics.Meter` publishes the counter
+  `cassie.client.operations` and the histogram `cassie.client.operation.duration`
+  (milliseconds), tagged with `db.system`, `db.operation`, and `outcome`
+  (`success` or `error`).
+- **Logging.** Set `CassieConnection.LoggerFactory` or
+  `CassieDataSource.LoggerFactory` to receive connection opened and closed events
+  at Information and operation failures at Warning.
+
+SQL text, parameter values, credentials, and server error details are never
+written to activities, metrics, or logs.
 
 ## Values and COPY
 

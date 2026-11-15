@@ -19,6 +19,9 @@ namespace Cntryl.Cassie.Data
 
         /// <inheritdoc />
         public override IsolationLevel IsolationLevel => _isolationLevel;
+
+        /// <summary>Gets a value indicating that savepoints are available through Save, Rollback and Release.</summary>
+        public override bool SupportsSavepoints => true;
         /// <inheritdoc />
         protected override DbConnection DbConnection => _connection;
 

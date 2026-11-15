@@ -218,6 +218,69 @@ namespace Cntryl.Cassie.Tests.Data
             Assert.True(secondTextIsNull);
         }
 
+        [Theory]
+        [InlineData(-1)]
+        [InlineData(2)]
+        [InlineData(int.MaxValue)]
+        public async Task ShouldReportIndexOutOfRangeGivenOrdinalOutsideResultWhenColumnIsAccessed(int ordinal)
+        {
+            // Arrange
+            await using CassieDataReader reader = await OpenAsync([(Int4, 0), (Text, 0)], [Encoding.UTF8.GetBytes("1"), Encoding.UTF8.GetBytes("a")]);
+
+            // Act
+            Action[] accesses =
+            [
+                () => _ = reader.GetValue(ordinal),
+                () => _ = reader[ordinal],
+                () => _ = reader.GetInt32(ordinal),
+                () => _ = reader.GetString(ordinal),
+                () => _ = reader.GetName(ordinal),
+                () => _ = reader.GetFieldType(ordinal),
+                () => _ = reader.GetDataTypeName(ordinal),
+                () => _ = reader.GetFieldValue<int>(ordinal)
+            ];
+            Task<bool> nullCheck = reader.IsDBNullAsync(ordinal, TestContext.Current.CancellationToken);
+
+            // Assert
+            Assert.All(accesses, static access => Assert.Throws<IndexOutOfRangeException>(access));
+            _ = await Assert.ThrowsAsync<IndexOutOfRangeException>(() => nullCheck);
+            Assert.Equal(1, reader.GetInt32(0));
+        }
+
+        [Fact]
+        public async Task ShouldReturnNoSchemaTableGivenCommandWithoutResultSetWhenSchemaTableIsRequested()
+        {
+            // Arrange
+            FakeReaderSession session = new();
+            session.Enqueue((byte)'C', Encoding.UTF8.GetBytes("INSERT 0 1\0"));
+            session.Enqueue((byte)'Z', [(byte)'I']);
+            await using CassieDataReader reader = new(session, commandTimeout: 0, CommandBehavior.Default);
+            await reader.InitializeAsync(TestContext.Current.CancellationToken);
+
+            // Act
+            DataTable? schema = await reader.GetSchemaTableAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            Assert.Equal(0, reader.FieldCount);
+            Assert.Null(schema);
+        }
+
+        [Fact]
+        public async Task ShouldDescribeColumnsThenRejectGivenReaderClosedWhenSchemaTableIsRequested()
+        {
+            // Arrange
+            CassieDataReader reader = await OpenAsync([(Int4, 0), (Text, 0)], [Encoding.UTF8.GetBytes("1"), Encoding.UTF8.GetBytes("a")]);
+
+            // Act
+            DataTable? open = await reader.GetSchemaTableAsync(TestContext.Current.CancellationToken);
+            await reader.DisposeAsync();
+            Task<DataTable?> closed = reader.GetSchemaTableAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            Assert.Equal(2, Assert.IsType<DataTable>(open).Rows.Count);
+            _ = await Assert.ThrowsAsync<InvalidOperationException>(() => closed);
+        }
+
         private static async Task<CassieDataReader> OpenAsync((int TypeOid, short Format)[] columns, byte[]?[] fields, CommandBehavior behavior = CommandBehavior.Default)
         {
             FakeReaderSession session = new();

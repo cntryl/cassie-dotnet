@@ -10,6 +10,7 @@ using System.Data;
 using System.Data.Common;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Cntryl.Cassie.Data
@@ -732,9 +733,10 @@ namespace Cntryl.Cassie.Data
         }
 
         /// <inheritdoc />
-        public override DataTable GetSchemaTable()
+        public override DataTable? GetSchemaTable()
         {
-            return ReaderSchema.CreateTable(_columns);
+            EnsureOpen();
+            return _columns.Count == 0 ? null : ReaderSchema.CreateTable(_columns);
         }
 
         /// <summary>Gets column metadata while preserving unknown origin and constraint values.</summary>
@@ -743,9 +745,14 @@ namespace Cntryl.Cassie.Data
             return ReaderSchema.CreateColumns(_columns);
         }
 
+        /// <summary>
+        /// Returns the column at an ordinal. ADO.NET specifies <see cref="IndexOutOfRangeException"/> for an ordinal
+        /// outside the result, which is what indexing the span raises (a list indexer would raise
+        /// <see cref="ArgumentOutOfRangeException"/> instead).
+        /// </summary>
         private ReaderColumn GetColumn(int ordinal)
         {
-            return (uint)ordinal < (uint)_columns.Count ? _columns[ordinal] : throw new ArgumentOutOfRangeException(nameof(ordinal), ordinal, "Column ordinal is out of range.");
+            return CollectionsMarshal.AsSpan(_columns)[ordinal];
         }
 
         /// <summary>Validates access to a field of the current row and returns its byte length, or -1 for NULL.</summary>
