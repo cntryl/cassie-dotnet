@@ -8,10 +8,26 @@ namespace Cntryl.Cassie.Types.Handlers
         private static readonly FrozenDictionary<int, CassieTypeHandler> ByOid = Build();
         private static readonly VectorHandler Vectors = new();
 
+        // Types whose GetFieldValue<T> conversion differs from a plain cast of the boxed value.
+        private static readonly FrozenDictionary<Type, object> FieldReaders = new Dictionary<Type, object>
+        {
+            [typeof(decimal)] = new DelegateFieldReader<decimal>(static (reader, ordinal) => reader.GetDecimal(ordinal)),
+            [typeof(CassieTemporalValue)] = new DelegateFieldReader<CassieTemporalValue>(static (reader, ordinal) => reader.GetTemporalValue(ordinal)),
+            [typeof(DateTime)] = new DelegateFieldReader<DateTime>(static (reader, ordinal) => reader.GetDateTime(ordinal)),
+            [typeof(TimeSpan)] = new DelegateFieldReader<TimeSpan>(static (reader, ordinal) => reader.GetTimeSpanValue(ordinal)),
+            [typeof(ulong)] = new DelegateFieldReader<ulong>(static (reader, ordinal) => reader.GetUInt64Value(ordinal))
+        }.ToFrozenDictionary();
+
         /// <summary>Returns the handler for a scalar or vector OID, or null when the type has no special conversion.</summary>
         internal static CassieTypeHandler? Find(int oid)
         {
             return CassieTypeMap.IsVectorOid(oid) ? Vectors : ByOid.GetValueOrDefault(oid);
+        }
+
+        /// <summary>Returns the reader for a CLR type that needs a conversion beyond casting the boxed column value, or null.</summary>
+        internal static CassieFieldReader<T>? FindFieldReader<T>()
+        {
+            return FieldReaders.GetValueOrDefault(typeof(T)) as CassieFieldReader<T>;
         }
 
         private static FrozenDictionary<int, CassieTypeHandler> Build()

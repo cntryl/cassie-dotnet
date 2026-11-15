@@ -455,17 +455,9 @@ namespace Cntryl.Cassie.Data
         /// <inheritdoc />
         public override T GetFieldValue<T>(int ordinal)
         {
-            return typeof(T) == typeof(decimal)
-                ? (T)(object)GetDecimal(ordinal)
-                : typeof(T) == typeof(CassieTemporalValue)
-                    ? (T)(object)GetTemporalValue(ordinal)
-                : typeof(T) == typeof(DateTime)
-                    ? (T)(object)GetDateTime(ordinal)
-                    : typeof(T) == typeof(TimeSpan)
-                        ? (T)(object)GetTimeSpanValue(ordinal)
-                        : typeof(T) == typeof(ulong)
-                            ? (T)(object)GetUInt64Value(ordinal)
-                            : base.GetFieldValue<T>(ordinal);
+            return CassieTypeHandlers.FindFieldReader<T>() is { } reader
+                ? reader.Read(this, ordinal)
+                : base.GetFieldValue<T>(ordinal);
         }
 
         /// <inheritdoc />
@@ -996,7 +988,7 @@ namespace Cntryl.Cassie.Data
             };
         }
 
-        private TimeSpan GetTimeSpanValue(int ordinal)
+        internal TimeSpan GetTimeSpanValue(int ordinal)
         {
             return GetValue(ordinal) switch
             {
@@ -1007,7 +999,7 @@ namespace Cntryl.Cassie.Data
             };
         }
 
-        private CassieTemporalValue GetTemporalValue(int ordinal)
+        internal CassieTemporalValue GetTemporalValue(int ordinal)
         {
             object value = GetValue(ordinal);
             return value switch
@@ -1023,7 +1015,7 @@ namespace Cntryl.Cassie.Data
             };
         }
 
-        private ulong GetUInt64Value(int ordinal)
+        internal ulong GetUInt64Value(int ordinal)
         {
             return GetValue(ordinal) switch
             {
