@@ -138,7 +138,7 @@ namespace Cntryl.Cassie.Data
 
         private async Task InitializeCoreAsync(CancellationToken cancellationToken)
         {
-            while (_columns.Count == 0 && !_complete && !_resultEnded)
+            while (_columns.Count == 0 && !_complete)
             {
                 (byte tag, byte[] payload) = await ReadQueryFrameAsync(cancellationToken).ConfigureAwait(false);
                 if (tag == (byte)'T')
@@ -149,12 +149,10 @@ namespace Cntryl.Cassie.Data
                 else if (tag == (byte)'C')
                 {
                     ParseCommandComplete(payload);
-                    _ = BeginStatementResultWithoutRows();
                 }
                 else if (tag == (byte)'I')
                 {
                     ObserveEmptyStatement();
-                    _ = BeginStatementResultWithoutRows();
                 }
                 else if (tag == (byte)'S')
                 {
@@ -361,22 +359,8 @@ namespace Cntryl.Cassie.Data
                             _hasCurrentResult = true;
                             return true;
                         case (byte)'S': ParseParameterStatus(payload); break;
-                        case (byte)'C':
-                            ParseCommandComplete(payload);
-                            if (BeginStatementResultWithoutRows())
-                            {
-                                return true;
-                            }
-
-                            break;
-                        case (byte)'I':
-                            ObserveEmptyStatement();
-                            if (BeginStatementResultWithoutRows())
-                            {
-                                return true;
-                            }
-
-                            break;
+                        case (byte)'C': ParseCommandComplete(payload); break;
+                        case (byte)'I': ObserveEmptyStatement(); break;
                         case (byte)'E':
                             throw await ReadServerErrorAsync(payload, cancellationToken).ConfigureAwait(false);
                         case (byte)'G': await _session.RejectCopyFromAsync().ConfigureAwait(false); break;
@@ -425,7 +409,7 @@ namespace Cntryl.Cassie.Data
             int caseInsensitiveIndex = _columns.FindIndex(column => string.Equals(column.Name, name, StringComparison.OrdinalIgnoreCase));
             return caseInsensitiveIndex >= 0
                 ? caseInsensitiveIndex
-                : throw new ArgumentException($"Column '{name}' was not found.", nameof(name));
+                : throw AdoContractExceptions.ColumnNotFound(name);
         }
 
         /// <inheritdoc />
@@ -1367,23 +1351,6 @@ namespace Cntryl.Cassie.Data
         private void ObserveEmptyStatement()
         {
             _statementCompleted?.Invoke(null);
-        }
-
-        /// <summary>
-        /// A pipelined batch yields one result per statement, including statements that return no rows, so a
-        /// completed statement with no preceding RowDescription becomes a result of its own. A plain command skips it.
-        /// </summary>
-        private bool BeginStatementResultWithoutRows()
-        {
-            if (_statementCompleted is null)
-            {
-                return false;
-            }
-
-            _hasCurrentResult = true;
-            _resultEnded = true;
-            _hasRowsKnown = true;
-            return true;
         }
 
         private static long CopyFieldData<T>(T[] source, long dataOffset, T[]? destination, int destinationOffset, int length)

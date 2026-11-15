@@ -117,8 +117,8 @@ points where callers most often depend on exact behavior.
   `InvalidOperationException` when the reader is closed or not positioned on a
   row, and when `CommandBehavior.SequentialAccess` columns are read out of order.
 - **Column names.** `GetOrdinal` matches the exact name first and then ignores
-  case. An unknown name throws `ArgumentException`. ADO.NET documents
-  `IndexOutOfRangeException` here; this is a known difference.
+  case. An unknown name throws `IndexOutOfRangeException` naming the column, as
+  ADO.NET specifies.
 - **Typed getters convert leniently.** `GetInt32` on a text column parses the
   text. A value that cannot be converted throws `FormatException` or
   `OverflowException` rather than `InvalidCastException`.
@@ -126,9 +126,9 @@ points where callers most often depend on exact behavior.
   set, and throws `InvalidOperationException` once the reader is closed.
 - **Parameters.** `CassieParameter.DbType` defaults to `DbType.Object`, which means
   "infer the type from the value"; ADO.NET documents `String` as the default. An
-  index outside the collection throws `IndexOutOfRangeException`. Reading a
-  parameter by an unknown name throws `ArgumentException`, and assigning one by
-  an unknown name adds it. Parameters are input-only.
+  index outside the collection throws `IndexOutOfRangeException`, and so does
+  reading, assigning, or removing a parameter by a name that is not in the
+  collection. Parameters are input-only.
 - **`RecordsAffected`** is -1 for statements that report no row count, and the sum
   of the counts otherwise.
 - **Not supported:** output parameters, XML parameters, binary `COPY`,
@@ -155,8 +155,10 @@ do { while (await reader.ReadAsync()) { /* rows of this command */ } }
 while (await reader.NextResultAsync());
 ```
 
-- `ExecuteReader` yields one result per command, including commands that return
-  no rows (zero columns), in order. `reader.RecordsAffected` is the sum.
+- `ExecuteReader` yields one result per command that returns a result set, in
+  order. Commands that return none, such as `INSERT`, are skipped, exactly as
+  for a multi-statement `CassieCommand`; their row counts are on each
+  `CassieBatchCommand`. `reader.RecordsAffected` is the sum.
   `ExecuteNonQuery` returns that sum. `ExecuteScalar` returns the first column of
   the first row of the first result that has columns; the rest of the batch still
   runs and is read.

@@ -22,7 +22,7 @@ namespace Cntryl.Cassie.Tests.Live
         }
 
         [Fact]
-        public async Task ShouldReturnOneResultPerCommandGivenWritesAndQueriesWhenBatchIsRead()
+        public async Task ShouldReturnOneResultPerQueryGivenWritesAndQueriesWhenBatchIsRead()
         {
             // Arrange
             await _live.CreateProbeTableAsync();
@@ -42,8 +42,7 @@ namespace Cntryl.Cassie.Tests.Live
             long counted;
             await using (DbDataReader reader = await batch.ExecuteReaderAsync(TestContext.Current.CancellationToken))
             {
-                Assert.True(await reader.NextResultAsync(TestContext.Current.CancellationToken));
-                Assert.True(await reader.NextResultAsync(TestContext.Current.CancellationToken));
+                // The reader starts on the first command that returns rows; the two inserts are skipped.
                 while (await reader.ReadAsync(TestContext.Current.CancellationToken))
                 {
                     rows.Add((reader.GetInt32(0), reader.GetString(1)));

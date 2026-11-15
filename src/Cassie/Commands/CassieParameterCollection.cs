@@ -107,7 +107,8 @@ namespace Cntryl.Cassie.Commands
         /// <inheritdoc />
         public override void RemoveAt(string parameterName)
         {
-            RemoveAt(IndexOf(parameterName));
+            int index = IndexOf(parameterName);
+            _items.RemoveAt(index >= 0 ? index : throw AdoContractExceptions.ParameterNotFound(parameterName));
         }
 
         /// <inheritdoc />
@@ -120,7 +121,7 @@ namespace Cntryl.Cassie.Commands
         /// <inheritdoc />
         protected override DbParameter GetParameter(string parameterName)
         {
-            return IndexOf(parameterName) is int index and >= 0 ? GetParameter(index) : throw new ArgumentException("The parameter name was not found.", nameof(parameterName));
+            return IndexOf(parameterName) is int index and >= 0 ? GetParameter(index) : throw AdoContractExceptions.ParameterNotFound(parameterName);
         }
 
         /// <inheritdoc />
@@ -133,14 +134,7 @@ namespace Cntryl.Cassie.Commands
         protected override void SetParameter(string parameterName, DbParameter value)
         {
             int index = IndexOf(parameterName);
-            if (index < 0)
-            {
-                _items.Add(value);
-            }
-            else
-            {
-                _items[index] = value;
-            }
+            _items[index >= 0 ? index : throw AdoContractExceptions.ParameterNotFound(parameterName)] = value;
         }
     }
 }

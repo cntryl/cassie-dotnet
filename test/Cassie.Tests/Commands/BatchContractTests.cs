@@ -52,7 +52,7 @@ namespace Cntryl.Cassie.Tests.Commands
         }
 
         [Fact]
-        public async Task ShouldYieldOneResultPerCommandGivenMixedBatchWhenReaderAdvances()
+        public async Task ShouldYieldOneResultPerRowReturningCommandGivenMixedBatchWhenReaderAdvances()
         {
             // Arrange
             BatchPeer peer = new();
@@ -88,12 +88,11 @@ namespace Cntryl.Cassie.Tests.Commands
                 while (await reader.NextResultAsync(TestContext.Current.CancellationToken));
 
                 // Assert
-                Assert.Equal(4, results.Count);
-                Assert.Equal([1, 0, 0, 1], results.Select(static result => result.Fields));
+                // Statements without a result set are skipped, as they are for an ordinary command.
+                Assert.Equal(2, results.Count);
+                Assert.Equal([1, 1], results.Select(static result => result.Fields));
                 Assert.Equal([1, 2], results[0].Values);
-                Assert.Empty(results[1].Values);
-                Assert.Empty(results[2].Values);
-                Assert.Equal([9], results[3].Values);
+                Assert.Equal([9], results[1].Values);
                 Assert.Equal(3, reader.RecordsAffected);
             }
 
