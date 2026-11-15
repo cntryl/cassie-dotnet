@@ -49,7 +49,18 @@ namespace Cntryl.Cassie.DependencyInjection.Tests.Infrastructure
         {
             while (true)
             {
-                using TcpClient client = await _listener.AcceptTcpClientAsync(_shutdown.Token);
+                TcpClient accepted;
+                try
+                {
+                    accepted = await _listener.AcceptTcpClientAsync(_shutdown.Token);
+                }
+                catch (InvalidOperationException) when (_shutdown.IsCancellationRequested)
+                {
+                    // The listener was stopped between two connections; there is nothing left to serve.
+                    return;
+                }
+
+                using TcpClient client = accepted;
                 NetworkStream stream = client.GetStream();
                 ScriptedHttpRequest request = await ReadRequestAsync(stream, _shutdown.Token);
                 _ = Interlocked.Increment(ref _requests);
