@@ -1,4 +1,5 @@
 using Cntryl.Cassie.Protocol;
+using Cntryl.Cassie.Types.Handlers;
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Net.NetworkInformation;
@@ -256,11 +257,6 @@ namespace Cntryl.Cassie.Types
             Span<byte> bytes = stackalloc byte[16];
             switch (oid, value)
             {
-                case (19, string name):
-                    byte[] nameBytes = Encoding.UTF8.GetBytes(name);
-                    return nameBytes.Length <= 63
-                        ? nameBytes
-                        : throw new ArgumentOutOfRangeException(nameof(value), "Binary NAME parameters cannot exceed 63 UTF-8 bytes.");
                 case (1003, Array names):
                     return EncodeBinaryNameArray(names);
                 case (int arrayOid, CassieArray values) when CassieTypeMap.GetArrayElementOid(arrayOid) is int elementOid:
@@ -274,43 +270,6 @@ namespace Cntryl.Cassie.Types
                     return EncodeBinaryArray(values, elementOid);
                 case (int temporalOid, CassieTemporalValue temporal) when temporal.PostgresTypeOid == temporalOid:
                     return EncodeBinaryTemporal(temporal);
-                case (18 or 19 or 25 or 1042 or 1043, string text):
-                    return Encoding.UTF8.GetBytes(text);
-                case (18 or 19 or 25 or 1042 or 1043, char character):
-                    return Encoding.UTF8.GetBytes(character.ToString());
-                case (114, string jsonText):
-                    return Encoding.UTF8.GetBytes(jsonText);
-                case (16, bool boolean):
-                    return [boolean ? (byte)1 : (byte)0];
-                case (17, byte[] bytea):
-                    return bytea;
-                case (20, long int8):
-                    BinaryPrimitives.WriteInt64BigEndian(bytes, int8);
-                    return bytes[..8].ToArray();
-                case (21, short int2):
-                    BinaryPrimitives.WriteInt16BigEndian(bytes, int2);
-                    return bytes[..2].ToArray();
-                case (21, byte int2):
-                    BinaryPrimitives.WriteInt16BigEndian(bytes, int2);
-                    return bytes[..2].ToArray();
-                case (21, sbyte int2):
-                    BinaryPrimitives.WriteInt16BigEndian(bytes, int2);
-                    return bytes[..2].ToArray();
-                case (23, int int4):
-                    BinaryPrimitives.WriteInt32BigEndian(bytes, int4);
-                    return bytes[..4].ToArray();
-                case (23, ushort int4):
-                    BinaryPrimitives.WriteInt32BigEndian(bytes, int4);
-                    return bytes[..4].ToArray();
-                case (int oidType, uint oidValue) when CassieTypeMap.IsObjectIdentifierOid(oidType):
-                    BinaryPrimitives.WriteUInt32BigEndian(bytes, oidValue);
-                    return bytes[..4].ToArray();
-                case (700, float float4):
-                    BinaryPrimitives.WriteInt32BigEndian(bytes, BitConverter.SingleToInt32Bits(float4));
-                    return bytes[..4].ToArray();
-                case (701, double float8):
-                    BinaryPrimitives.WriteInt64BigEndian(bytes, BitConverter.DoubleToInt64Bits(float8));
-                    return bytes[..8].ToArray();
                 case (1700, CassieNumeric numeric):
                     return EncodeBinaryNumeric(numeric.Value);
                 case (1700, decimal numeric):
@@ -365,16 +324,8 @@ namespace Cntryl.Cassie.Types
                 case (1184, DateTimeOffset timestampTz):
                     BinaryPrimitives.WriteInt64BigEndian(bytes, (timestampTz.UtcTicks - new DateTime(2000, 1, 1).Ticks) / 10);
                     return bytes[..8].ToArray();
-                case (2950, Guid uuid):
-                    _ = uuid.TryWriteBytes(bytes, bigEndian: true, out _);
-                    return bytes.ToArray();
-                case (3802, string jsonb):
-                    byte[] json = Encoding.UTF8.GetBytes(jsonb);
-                    return [1, .. json];
-                case (4072, string jsonPath):
-                    return [1, .. Encoding.UTF8.GetBytes(jsonPath)];
                 default:
-                    return null;
+                    return CassieTypeHandlers.Find(oid)?.EncodeBinary(oid, value);
             }
         }
 

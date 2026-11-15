@@ -1,4 +1,5 @@
 using Cntryl.Cassie.Connection;
+using Cntryl.Cassie.Types.Handlers;
 using System.Buffers.Binary;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -31,27 +32,13 @@ namespace Cntryl.Cassie.Types
         {
             return oid switch
             {
-                16 => value switch
-                {
-                    "t" or "true" or "TRUE" => true,
-                    "f" or "false" or "FALSE" => false,
-                    _ => throw new FormatException("Cassie returned an invalid text boolean value.")
-                },
-                17 => DecodeBytea(value),
-                20 => long.Parse(value, CultureInfo.InvariantCulture),
-                21 => short.Parse(value, CultureInfo.InvariantCulture),
-                23 => int.Parse(value, CultureInfo.InvariantCulture),
-                26 => uint.Parse(value, NumberStyles.None, CultureInfo.InvariantCulture),
-                700 => float.Parse(value, CultureInfo.InvariantCulture),
-                701 => double.Parse(value, CultureInfo.InvariantCulture),
                 1700 => new CassieNumeric(value),
-                2950 => Guid.Parse(value),
                 1082 => DecodeTextDate(value, dateStyle),
                 1083 => DecodeTextTime(value),
                 1114 => DecodeTextTimestamp(value, CassieTemporalKind.Timestamp, dateStyle),
                 1184 => DecodeTextTimestampTz(value, dateStyle),
                 1266 => DecodeTextTimeWithTimeZone(value),
-                _ => value
+                _ => CassieTypeHandlers.Find(oid)?.DecodeText(oid, value, dateStyle) ?? value
             };
         }
 
@@ -72,20 +59,14 @@ namespace Cntryl.Cassie.Types
                 return DecodeBinaryArray(value, elementTypeOid);
             }
 
+            if (CassieTypeHandlers.Find(oid)?.DecodeBinary(oid, value) is { } decoded)
+            {
+                return decoded;
+            }
+
             ReadOnlySpan<byte> bytes = value;
             return oid switch
             {
-                16 when bytes.Length == 1 && bytes[0] <= 1 => bytes[0] == 1,
-                17 => value,
-                18 or 19 or 25 or 1042 or 1043 => Encoding.UTF8.GetString(bytes),
-                20 when bytes.Length == 8 => BinaryPrimitives.ReadInt64BigEndian(bytes),
-                21 when bytes.Length == 2 => BinaryPrimitives.ReadInt16BigEndian(bytes),
-                23 when bytes.Length == 4 => BinaryPrimitives.ReadInt32BigEndian(bytes),
-                _ when CassieTypeMap.IsObjectIdentifierOid(oid) => bytes.Length == 4
-                    ? BinaryPrimitives.ReadUInt32BigEndian(bytes)
-                    : throw new FormatException($"Cassie returned a binary object identifier with length {bytes.Length} instead of 4."),
-                700 when bytes.Length == 4 => BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32BigEndian(bytes)),
-                701 when bytes.Length == 8 => BitConverter.Int64BitsToDouble(BinaryPrimitives.ReadInt64BigEndian(bytes)),
                 650 or 869 => DecodeBinaryNetwork(value, oid == 650),
                 774 => DecodeBinaryMacAddress(value, 8),
                 829 => DecodeBinaryMacAddress(value, 6),
@@ -98,22 +79,8 @@ namespace Cntryl.Cassie.Types
                 1114 when bytes.Length == 8 => DecodeBinaryTimestamp(bytes),
                 1184 when bytes.Length == 8 => DecodeBinaryTimestampTz(bytes),
                 1266 when bytes.Length == 12 => DecodeBinaryTimeTz(bytes),
-                114 => Encoding.UTF8.GetString(bytes),
-                2278 when bytes.IsEmpty => string.Empty,
-                2278 => throw new FormatException("Cassie returned binary void with a non-empty payload."),
-                2950 when bytes.Length == 16 => new Guid(bytes, bigEndian: true),
-                3802 when bytes.Length > 0 && bytes[0] == 1 => Encoding.UTF8.GetString(bytes[1..]),
-                3802 => throw new FormatException("Cassie returned binary JSONB with an unsupported version."),
-                4072 => DecodeBinaryJsonPath(bytes),
                 _ => throw new NotSupportedException($"Binary results for PostgreSQL OID {oid} are not supported by this provider.")
             };
-        }
-
-        private static string DecodeBinaryJsonPath(ReadOnlySpan<byte> bytes)
-        {
-            return bytes.Length == 0 || bytes[0] != 1
-                ? throw new FormatException("Cassie returned binary JSONPath with an unsupported version.")
-                : Encoding.UTF8.GetString(bytes[1..]);
         }
 
         private static CassieArray DecodeBinaryArray(byte[] value, int expectedElementTypeOid)
@@ -827,13 +794,5 @@ namespace Cntryl.Cassie.Types
             value = new DateTime(epochTicks + (microseconds * 10), DateTimeKind.Utc);
             return true;
         }
-
-        private static byte[] DecodeBytea(string value)
-        {
-            return !value.StartsWith("\\x", StringComparison.Ordinal) || (value.Length - 2) % 2 != 0
-                ? throw new FormatException("Cassie returned bytea outside the supported hex format.")
-                : Convert.FromHexString(value.AsSpan(2));
-        }
-
     }
 }
