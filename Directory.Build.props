@@ -4,7 +4,7 @@
     <!-- Compile async methods as runtime async (.NET 11): the runtime suspends and resumes them itself
          instead of the compiler generating a state machine per method. -->
     <Features>$(Features);runtime-async=on</Features>
-    <PackageVersion>0.1.0</PackageVersion>
+    <PackageVersion>0.1.1</PackageVersion>
     <RootNamespace>Cntryl.$(MSBuildProjectName)</RootNamespace>
     <AssemblyName>Cntryl.$(MSBuildProjectName)</AssemblyName>
     <PackageId>Cntryl.$(MSBuildProjectName)</PackageId>

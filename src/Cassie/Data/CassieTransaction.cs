@@ -47,8 +47,14 @@ namespace Cntryl.Cassie.Data
             await CompleteAsync("COMMIT", cancellationToken).ConfigureAwait(false);
         }
 
+        /// <summary>Rolls the transaction back.</summary>
+        public Task RollbackAsync()
+        {
+            return RollbackAsync(CancellationToken.None);
+        }
+
         /// <inheritdoc />
-        public override async Task RollbackAsync(CancellationToken cancellationToken = default)
+        public override async Task RollbackAsync(CancellationToken cancellationToken)
         {
             await CompleteAsync("ROLLBACK", cancellationToken).ConfigureAwait(false);
         }
@@ -77,8 +83,14 @@ namespace Cntryl.Cassie.Data
             await ExecuteSavepointAsync("SAVEPOINT", savepointName, cancellationToken).ConfigureAwait(false);
         }
 
+        /// <summary>Rolls back to a savepoint, undoing the commands executed after it was created.</summary>
+        public Task RollbackAsync(string savepointName)
+        {
+            return RollbackAsync(savepointName, CancellationToken.None);
+        }
+
         /// <inheritdoc />
-        public override async Task RollbackAsync(string savepointName, CancellationToken cancellationToken = default)
+        public override async Task RollbackAsync(string savepointName, CancellationToken cancellationToken)
         {
             await ExecuteSavepointAsync("ROLLBACK TO SAVEPOINT", savepointName, cancellationToken).ConfigureAwait(false);
         }

@@ -49,14 +49,27 @@ namespace Cntryl.Cassie.Connection
         }
 
         /// <summary>Starts a READ COMMITTED transaction.</summary>
-        public new async ValueTask<CassieTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+        public ValueTask<CassieTransaction> BeginTransactionAsync()
         {
-            return await BeginTransactionCoreAsync(IsolationLevel.Unspecified, cancellationToken).ConfigureAwait(false);
+            return BeginTransactionAsync(IsolationLevel.Unspecified, CancellationToken.None);
+        }
+
+        /// <summary>Starts a READ COMMITTED transaction.</summary>
+        public new ValueTask<CassieTransaction> BeginTransactionAsync(CancellationToken cancellationToken)
+        {
+            return BeginTransactionAsync(IsolationLevel.Unspecified, cancellationToken);
         }
 
         /// <summary>Starts a transaction with the given isolation level.</summary>
         /// <exception cref="NotSupportedException">The isolation level is not supported by Cassie.</exception>
-        public new async ValueTask<CassieTransaction> BeginTransactionAsync(IsolationLevel isolationLevel, CancellationToken cancellationToken = default)
+        public ValueTask<CassieTransaction> BeginTransactionAsync(IsolationLevel isolationLevel)
+        {
+            return BeginTransactionAsync(isolationLevel, CancellationToken.None);
+        }
+
+        /// <summary>Starts a transaction with the given isolation level.</summary>
+        /// <exception cref="NotSupportedException">The isolation level is not supported by Cassie.</exception>
+        public new async ValueTask<CassieTransaction> BeginTransactionAsync(IsolationLevel isolationLevel, CancellationToken cancellationToken)
         {
             return await BeginTransactionCoreAsync(isolationLevel, cancellationToken).ConfigureAwait(false);
         }

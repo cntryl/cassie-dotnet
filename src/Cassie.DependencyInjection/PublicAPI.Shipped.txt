@@ -1,0 +1,4 @@
+#nullable enable
+Cntryl.Cassie.DependencyInjection.CassieServiceCollectionExtensions
+static Cntryl.Cassie.DependencyInjection.CassieServiceCollectionExtensions.AddCassieDataSource(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! connectionString) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Cntryl.Cassie.DependencyInjection.CassieServiceCollectionExtensions.AddCassieRestClient(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Uri! baseAddress) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

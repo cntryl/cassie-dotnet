@@ -1,7 +1,7 @@
 namespace Cntryl.Cassie.Commands
 {
     /// <summary>Finds named parameter markers while ignoring SQL strings, identifiers, and comments.</summary>
-    public static class SqlParameterScanner
+    internal static class SqlParameterScanner
     {
         /// <summary>Returns distinct parameter names in their first-seen order.</summary>
         /// <param name="sql">SQL text to scan.</param>
