@@ -1,8 +1,8 @@
 using Cntryl.Cassie.Protocol;
+using Cntryl.Cassie.Types.Handlers;
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Net.NetworkInformation;
-using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 
@@ -21,81 +21,18 @@ namespace Cntryl.Cassie.Types
                 Array array when HasNonFiniteFloat(array) => EncodeTextArray(array, oid),
                 Array array => EncodeArrayParameter(array, oid),
                 CassieTemporalValue temporal => FormatTemporalText(temporal, oid),
-                CassieNetworkAddress networkAddress when oid is 650 or 869 => EncodeTextNetworkAddress(networkAddress, oid == 650),
-                PhysicalAddress macAddress when oid is 774 or 829 => FormatTextMacAddress(macAddress, oid == 774 ? 8 : 6),
-                CassieBitString bitString when oid is 1560 or 1562 => EncodeTextBitString(bitString, oid == 1562),
-                CassieLsn lsn when oid == 3220 => lsn.ToString(),
-                CassieTimeWithTimeZone timeWithTimeZone when oid == 1266 => FormatTextTimeWithTimeZone(timeWithTimeZone),
-                CassieInterval interval when oid == 1186 => FormatTextInterval(interval),
-                CassieVector vector when CassieTypeMap.IsVectorOid(oid) => FormatTextVector(vector, oid),
                 string stringValue => stringValue,
                 bool booleanValue => booleanValue ? "true" : "false",
-                DateTime dateTime when oid == 1082 => DateOnly.FromDateTime(dateTime).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                DateTime dateTime when oid == 1114 => FormatTextTimestamp(dateTime),
+                _ when CassieTypeHandlers.Find(oid)?.EncodeText(oid, value) is { } encoded => encoded,
                 DateTime dateTime => dateTime.ToString("O", CultureInfo.InvariantCulture),
                 DateTimeOffset dateTimeOffset => dateTimeOffset.ToString("O", CultureInfo.InvariantCulture),
                 DateOnly dateOnly => dateOnly.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                TimeSpan timeSpan when oid == 1083 => FormatTimeSpan(timeSpan),
                 TimeOnly timeOnly => timeOnly.ToString("O", CultureInfo.InvariantCulture),
                 Guid guid => guid.ToString("D"),
                 IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
                 _ => throw new NotSupportedException($"Parameter type '{value.GetType().FullName}' has no text codec.")
             };
             return Encoding.UTF8.GetBytes(text);
-        }
-
-        private static string EncodeTextNetworkAddress(CassieNetworkAddress address, bool expectedCidr)
-        {
-            return address.Address is null || address.IsCidr != expectedCidr
-                || (address.Address.AddressFamily == AddressFamily.InterNetworkV6 && address.Address.ScopeId != 0)
-                ? throw new ArgumentException("The network address value does not match the PostgreSQL type OID.", nameof(address))
-                : address.ToString();
-        }
-
-        private static string FormatTextMacAddress(PhysicalAddress address, int expectedLength)
-        {
-            byte[] bytes = address.GetAddressBytes();
-            return bytes.Length == expectedLength
-                ? string.Join(':', bytes.Select(static value => value.ToString("x2", CultureInfo.InvariantCulture)))
-                : throw new ArgumentException("The MAC address length does not match the PostgreSQL type OID.", nameof(address));
-        }
-
-        private static string EncodeTextBitString(CassieBitString bitString, bool expectedVarying)
-        {
-            return bitString.Value is null || bitString.IsVarying != expectedVarying
-                ? throw new ArgumentException("The bit string value does not match the PostgreSQL type OID.", nameof(bitString))
-                : bitString.Value;
-        }
-
-        private static string FormatTextTimeWithTimeZone(CassieTimeWithTimeZone value)
-        {
-            string time = new TimeOnly(value.Time.Ticks / 10 * 10)
-                .ToString("HH:mm:ss.ffffff", CultureInfo.InvariantCulture)
-                .TrimEnd('0')
-                .TrimEnd('.');
-            long offset = value.OffsetSeconds;
-            long absoluteOffset = Math.Abs(offset);
-            string offsetText = string.Concat(
-                offset < 0 ? "-" : "+",
-                (absoluteOffset / 3600).ToString("00", CultureInfo.InvariantCulture),
-                ":",
-                (absoluteOffset / 60 % 60).ToString("00", CultureInfo.InvariantCulture),
-                absoluteOffset % 60 == 0 ? string.Empty : ":" + (absoluteOffset % 60).ToString("00", CultureInfo.InvariantCulture));
-            return time + offsetText;
-        }
-
-        private static string FormatTimeSpan(TimeSpan value)
-        {
-            long microseconds = GetTimeMicroseconds(value);
-            return new TimeOnly(microseconds * 10)
-                .ToString("HH:mm:ss.ffffff", CultureInfo.InvariantCulture)
-                .TrimEnd('0')
-                .TrimEnd('.');
-        }
-
-        private static string FormatTextTimestamp(DateTime value)
-        {
-            return value.ToString("yyyy-MM-dd HH:mm:ss.ffffff", CultureInfo.InvariantCulture);
         }
 
         private static string FormatTemporalText(CassieTemporalValue temporal, int oid)
@@ -219,33 +156,6 @@ namespace Cntryl.Cassie.Types
             return value < 0 && value % divisor != 0 ? quotient - 1 : quotient;
         }
 
-        private static long GetTimeMicroseconds(TimeSpan value)
-        {
-            return value.Ticks is >= 0 and < TimeSpan.TicksPerDay
-                ? value.Ticks / 10
-                : throw new ArgumentOutOfRangeException(nameof(value), "TIME parameters must be from midnight through the final microsecond before 24:00.");
-        }
-
-        private static string FormatTextInterval(CassieInterval value)
-        {
-            return (value.Months, value.Days, value.Microseconds) switch
-            {
-                (int.MaxValue, int.MaxValue, long.MaxValue) => "infinity",
-                (int.MinValue, int.MinValue, long.MinValue) => "-infinity",
-                _ => string.Concat(
-                    value.Months.ToString(CultureInfo.InvariantCulture), " months ",
-                    value.Days.ToString(CultureInfo.InvariantCulture), " days ",
-                    value.Microseconds.ToString(CultureInfo.InvariantCulture), " microseconds")
-            };
-        }
-
-        private static string FormatTextVector(CassieVector vector, int oid)
-        {
-            return CassieTypeMap.GetVectorDimension(oid) == vector.Dimension
-                ? "[" + string.Join(",", vector.Select(static value => value.ToString("R", CultureInfo.InvariantCulture))) + "]"
-                : throw new ArgumentException("The vector dimension does not match its PostgreSQL type OID.", nameof(vector));
-        }
-
         internal static byte[]? GetBinaryParameter(object? value, int oid)
         {
             if (value is null or DBNull)
@@ -256,11 +166,6 @@ namespace Cntryl.Cassie.Types
             Span<byte> bytes = stackalloc byte[16];
             switch (oid, value)
             {
-                case (19, string name):
-                    byte[] nameBytes = Encoding.UTF8.GetBytes(name);
-                    return nameBytes.Length <= 63
-                        ? nameBytes
-                        : throw new ArgumentOutOfRangeException(nameof(value), "Binary NAME parameters cannot exceed 63 UTF-8 bytes.");
                 case (1003, Array names):
                     return EncodeBinaryNameArray(names);
                 case (int arrayOid, CassieArray values) when CassieTypeMap.GetArrayElementOid(arrayOid) is int elementOid:
@@ -274,107 +179,8 @@ namespace Cntryl.Cassie.Types
                     return EncodeBinaryArray(values, elementOid);
                 case (int temporalOid, CassieTemporalValue temporal) when temporal.PostgresTypeOid == temporalOid:
                     return EncodeBinaryTemporal(temporal);
-                case (18 or 19 or 25 or 1042 or 1043, string text):
-                    return Encoding.UTF8.GetBytes(text);
-                case (18 or 19 or 25 or 1042 or 1043, char character):
-                    return Encoding.UTF8.GetBytes(character.ToString());
-                case (114, string jsonText):
-                    return Encoding.UTF8.GetBytes(jsonText);
-                case (16, bool boolean):
-                    return [boolean ? (byte)1 : (byte)0];
-                case (17, byte[] bytea):
-                    return bytea;
-                case (20, long int8):
-                    BinaryPrimitives.WriteInt64BigEndian(bytes, int8);
-                    return bytes[..8].ToArray();
-                case (21, short int2):
-                    BinaryPrimitives.WriteInt16BigEndian(bytes, int2);
-                    return bytes[..2].ToArray();
-                case (21, byte int2):
-                    BinaryPrimitives.WriteInt16BigEndian(bytes, int2);
-                    return bytes[..2].ToArray();
-                case (21, sbyte int2):
-                    BinaryPrimitives.WriteInt16BigEndian(bytes, int2);
-                    return bytes[..2].ToArray();
-                case (23, int int4):
-                    BinaryPrimitives.WriteInt32BigEndian(bytes, int4);
-                    return bytes[..4].ToArray();
-                case (23, ushort int4):
-                    BinaryPrimitives.WriteInt32BigEndian(bytes, int4);
-                    return bytes[..4].ToArray();
-                case (int oidType, uint oidValue) when CassieTypeMap.IsObjectIdentifierOid(oidType):
-                    BinaryPrimitives.WriteUInt32BigEndian(bytes, oidValue);
-                    return bytes[..4].ToArray();
-                case (700, float float4):
-                    BinaryPrimitives.WriteInt32BigEndian(bytes, BitConverter.SingleToInt32Bits(float4));
-                    return bytes[..4].ToArray();
-                case (701, double float8):
-                    BinaryPrimitives.WriteInt64BigEndian(bytes, BitConverter.DoubleToInt64Bits(float8));
-                    return bytes[..8].ToArray();
-                case (1700, CassieNumeric numeric):
-                    return EncodeBinaryNumeric(numeric.Value);
-                case (1700, decimal numeric):
-                    return EncodeBinaryNumeric(numeric.ToString(CultureInfo.InvariantCulture));
-                case (1700, ulong numeric):
-                    return EncodeBinaryNumeric(numeric.ToString(CultureInfo.InvariantCulture));
-                case (650 or 869, CassieNetworkAddress networkAddress):
-                    return EncodeBinaryNetwork(networkAddress, oid == 650);
-                case (774 or 829, PhysicalAddress macAddress):
-                    return EncodeBinaryMacAddress(macAddress, oid == 774 ? 8 : 6);
-                case (1560 or 1562, CassieBitString bitString) when bitString.Value is not null && bitString.IsVarying == (oid == 1562):
-                    return EncodeBinaryBitString(bitString);
-                case (1560 or 1562, CassieBitString):
-                    throw new ArgumentException("The bit string value does not match the PostgreSQL type OID.", nameof(value));
-                case (3220, CassieLsn lsn):
-                    BinaryPrimitives.WriteUInt64BigEndian(bytes, lsn.Value);
-                    return bytes[..8].ToArray();
-                case (int vectorOid, CassieVector vector) when CassieTypeMap.IsVectorOid(vectorOid):
-                    return EncodeBinaryVector(vector, vectorOid);
-                case (1186, CassieInterval interval):
-                    BinaryPrimitives.WriteInt64BigEndian(bytes, interval.Microseconds);
-                    using (MemoryStream intervalBytes = new(16))
-                    {
-                        intervalBytes.Write(bytes[..8]);
-                        PgWriter.WriteInt32(intervalBytes, interval.Days);
-                        PgWriter.WriteInt32(intervalBytes, interval.Months);
-                        return intervalBytes.ToArray();
-                    }
-                case (1266, CassieTimeWithTimeZone timeTz):
-                    BinaryPrimitives.WriteInt64BigEndian(bytes, timeTz.Time.Ticks / 10);
-                    using (MemoryStream timeTzBytes = new(12))
-                    {
-                        timeTzBytes.Write(bytes[..8]);
-                        PgWriter.WriteInt32(timeTzBytes, checked(-timeTz.OffsetSeconds));
-                        return timeTzBytes.ToArray();
-                    }
-                case (1082, DateOnly date):
-                    BinaryPrimitives.WriteInt32BigEndian(bytes, date.DayNumber - new DateOnly(2000, 1, 1).DayNumber);
-                    return bytes[..4].ToArray();
-                case (1082, DateTime date):
-                    BinaryPrimitives.WriteInt32BigEndian(bytes, DateOnly.FromDateTime(date).DayNumber - new DateOnly(2000, 1, 1).DayNumber);
-                    return bytes[..4].ToArray();
-                case (1083, TimeOnly time):
-                    BinaryPrimitives.WriteInt64BigEndian(bytes, time.Ticks / 10);
-                    return bytes[..8].ToArray();
-                case (1083, TimeSpan time):
-                    BinaryPrimitives.WriteInt64BigEndian(bytes, GetTimeMicroseconds(time));
-                    return bytes[..8].ToArray();
-                case (1114, DateTime timestamp):
-                    BinaryPrimitives.WriteInt64BigEndian(bytes, (timestamp.Ticks - new DateTime(2000, 1, 1).Ticks) / 10);
-                    return bytes[..8].ToArray();
-                case (1184, DateTimeOffset timestampTz):
-                    BinaryPrimitives.WriteInt64BigEndian(bytes, (timestampTz.UtcTicks - new DateTime(2000, 1, 1).Ticks) / 10);
-                    return bytes[..8].ToArray();
-                case (2950, Guid uuid):
-                    _ = uuid.TryWriteBytes(bytes, bigEndian: true, out _);
-                    return bytes.ToArray();
-                case (3802, string jsonb):
-                    byte[] json = Encoding.UTF8.GetBytes(jsonb);
-                    return [1, .. json];
-                case (4072, string jsonPath):
-                    return [1, .. Encoding.UTF8.GetBytes(jsonPath)];
                 default:
-                    return null;
+                    return CassieTypeHandlers.Find(oid)?.EncodeBinary(oid, value);
             }
         }
 
@@ -673,219 +479,6 @@ namespace Cntryl.Cassie.Types
             return result.Append('}').ToString();
         }
 
-        private static byte[] EncodeBinaryNumeric(string value)
-        {
-            ushort sign = 0x0000;
-            ushort scale;
-            if (value == "NaN")
-            {
-                sign = 0xC000;
-                scale = 0;
-                return EncodeNumericHeader([], 0, sign, scale);
-            }
-
-            if (value is "Infinity" or "+Infinity" or "-Infinity")
-            {
-                sign = value == "-Infinity" ? (ushort)0xF000 : (ushort)0xD000;
-                return EncodeNumericHeader([], 0, sign, 32);
-            }
-
-            int index = 0;
-            bool negative = value.Length > 0 && value[0] == '-';
-            if (negative || (value.Length > 0 && value[0] == '+'))
-            {
-                index++;
-            }
-
-            int exponent = 0;
-            int exponentIndex = value.IndexOfAny(['e', 'E'], index);
-            ReadOnlySpan<char> mantissa = exponentIndex < 0 ? value.AsSpan(index) : value.AsSpan(index, exponentIndex - index);
-            if (exponentIndex >= 0 && !int.TryParse(value.AsSpan(exponentIndex + 1), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out exponent))
-            {
-                throw new FormatException("CassieNumeric exponent is outside the supported range.");
-            }
-
-            int point = mantissa.IndexOf('.');
-            ReadOnlySpan<char> integerPart = point < 0 ? mantissa : mantissa[..point];
-            ReadOnlySpan<char> fractionalPart = point < 0 ? [] : mantissa[(point + 1)..];
-            int decimalScale = checked(fractionalPart.Length - exponent);
-            if (decimalScale > 16383 || integerPart.Length + fractionalPart.Length + Math.Max(0, -decimalScale) > 131072)
-            {
-                throw new ArgumentOutOfRangeException(nameof(value), "The numeric value exceeds Cassie's binary NUMERIC limits.");
-            }
-
-            string coefficient = integerPart.ToString() + fractionalPart.ToString();
-            if (coefficient.Length == 0)
-            {
-                coefficient = "0";
-            }
-
-            if (decimalScale < 0)
-            {
-                coefficient += new string('0', -decimalScale);
-                decimalScale = 0;
-            }
-
-            if (coefficient.Length <= decimalScale)
-            {
-                coefficient = new string('0', decimalScale + 1 - coefficient.Length) + coefficient;
-            }
-
-            int integerDigitCount = coefficient.Length - decimalScale;
-            string integerDigits = coefficient[..integerDigitCount];
-            string fractionDigits = coefficient[integerDigitCount..];
-            scale = checked((ushort)decimalScale);
-
-            int integerPadding = (4 - (integerDigits.Length % 4)) % 4;
-            int fractionPadding = (4 - (fractionDigits.Length % 4)) % 4;
-            integerDigits = new string('0', integerPadding) + integerDigits;
-            fractionDigits += new string('0', fractionPadding);
-            List<ushort> digits = [];
-            for (int start = 0; start < integerDigits.Length; start += 4)
-            {
-                digits.Add(ushort.Parse(integerDigits.AsSpan(start, 4), CultureInfo.InvariantCulture));
-            }
-
-            for (int start = 0; start < fractionDigits.Length; start += 4)
-            {
-                digits.Add(ushort.Parse(fractionDigits.AsSpan(start, 4), CultureInfo.InvariantCulture));
-            }
-
-            int weight = (integerDigits.Length / 4) - 1;
-            int leading = 0;
-            while (leading < digits.Count && digits[leading] == 0)
-            {
-                leading++;
-            }
-
-            if (leading > 0)
-            {
-                digits.RemoveRange(0, leading);
-                weight -= leading;
-            }
-
-            while (digits.Count > 0 && digits[^1] == 0)
-            {
-                digits.RemoveAt(digits.Count - 1);
-            }
-
-            if (digits.Count == 0)
-            {
-                weight = 0;
-            }
-
-            if (negative && digits.Count > 0)
-            {
-                sign = 0x4000;
-            }
-
-            return EncodeNumericHeader(digits, checked((short)weight), sign, scale);
-        }
-
-        private static byte[] EncodeBinaryNetwork(CassieNetworkAddress address, bool expectedCidr)
-        {
-            if (address.Address is null || address.IsCidr != expectedCidr
-                || (address.Address.AddressFamily == AddressFamily.InterNetworkV6 && address.Address.ScopeId != 0))
-            {
-                throw new ArgumentException("The network address value does not match the PostgreSQL type OID.", nameof(address));
-            }
-
-            byte[] addressBytes = address.Address.GetAddressBytes();
-            byte family = address.Address.AddressFamily switch
-            {
-                AddressFamily.InterNetwork => 2,
-                AddressFamily.InterNetworkV6 => 3,
-                _ => throw new ArgumentException("Only IPv4 and IPv6 network addresses are supported.", nameof(address))
-            };
-            int width = addressBytes.Length * 8;
-            if ((uint)address.PrefixLength > (uint)width)
-            {
-                throw new ArgumentException("The network prefix length is outside the address family range.", nameof(address));
-            }
-
-            if (address.IsCidr)
-            {
-                for (int bit = address.PrefixLength; bit < width; bit++)
-                {
-                    if ((addressBytes[bit / 8] & (1 << (7 - (bit % 8)))) != 0)
-                    {
-                        throw new ArgumentException("CIDR parameters cannot contain host bits.", nameof(address));
-                    }
-                }
-            }
-
-            return [family, checked((byte)address.PrefixLength), address.IsCidr ? (byte)1 : (byte)0, checked((byte)addressBytes.Length), .. addressBytes];
-        }
-
-        private static byte[] EncodeBinaryMacAddress(PhysicalAddress address, int expectedLength)
-        {
-            byte[] bytes = address.GetAddressBytes();
-            return bytes.Length == expectedLength
-                ? bytes
-                : throw new ArgumentException("The MAC address length does not match the PostgreSQL type OID.", nameof(address));
-        }
-
-        private static byte[] EncodeBinaryBitString(CassieBitString bitString)
-        {
-            if (bitString.Value is null)
-            {
-                throw new ArgumentException("A default bit-string value is invalid.", nameof(bitString));
-            }
-
-            int payloadLength = (bitString.Value.Length + 7) / 8;
-            byte[] bytes = new byte[4 + payloadLength];
-            BinaryPrimitives.WriteInt32BigEndian(bytes, bitString.Value.Length);
-            for (int bit = 0; bit < bitString.Value.Length; bit++)
-            {
-                if (bitString.Value[bit] == '1')
-                {
-                    bytes[4 + (bit / 8)] |= (byte)(1 << (7 - (bit % 8)));
-                }
-            }
-
-            return bytes;
-        }
-
-        private static byte[] EncodeBinaryVector(CassieVector vector, int oid)
-        {
-            if (CassieTypeMap.GetVectorDimension(oid) != vector.Dimension)
-            {
-                throw new ArgumentException("The vector dimension does not match its PostgreSQL type OID.", nameof(vector));
-            }
-
-            byte[] bytes = new byte[4 + (vector.Count * sizeof(float))];
-            BinaryPrimitives.WriteInt16BigEndian(bytes, checked((short)vector.Dimension));
-            BinaryPrimitives.WriteInt16BigEndian(bytes.AsSpan(2), 0);
-            for (int index = 0; index < vector.Count; index++)
-            {
-                BinaryPrimitives.WriteInt32BigEndian(bytes.AsSpan(4 + (index * sizeof(float))), BitConverter.SingleToInt32Bits(vector[index]));
-            }
-
-            return bytes;
-        }
-
-        private static byte[] EncodeNumericHeader(List<ushort> digits, short weight, ushort sign, ushort scale)
-        {
-            using MemoryStream payload = new(8 + (digits.Count * sizeof(ushort)));
-            PgWriter.WriteInt16(payload, checked((short)digits.Count));
-            PgWriter.WriteInt16(payload, weight);
-            WriteUInt16(payload, sign);
-            WriteUInt16(payload, scale);
-            foreach (ushort digit in digits)
-            {
-                WriteUInt16(payload, digit);
-            }
-
-            return payload.ToArray();
-        }
-
-        private static void WriteUInt16(Stream stream, ushort value)
-        {
-            Span<byte> bytes = stackalloc byte[sizeof(ushort)];
-            BinaryPrimitives.WriteUInt16BigEndian(bytes, value);
-            stream.Write(bytes);
-        }
-
         private static string EncodeArrayParameter(Array array, int arrayOid)
         {
             int elementOid = CassieTypeMap.GetArrayElementOid(arrayOid)
@@ -923,7 +516,7 @@ namespace Cntryl.Cassie.Types
                     else if (item is DateTime dateTime)
                     {
                         writer.WriteStringValue(elementOid == 1114
-                            ? FormatTextTimestamp(dateTime)
+                            ? TimestampHandler.FormatTextTimestamp(dateTime)
                             : dateTime.ToString("O", CultureInfo.InvariantCulture));
                     }
                     else if (item is DateTimeOffset dateTimeOffset)
@@ -932,15 +525,15 @@ namespace Cntryl.Cassie.Types
                     }
                     else if (item is CassieNetworkAddress networkAddress)
                     {
-                        writer.WriteStringValue(EncodeTextNetworkAddress(networkAddress, elementOid == 650));
+                        writer.WriteStringValue(NetworkAddressHandler.EncodeTextNetworkAddress(networkAddress, elementOid == 650));
                     }
                     else if (item is PhysicalAddress macAddress)
                     {
-                        writer.WriteStringValue(FormatTextMacAddress(macAddress, elementOid == 774 ? 8 : 6));
+                        writer.WriteStringValue(MacAddressHandler.FormatTextMacAddress(macAddress, elementOid == 774 ? 8 : 6));
                     }
                     else if (item is CassieBitString bitString)
                     {
-                        writer.WriteStringValue(EncodeTextBitString(bitString, elementOid == 1562));
+                        writer.WriteStringValue(BitStringHandler.EncodeTextBitString(bitString, elementOid == 1562));
                     }
                     else if (item is CassieLsn lsn)
                     {
@@ -948,7 +541,7 @@ namespace Cntryl.Cassie.Types
                     }
                     else if (item is CassieTimeWithTimeZone timeWithTimeZone)
                     {
-                        writer.WriteStringValue(FormatTextTimeWithTimeZone(timeWithTimeZone));
+                        writer.WriteStringValue(TimeTzHandler.FormatTextTimeWithTimeZone(timeWithTimeZone));
                     }
                     else if (item is CassieTemporalValue temporal)
                     {
@@ -956,7 +549,7 @@ namespace Cntryl.Cassie.Types
                     }
                     else if (item is CassieInterval interval)
                     {
-                        writer.WriteStringValue(FormatTextInterval(interval));
+                        writer.WriteStringValue(IntervalHandler.FormatTextInterval(interval));
                     }
                     else if (item is bool boolean)
                     {
