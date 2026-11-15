@@ -728,16 +728,24 @@ namespace Cntryl.Cassie.Types
 
         private static object DecodeBinaryDate(ReadOnlySpan<byte> bytes)
         {
+            return TryReadBinaryDate(bytes, out DateOnly date)
+                ? date
+                : CassieTemporalValue.FromDateDays(BinaryPrimitives.ReadInt32BigEndian(bytes));
+        }
+
+        /// <summary>Reads a binary date as a <see cref="DateOnly"/> when it lies within the CLR range.</summary>
+        internal static bool TryReadBinaryDate(ReadOnlySpan<byte> bytes, out DateOnly value)
+        {
             int days = BinaryPrimitives.ReadInt32BigEndian(bytes);
-            if (days is int.MinValue or int.MaxValue)
+            long dayNumber = (long)new DateOnly(2000, 1, 1).DayNumber + days;
+            if (days is int.MinValue or int.MaxValue || dayNumber is < 0 or > 3_652_058)
             {
-                return CassieTemporalValue.FromDateDays(days);
+                value = default;
+                return false;
             }
 
-            long dayNumber = (long)new DateOnly(2000, 1, 1).DayNumber + days;
-            return dayNumber is >= 0 and <= 3_652_058
-                ? DateOnly.FromDayNumber((int)dayNumber)
-                : CassieTemporalValue.FromDateDays(days);
+            value = DateOnly.FromDayNumber((int)dayNumber);
+            return true;
         }
 
         private static object DecodeBinaryTime(ReadOnlySpan<byte> bytes)
@@ -774,24 +782,50 @@ namespace Cntryl.Cassie.Types
 
         private static object DecodeBinaryTimestamp(ReadOnlySpan<byte> bytes)
         {
+            return TryReadBinaryTimestamp(bytes, out DateTime timestamp)
+                ? timestamp
+                : CassieTemporalValue.FromTimestampMicroseconds(BinaryPrimitives.ReadInt64BigEndian(bytes));
+        }
+
+        private static object DecodeBinaryTimestampTz(ReadOnlySpan<byte> bytes)
+        {
+            return TryReadBinaryTimestampTz(bytes, out DateTime timestamp)
+                ? new DateTimeOffset(timestamp)
+                : CassieTemporalValue.FromTimestampWithTimeZoneMicroseconds(BinaryPrimitives.ReadInt64BigEndian(bytes));
+        }
+
+        /// <summary>Reads a binary timestamp as an unspecified-kind <see cref="DateTime"/> when it lies within the CLR range.</summary>
+        internal static bool TryReadBinaryTimestamp(ReadOnlySpan<byte> bytes, out DateTime value)
+        {
             long microseconds = BinaryPrimitives.ReadInt64BigEndian(bytes);
             long epochTicks = new DateTime(2000, 1, 1).Ticks;
             long minimumMicroseconds = (DateTime.MinValue.Ticks - epochTicks) / 10;
             long maximumMicroseconds = (DateTime.MaxValue.Ticks - epochTicks) / 10;
-            return microseconds is long.MinValue or long.MaxValue || microseconds < minimumMicroseconds || microseconds > maximumMicroseconds
-                ? CassieTemporalValue.FromTimestampMicroseconds(microseconds)
-                : new DateTime(epochTicks + (microseconds * 10), DateTimeKind.Unspecified);
+            if (microseconds is long.MinValue or long.MaxValue || microseconds < minimumMicroseconds || microseconds > maximumMicroseconds)
+            {
+                value = default;
+                return false;
+            }
+
+            value = new DateTime(epochTicks + (microseconds * 10), DateTimeKind.Unspecified);
+            return true;
         }
 
-        private static object DecodeBinaryTimestampTz(ReadOnlySpan<byte> bytes)
+        /// <summary>Reads a binary timestamptz as a UTC <see cref="DateTime"/> when it lies within the CLR range.</summary>
+        internal static bool TryReadBinaryTimestampTz(ReadOnlySpan<byte> bytes, out DateTime value)
         {
             long microseconds = BinaryPrimitives.ReadInt64BigEndian(bytes);
             long epochTicks = new DateTime(2000, 1, 1).Ticks;
             long minimumMicroseconds = (DateTimeOffset.MinValue.UtcTicks - epochTicks) / 10;
             long maximumMicroseconds = (DateTimeOffset.MaxValue.UtcTicks - epochTicks) / 10;
-            return microseconds is long.MinValue or long.MaxValue || microseconds < minimumMicroseconds || microseconds > maximumMicroseconds
-                ? CassieTemporalValue.FromTimestampWithTimeZoneMicroseconds(microseconds)
-                : new DateTimeOffset(new DateTime(epochTicks + (microseconds * 10), DateTimeKind.Utc));
+            if (microseconds is long.MinValue or long.MaxValue || microseconds < minimumMicroseconds || microseconds > maximumMicroseconds)
+            {
+                value = default;
+                return false;
+            }
+
+            value = new DateTime(epochTicks + (microseconds * 10), DateTimeKind.Utc);
+            return true;
         }
 
         private static byte[] DecodeBytea(string value)
