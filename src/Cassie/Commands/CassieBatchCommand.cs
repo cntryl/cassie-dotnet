@@ -36,7 +36,7 @@ namespace Cntryl.Cassie.Commands
         /// <summary>Gets the rows affected by this command in the most recent execution of its batch.</summary>
         /// <remarks>
         /// The value is -1 until the server reports the command complete, and stays -1 for statements that do not
-        /// report a row count (such as <c>SELECT</c>). Each execution resets it. When a batch fails, commands that
+        /// report a row count (such as <c>SELECT</c>). Each execution attempt resets it, including one that fails local validation. When a batch fails, commands that
         /// completed before the failing command keep the count the server reported; the failing command and the
         /// commands the server skipped stay at -1. Outside an explicit transaction the server may still roll back
         /// the completed commands, so a reported count is not proof that the change persisted.

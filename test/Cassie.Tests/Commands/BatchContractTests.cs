@@ -663,6 +663,52 @@ namespace Cntryl.Cassie.Tests.Commands
         }
 
         [Fact]
+        public async Task ShouldResetRecordsAffectedGivenLaterExecutionFailsValidationWhenBatchRunsAgain()
+        {
+            // Arrange
+            BatchPeer peer = new();
+            using ScriptedServer server = new(peer.Serve((_, session) => BatchPeer.ReplyWithCommandAsync(session, "INSERT 0 4")));
+            await using CassieConnection connection = new() { ConnectionString = server.ConnectionString("Pooling=false") };
+            await connection.OpenAsync(TestContext.Current.CancellationToken);
+            await using CassieBatch batch = new(connection);
+            CassieBatchCommand command = batch.BatchCommands.Add("INSERT INTO a SELECT @value");
+            _ = command.Parameters.Add(new CassieParameter { ParameterName = "value", Value = 1 });
+            _ = await batch.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(4, command.RecordsAffected);
+            command.Parameters.Clear();
+
+            // Act
+            Exception? failure = await Record.ExceptionAsync(() => batch.ExecuteNonQueryAsync(TestContext.Current.CancellationToken));
+
+            // Assert
+            _ = Assert.IsType<InvalidOperationException>(failure);
+            Assert.Equal(-1, command.RecordsAffected);
+            _ = Assert.Single(peer.Batches);
+        }
+
+        [Fact]
+        public async Task ShouldRejectTransactionGivenConnectionlessBatchWhenTransactionIsAssigned()
+        {
+            // Arrange
+            BatchPeer peer = new();
+            using ScriptedServer server = new(peer.Serve((_, session) => BatchPeer.ReplyWithCommandAsync(session, "INSERT 0 1")));
+            await using CassieDataSource source = new(server.ConnectionString("Pooling=false"));
+            await using CassieConnection other = await source.OpenConnectionAsync(TestContext.Current.CancellationToken);
+            await using DbTransaction transaction = await other.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            await using DbBatch batch = source.CreateBatch();
+            batch.Transaction = transaction;
+            batch.BatchCommands.Add(new CassieBatchCommand("INSERT INTO a SELECT 1"));
+
+            // Act
+            Exception? failure = await Record.ExceptionAsync(() => batch.ExecuteNonQueryAsync(TestContext.Current.CancellationToken));
+
+            // Assert
+            _ = Assert.IsType<InvalidOperationException>(failure);
+            Assert.Empty(peer.Batches);
+            Assert.Equal(1, server.Accepted);
+        }
+
+        [Fact]
         public async Task ShouldRunOnOwnedConnectionGivenBatchFromTypedSourceWhenConnectionIsCreated()
         {
             // Arrange

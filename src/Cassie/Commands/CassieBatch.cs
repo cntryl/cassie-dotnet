@@ -313,15 +313,15 @@ namespace Cntryl.Cassie.Commands
             try
             {
                 CassieBatchCommand[] commands = SnapshotCommands();
+                foreach (CassieBatchCommand command in commands)
+                {
+                    command.RecordsAffectedValue = -1;
+                }
 
                 // Local validation comes first, so a bad parameter never opens a connection or touches a transaction.
                 CassiePreparedCommand[] prepared = PrepareAll(commands);
                 EncodedParameters[] encoded = [.. prepared.Select(static command => ParameterizedQueryBatch.EncodeParameters(command))];
                 (connection, owned) = await AcquireConnectionAsync(preOpened, cancellationToken).ConfigureAwait(false);
-                foreach (CassieBatchCommand command in commands)
-                {
-                    command.RecordsAffectedValue = -1;
-                }
 
                 int completed = 0;
                 CassieDataReader reader = await connection.ExecuteBatchAsync(
