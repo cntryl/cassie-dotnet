@@ -73,7 +73,8 @@ while (await reader.NextResultAsync());
   the first row of the first result that has columns; the rest of the batch still
   runs and is read.
 - `CassieBatchCommand.RecordsAffected` is set per command as the server reports
-  it: -1 until then, and -1 for statements without a row count such as `SELECT`.
+  it: the row count, or -1 for a completed statement without one such as
+  `SELECT`. It is 0 for a command that affected no rows, failed, or was skipped.
 - Every parameter of every command is validated and encoded before anything is
   sent (and before a connectionless batch opens a connection), so a bad parameter
   fails without closing the connection or its transaction.
@@ -81,15 +82,18 @@ while (await reader.NextResultAsync());
   is thrown as `CassieException` when the reader reaches the failing command (or
   from the `Execute` method), after the response has been read to
   ReadyForQuery, so the connection stays usable. Commands that completed before
-  the failure keep their `RecordsAffected`; the failing and skipped commands stay
-  at -1. Outside an explicit transaction the server may treat the pipeline as one
+  the failure keep their `RecordsAffected`; the failing and skipped commands
+  report 0. Outside an explicit transaction the server may treat the pipeline as one
   implicit transaction and undo the completed commands, so use a transaction
   when the commands must succeed or fail together.
 - `Timeout`, `Cancel`, and cancellation tokens work as for commands and cover the
   whole batch. Synchronous members use blocking I/O on the calling thread.
-- `Prepare` and `PrepareAsync` only validate the batch (connection, transaction,
-  and parameter binding); they send nothing and do not prepare server
-  statements. Every command is parsed with the unnamed statement on each execution.
+- `Prepare` and `PrepareAsync` validate the batch (connection, transaction, and
+  parameter binding) and then prepare each command as a server statement. Later
+  executions bind to those statements instead of parsing the SQL again, and a
+  command is prepared again when its SQL, parameter types, or session changes.
+  Disposing the batch closes the statements. A batch from a data source is only
+  validated, because each execution uses a new connection.
 - A batch from a `DbDataSource` has no connection: each execution opens a pooled
   connection and closes it when the reader is closed. It cannot take a
   transaction. `CommandBehavior.SchemaOnly` is not supported for batches.

@@ -162,39 +162,72 @@ namespace Cntryl.Cassie.Commands
             }
         }
 
-        /// <summary>Validates the batch; it does not prepare statements on the server.</summary>
+        /// <summary>Prepares each command of the batch as a server statement on the batch's connection.</summary>
         /// <remarks>
-        /// Server-side preparation of a pipelined batch is not implemented: every command is parsed with the
-        /// unnamed statement each time. This method checks the connection state, the transaction, and that every
-        /// command binds its parameters, so mistakes surface here rather than at execution. It sends nothing.
+        /// The batch is validated first: connection state, transaction, and that every command binds and encodes its
+        /// parameters. Each command is then prepared on the server, and later executions bind to those statements
+        /// instead of parsing the SQL again. A command is prepared again automatically when its SQL, its parameter
+        /// types, or the connection's session changes. Disposing the batch closes the statements. A batch without a
+        /// connection (created from a data source) is only validated, because each execution uses a new connection.
         /// </remarks>
         public override void Prepare()
         {
-            ValidateForPrepare();
+            (CassieBatchCommand[] commands, CassiePreparedCommand[] prepared) = ValidateForPrepare();
+            if (DbConnection is CassieConnection connection)
+            {
+                for (int index = 0; index < commands.Length; index++)
+                {
+                    commands[index].PreparedStatement.Request();
+                    _ = commands[index].PreparedStatement.EnsurePrepared(connection, prepared[index], Timeout);
+                }
+            }
         }
 
-        /// <summary>Validates the batch; it does not prepare statements on the server. See <see cref="Prepare"/>.</summary>
-        /// <param name="cancellationToken">A token checked before validation.</param>
-        /// <returns>A completed task.</returns>
-        public override Task PrepareAsync(CancellationToken cancellationToken = default)
+        /// <summary>Prepares each command of the batch as a server statement on the batch's connection. See <see cref="Prepare"/>.</summary>
+        /// <param name="cancellationToken">A token that cancels validation or preparation.</param>
+        /// <returns>A task that completes when every command is prepared.</returns>
+        public override async Task PrepareAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            ValidateForPrepare();
-            return Task.CompletedTask;
+            (CassieBatchCommand[] commands, CassiePreparedCommand[] prepared) = ValidateForPrepare();
+            if (DbConnection is CassieConnection connection)
+            {
+                for (int index = 0; index < commands.Length; index++)
+                {
+                    commands[index].PreparedStatement.Request();
+                    _ = await commands[index].PreparedStatement.EnsurePreparedAsync(connection, prepared[index], Timeout, cancellationToken).ConfigureAwait(false);
+                }
+            }
         }
 
         /// <inheritdoc />
         public override void Dispose()
         {
-            _disposed = true;
+            if (!_disposed)
+            {
+                _disposed = true;
+                foreach (CassieBatchCommand command in BatchCommands.Items)
+                {
+                    command.PreparedStatement.Release();
+                }
+            }
+
             base.Dispose();
         }
 
         /// <inheritdoc />
-        public override ValueTask DisposeAsync()
+        public override async ValueTask DisposeAsync()
         {
-            _disposed = true;
-            return base.DisposeAsync();
+            if (!_disposed)
+            {
+                _disposed = true;
+                foreach (CassieBatchCommand command in BatchCommands.Items)
+                {
+                    await command.PreparedStatement.ReleaseAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+            }
+
+            await base.DisposeAsync().ConfigureAwait(false);
         }
 
         /// <inheritdoc />
@@ -226,7 +259,7 @@ namespace Cntryl.Cassie.Commands
             return owned.RunSynchronously(() => ExecuteBatchReaderAsync(owned, behavior, CancellationToken.None));
         }
 
-        private void ValidateForPrepare()
+        private (CassieBatchCommand[] Commands, CassiePreparedCommand[] Prepared) ValidateForPrepare()
         {
             CassieBatchCommand[] commands = SnapshotCommands();
             if (DbConnection is CassieConnection connection)
@@ -238,10 +271,13 @@ namespace Cntryl.Cassie.Commands
                 throw new InvalidOperationException("The batch requires an open Cassie connection.");
             }
 
-            foreach (CassiePreparedCommand prepared in PrepareAll(commands))
+            CassiePreparedCommand[] preparedCommands = PrepareAll(commands);
+            foreach (CassiePreparedCommand prepared in preparedCommands)
             {
                 _ = ParameterizedQueryBatch.EncodeParameters(prepared);
             }
+
+            return (commands, preparedCommands);
         }
 
         private CassieBatchCommand[] SnapshotCommands()
@@ -302,6 +338,12 @@ namespace Cntryl.Cassie.Commands
 
         private async Task<CassieDataReader> ExecuteBatchReaderAsync(CassieConnection? preOpened, CommandBehavior behavior, CancellationToken cancellationToken)
         {
+            // Every attempt starts from zero, including one rejected before anything is sent.
+            foreach (CassieBatchCommand command in BatchCommands.Items)
+            {
+                command.RecordsAffectedValue = 0;
+            }
+
             if ((behavior & CommandBehavior.SchemaOnly) != 0)
             {
                 throw new NotSupportedException("A batch cannot return schema only; describe each command separately.");
@@ -313,20 +355,30 @@ namespace Cntryl.Cassie.Commands
             try
             {
                 CassieBatchCommand[] commands = SnapshotCommands();
-                foreach (CassieBatchCommand command in commands)
-                {
-                    command.RecordsAffectedValue = -1;
-                }
 
                 // Local validation comes first, so a bad parameter never opens a connection or touches a transaction.
                 CassiePreparedCommand[] prepared = PrepareAll(commands);
                 EncodedParameters[] encoded = [.. prepared.Select(static command => ParameterizedQueryBatch.EncodeParameters(command))];
                 (connection, owned) = await AcquireConnectionAsync(preOpened, cancellationToken).ConfigureAwait(false);
 
+                // Prepared statements belong to the caller's session; an owned connection is new for each execution.
+                string?[] statementNames = new string?[commands.Length];
+                if (!owned)
+                {
+                    for (int index = 0; index < commands.Length; index++)
+                    {
+                        if (commands[index].PreparedStatement.IsRequested)
+                        {
+                            statementNames[index] = await commands[index].PreparedStatement.EnsurePreparedAsync(connection, prepared[index], Timeout, cancellationToken).ConfigureAwait(false);
+                        }
+                    }
+                }
+
                 int completed = 0;
                 CassieDataReader reader = await connection.ExecuteBatchAsync(
                     prepared,
                     encoded,
+                    statementNames,
                     Timeout,
                     owned ? behavior | CommandBehavior.CloseConnection : behavior,
                     operationScope,

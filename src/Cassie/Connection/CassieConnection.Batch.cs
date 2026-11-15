@@ -22,11 +22,11 @@ namespace Cntryl.Cassie.Connection
         }
 
         /// <summary>
-        /// Sends every command in one write (Parse, Bind, Describe, Execute per command, then one Sync) and returns a
+        /// Sends every command in one write (Parse unless the command is already prepared, then Bind, Describe, Execute; one Sync at the end) and returns a
         /// reader positioned on the first command's result. All parameters are encoded before the session is touched, so
         /// local validation failures (including parameter encoding, done by the caller before this method) leave the connection and its transaction untouched.
         /// </summary>
-        internal async Task<CassieDataReader> ExecuteBatchAsync(IReadOnlyList<CassiePreparedCommand> commands, IReadOnlyList<EncodedParameters> encodedParameters, int commandTimeout, CommandBehavior behavior, CassieDiagnostics.OperationScope? operationScope, Action<CommandTag?> statementCompleted, CancellationToken cancellationToken)
+        internal async Task<CassieDataReader> ExecuteBatchAsync(IReadOnlyList<CassiePreparedCommand> commands, IReadOnlyList<EncodedParameters> encodedParameters, IReadOnlyList<string?> statementNames, int commandTimeout, CommandBehavior behavior, CassieDiagnostics.OperationScope? operationScope, Action<CommandTag?> statementCompleted, CancellationToken cancellationToken)
         {
             PgSession session = RequireSession("The connection is not open.");
             ThrowIfReaderActive();
@@ -37,7 +37,7 @@ namespace Cntryl.Cassie.Connection
                 for (int index = 0; index < commands.Count; index++)
                 {
                     ValidateSqlText(commands[index].Sql);
-                    ParameterizedQueryBatch.AppendExecuteRequest(request, commands[index], statementName: null, binaryResults: false, ExecuteAllFrame, encodedParameters[index]);
+                    ParameterizedQueryBatch.AppendExecuteRequest(request, commands[index], statementNames[index], binaryResults: false, ExecuteAllFrame, encodedParameters[index]);
                 }
 
                 PgWriter.AppendFrame(request, FrontendMessage.Sync, []);

@@ -179,7 +179,7 @@ namespace Cntryl.Cassie.Tests.Commands
 
             // Assert
             Assert.Equal("23505", failure.SqlState);
-            Assert.Equal([2, -1, -1], batch.BatchCommands.Select(static command => command.RecordsAffected));
+            Assert.Equal([2, 0, 0], batch.BatchCommands.Select(static command => command.RecordsAffected));
             Assert.Equal(ConnectionState.Open, connection.State);
             Assert.Equal(sessionIdentity, connection.SessionIdentity);
             using CassieCommand followUp = new() { Connection = connection, CommandText = "SELECT 7" };
@@ -453,25 +453,105 @@ namespace Cntryl.Cassie.Tests.Commands
         }
 
         [Fact]
-        public async Task ShouldValidateWithoutSendingGivenPreparedBatchWhenPrepareRuns()
+        public async Task ShouldSendNothingGivenUnboundParameterWhenPrepareRuns()
         {
             // Arrange
             BatchPeer peer = new();
-            using ScriptedServer server = new(peer.Serve((_, session) => BatchPeer.ReplyWithCommandAsync(session, "INSERT 0 1")));
+            using ScriptedServer server = new(peer.Serve((number, session) => BatchPeer.ReplyInKindAsync(session, peer.Batches[number - 1], "INSERT 0 1")));
             await using CassieConnection connection = new() { ConnectionString = server.ConnectionString("Pooling=false") };
             await connection.OpenAsync(TestContext.Current.CancellationToken);
             await using CassieBatch batch = new(connection);
-            CassieBatchCommand command = batch.BatchCommands.Add("INSERT INTO a VALUES (@x)");
+            _ = batch.BatchCommands.Add("INSERT INTO a VALUES (@x)");
 
             // Act
             Exception? unbound = await Record.ExceptionAsync(() => batch.PrepareAsync(TestContext.Current.CancellationToken));
-            _ = command.Parameters.Add(new CassieParameter { ParameterName = "x", Value = 1 });
-            await batch.PrepareAsync(TestContext.Current.CancellationToken);
 
             // Assert
             _ = Assert.IsType<InvalidOperationException>(unbound);
             Assert.Empty(peer.Batches);
             Assert.Empty(peer.SimpleQueries);
+        }
+
+        [Fact]
+        public async Task ShouldBindToPreparedStatementsGivenPreparedBatchWhenBatchExecutesTwice()
+        {
+            // Arrange
+            BatchPeer peer = new();
+            using ScriptedServer server = new(peer.Serve((number, session) => BatchPeer.ReplyInKindAsync(session, peer.Batches[number - 1], "INSERT 0 1")));
+            await using CassieConnection connection = new() { ConnectionString = server.ConnectionString("Pooling=false") };
+            await connection.OpenAsync(TestContext.Current.CancellationToken);
+            CassieBatch batch = new(connection);
+            foreach (string table in new[] { "a", "b" })
+            {
+                CassieBatchCommand command = batch.BatchCommands.Add($"INSERT INTO {table} VALUES (@x)");
+                _ = command.Parameters.Add(new CassieParameter { ParameterName = "x", Value = 1 });
+            }
+
+            // Act
+            await batch.PrepareAsync(TestContext.Current.CancellationToken);
+            int first = await batch.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+            int second = await batch.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+            await batch.DisposeAsync();
+
+            // Assert
+            BatchFrame[][] exchanges = peer.Batches;
+            Assert.Equal(["PDS", "PDS", "BDEBDES", "BDEBDES", "CS", "CS"], exchanges.Select(BatchPeer.Tags));
+            string[] prepared = [BatchPeer.ParseStatementName(exchanges[0][0]), BatchPeer.ParseStatementName(exchanges[1][0])];
+            Assert.All(prepared, static name => Assert.NotEmpty(name));
+            Assert.NotEqual(prepared[0], prepared[1]);
+            foreach (BatchFrame[] execution in exchanges[2..4])
+            {
+                Assert.Equal(prepared, execution.Where(static frame => frame.Tag == (byte)'B').Select(BatchPeer.BindStatementName));
+            }
+
+            Assert.Equal(2, first);
+            Assert.Equal(2, second);
+            Assert.Equal(ConnectionState.Open, connection.State);
+        }
+
+        [Fact]
+        public async Task ShouldPrepareAgainGivenCommandTextChangedWhenPreparedBatchExecutes()
+        {
+            // Arrange
+            BatchPeer peer = new();
+            using ScriptedServer server = new(peer.Serve((number, session) => BatchPeer.ReplyInKindAsync(session, peer.Batches[number - 1], "INSERT 0 1")));
+            await using CassieConnection connection = new() { ConnectionString = server.ConnectionString("Pooling=false") };
+            await connection.OpenAsync(TestContext.Current.CancellationToken);
+            await using CassieBatch batch = new(connection);
+            CassieBatchCommand command = batch.BatchCommands.Add("INSERT INTO a SELECT 1");
+            await batch.PrepareAsync(TestContext.Current.CancellationToken);
+
+            // Act
+            command.CommandText = "INSERT INTO b SELECT 1";
+            int affected = await batch.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            BatchFrame[][] exchanges = peer.Batches;
+            Assert.Equal(["PDS", "CS", "PDS", "BDES"], exchanges.Select(BatchPeer.Tags));
+            Assert.Equal("INSERT INTO b SELECT 1", BatchPeer.ParseSql(exchanges[2][0]));
+            Assert.Equal(BatchPeer.ParseStatementName(exchanges[2][0]), BatchPeer.BindStatementName(exchanges[3][0]));
+            Assert.Equal(1, affected);
+        }
+
+        [Fact]
+        public async Task ShouldOnlyValidateGivenBatchFromDataSourceWhenPrepareRuns()
+        {
+            // Arrange
+            BatchPeer peer = new();
+            using ScriptedServer server = new(peer.Serve((number, session) => BatchPeer.ReplyInKindAsync(session, peer.Batches[number - 1], "INSERT 0 1")));
+            await using CassieDataSource source = new(server.ConnectionString("Pooling=false"));
+            await using DbBatch batch = source.CreateBatch();
+            DbBatchCommand command = batch.CreateBatchCommand();
+            command.CommandText = "INSERT INTO a SELECT 1";
+            batch.BatchCommands.Add(command);
+
+            // Act
+            await batch.PrepareAsync(TestContext.Current.CancellationToken);
+            int affected = await batch.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            Assert.Equal(1, affected);
+            Assert.Equal(["PBDES"], peer.Batches.Select(BatchPeer.Tags));
         }
 
         [Fact]
@@ -682,8 +762,38 @@ namespace Cntryl.Cassie.Tests.Commands
 
             // Assert
             _ = Assert.IsType<InvalidOperationException>(failure);
-            Assert.Equal(-1, command.RecordsAffected);
+            Assert.Equal(0, command.RecordsAffected);
             _ = Assert.Single(peer.Batches);
+        }
+
+        [Fact]
+        public async Task ShouldResetRecordsAffectedGivenAttemptRejectedBeforeValidationWhenBatchRunsAgain()
+        {
+            // Arrange
+            BatchPeer peer = new();
+            using ScriptedServer server = new(peer.Serve((_, session) => BatchPeer.ReplyWithCommandAsync(session, "INSERT 0 4")));
+            await using CassieConnection connection = new() { ConnectionString = server.ConnectionString("Pooling=false") };
+            await connection.OpenAsync(TestContext.Current.CancellationToken);
+            await using CassieBatch batch = new(connection);
+            CassieBatchCommand command = batch.BatchCommands.Add("INSERT INTO a SELECT 1");
+            _ = await batch.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+            int afterSuccess = command.RecordsAffected;
+
+            // Act
+            command.CommandType = CommandType.TableDirect;
+            Exception? unsupportedType = await Record.ExceptionAsync(() => batch.ExecuteNonQueryAsync(TestContext.Current.CancellationToken));
+            int afterUnsupportedType = command.RecordsAffected;
+            command.CommandType = CommandType.Text;
+            _ = await batch.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+            Exception? schemaOnly = await Record.ExceptionAsync(() => batch.ExecuteReaderAsync(CommandBehavior.SchemaOnly, TestContext.Current.CancellationToken));
+
+            // Assert
+            Assert.Equal(4, afterSuccess);
+            _ = Assert.IsType<NotSupportedException>(unsupportedType);
+            Assert.Equal(0, afterUnsupportedType);
+            _ = Assert.IsType<NotSupportedException>(schemaOnly);
+            Assert.Equal(0, command.RecordsAffected);
+            Assert.Equal(2, peer.Batches.Length);
         }
 
         [Fact]
@@ -805,20 +915,27 @@ namespace Cntryl.Cassie.Tests.Commands
         }
 
         [Fact]
-        public async Task ShouldValidateSynchronouslyGivenPreparedBatchWhenPrepareRuns()
+        public void ShouldStayOnCallingThreadGivenSynchronousPrepareWhenPreparedBatchExecutes()
         {
             // Arrange
-            using ScriptedServer server = new(session => session.StayVerySilentAsync());
-            await using CassieConnection connection = new() { ConnectionString = server.ConnectionString("Pooling=false") };
-            await connection.OpenAsync(TestContext.Current.CancellationToken);
-            using CassieBatch batch = new(connection);
-            _ = batch.BatchCommands.Add("SELECT 1");
+            BatchPeer peer = new();
+            using ScriptedServer server = new(peer.Serve((number, session) => BatchPeer.ReplyInKindAsync(session, peer.Batches[number - 1], "INSERT 0 1")));
+            using CassieConnection connection = new() { ConnectionString = server.ConnectionString("Pooling=false") };
+            connection.Open();
+            CassieBatch batch = new(connection);
+            _ = batch.BatchCommands.Add("INSERT INTO a SELECT 1");
+            int before = SynchronousCall.PendingWaitsOnThisThread;
 
             // Act
-            Exception? failure = Record.Exception(batch.Prepare);
+            batch.Prepare();
+            int affected = batch.ExecuteNonQuery();
+            batch.Dispose();
+            int pendingWaits = SynchronousCall.PendingWaitsOnThisThread - before;
 
             // Assert
-            Assert.Null(failure);
+            Assert.Equal(1, affected);
+            Assert.Equal(["PDS", "BDES", "CS"], peer.Batches.Select(BatchPeer.Tags));
+            Assert.Equal(0, pendingWaits);
         }
 
         private static ActivitySamplingResult SampleActivity(ref ActivityCreationOptions<ActivityContext> options)

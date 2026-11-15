@@ -105,9 +105,9 @@ namespace Cntryl.Cassie.Tests.Live
             Assert.False(string.IsNullOrEmpty(error.SqlState));
             Assert.Equal(ConnectionState.Open, _live.Connection.State);
             Assert.Equal(0L, skippedRows);
-            Assert.Equal(-1, failing.RecordsAffected);
-            Assert.Equal(-1, skipped.RecordsAffected);
-            Assert.True(first.RecordsAffected is 1 or -1);
+            Assert.Equal(0, failing.RecordsAffected);
+            Assert.Equal(0, skipped.RecordsAffected);
+            Assert.Equal(1, first.RecordsAffected);
         }
 
         [Fact]
@@ -131,6 +131,33 @@ namespace Cntryl.Cassie.Tests.Live
             // Assert
             Assert.Equal(2L, insideTransaction);
             Assert.Equal(0L, afterRollback);
+        }
+
+        [Fact]
+        public async Task ShouldReuseServerStatementsGivenPreparedBatchWhenParametersChangeBetweenExecutions()
+        {
+            // Arrange
+            await _live.CreateProbeTableAsync();
+            await using CassieBatch batch = new(_live.Connection);
+            CassieBatchCommand insert = batch.BatchCommands.Add($"INSERT INTO {LiveSession.ProbeTable} (id, label) VALUES (@id, @label)");
+            CassieParameter id = new() { ParameterName = "id", DbType = DbType.Int32, Value = 1 };
+            CassieParameter label = new() { ParameterName = "label", DbType = DbType.String, Value = "first" };
+            _ = insert.Parameters.Add(id);
+            _ = insert.Parameters.Add(label);
+            CassieBatchCommand count = batch.BatchCommands.Add($"SELECT count(*) FROM {LiveSession.ProbeTable} WHERE id >= @minimum");
+            _ = count.Parameters.Add(new CassieParameter { ParameterName = "minimum", DbType = DbType.Int32, Value = 1 });
+            await batch.PrepareAsync(TestContext.Current.CancellationToken);
+
+            // Act
+            object? afterFirst = await batch.ExecuteScalarAsync(TestContext.Current.CancellationToken);
+            id.Value = 2;
+            label.Value = "second";
+            object? afterSecond = await batch.ExecuteScalarAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            Assert.Equal(1L, afterFirst);
+            Assert.Equal(2L, afterSecond);
+            Assert.Equal(1, insert.RecordsAffected);
         }
     }
 }

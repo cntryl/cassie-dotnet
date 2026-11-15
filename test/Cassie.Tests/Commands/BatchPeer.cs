@@ -112,6 +112,56 @@ namespace Cntryl.Cassie.Tests.Commands
             return session.WriteAsync((byte)'E', error);
         }
 
+        /// <summary>
+        /// Answers each received frame the way a server would: ParseComplete for Parse, ParameterDescription and
+        /// NoData for a statement Describe, BindComplete for Bind, NoData for a portal Describe, CommandComplete
+        /// for Execute, and CloseComplete for Close.
+        /// </summary>
+        internal static async Task ReplyInKindAsync(ScriptedSession session, BatchFrame[] received, string commandTag)
+        {
+            foreach (BatchFrame frame in received)
+            {
+                switch ((char)frame.Tag)
+                {
+                    case 'P':
+                        await session.WriteAsync((byte)'1', []);
+                        break;
+                    case 'B':
+                        await session.WriteAsync((byte)'2', []);
+                        break;
+                    case 'D' when frame.Payload[0] == (byte)'S':
+                        await session.WriteAsync((byte)'t', [0, 0]);
+                        await session.WriteAsync((byte)'n', []);
+                        break;
+                    case 'D':
+                        await session.WriteAsync((byte)'n', []);
+                        break;
+                    case 'E':
+                        await session.WriteCommandCompleteAsync(commandTag);
+                        break;
+                    case 'C':
+                        await session.WriteAsync((byte)'3', []);
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+
+        /// <summary>Returns the statement name a Parse frame defines.</summary>
+        internal static string ParseStatementName(BatchFrame parse)
+        {
+            return Encoding.UTF8.GetString(parse.Payload, 0, Array.IndexOf(parse.Payload, (byte)0));
+        }
+
+        /// <summary>Returns the statement name a Bind frame executes.</summary>
+        internal static string BindStatementName(BatchFrame bind)
+        {
+            int portalEnd = Array.IndexOf(bind.Payload, (byte)0);
+            int statementEnd = Array.IndexOf(bind.Payload, (byte)0, portalEnd + 1);
+            return Encoding.UTF8.GetString(bind.Payload, portalEnd + 1, statementEnd - portalEnd - 1);
+        }
+
         /// <summary>Returns the frame tags of a batch as text, for example <c>PBDEPBDES</c>.</summary>
         internal static string Tags(BatchFrame[] batch)
         {

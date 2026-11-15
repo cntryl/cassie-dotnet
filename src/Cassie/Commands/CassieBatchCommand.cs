@@ -35,11 +35,12 @@ namespace Cntryl.Cassie.Commands
 
         /// <summary>Gets the rows affected by this command in the most recent execution of its batch.</summary>
         /// <remarks>
-        /// The value is -1 until the server reports the command complete, and stays -1 for statements that do not
-        /// report a row count (such as <c>SELECT</c>). Each execution attempt resets it, including one that fails local validation. When a batch fails, commands that
-        /// completed before the failing command keep the count the server reported; the failing command and the
-        /// commands the server skipped stay at -1. Outside an explicit transaction the server may still roll back
-        /// the completed commands, so a reported count is not proof that the change persisted.
+        /// The value is the count the server reported, or -1 for a completed statement that reports no row count
+        /// (such as <c>SELECT</c>). It is 0 when the command affected no rows, failed, or was skipped because an
+        /// earlier command in the batch failed, as <see cref="DbBatchCommand.RecordsAffected"/> specifies. Each
+        /// execution attempt resets it to 0, including one that fails local validation. Outside an explicit
+        /// transaction the server may still roll back commands that completed before a failure, so a reported
+        /// count is not proof that the change persisted.
         /// </remarks>
         public override int RecordsAffected => RecordsAffectedValue;
 
@@ -52,7 +53,10 @@ namespace Cntryl.Cassie.Commands
         /// <inheritdoc />
         protected override DbParameterCollection DbParameterCollection => Parameters;
 
-        internal int RecordsAffectedValue { get; set; } = -1;
+        internal int RecordsAffectedValue { get; set; }
+
+        /// <summary>Gets the server statement prepared for this command, when its batch was prepared.</summary>
+        internal PreparedStatementLease PreparedStatement { get; } = new();
 
         /// <inheritdoc />
         public override DbParameter CreateParameter()
