@@ -3,7 +3,6 @@ using Cntryl.Cassie.Types.Handlers;
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Net.NetworkInformation;
-using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 
@@ -22,14 +21,9 @@ namespace Cntryl.Cassie.Types
                 Array array when HasNonFiniteFloat(array) => EncodeTextArray(array, oid),
                 Array array => EncodeArrayParameter(array, oid),
                 CassieTemporalValue temporal => FormatTemporalText(temporal, oid),
-                CassieNetworkAddress networkAddress when oid is 650 or 869 => EncodeTextNetworkAddress(networkAddress, oid == 650),
-                PhysicalAddress macAddress when oid is 774 or 829 => FormatTextMacAddress(macAddress, oid == 774 ? 8 : 6),
-                CassieBitString bitString when oid is 1560 or 1562 => EncodeTextBitString(bitString, oid == 1562),
                 string stringValue => stringValue,
                 bool booleanValue => booleanValue ? "true" : "false",
                 _ when CassieTypeHandlers.Find(oid)?.EncodeText(oid, value) is { } encoded => encoded,
-                CassieLsn lsn when oid == 3220 => lsn.ToString(),
-                CassieVector vector when CassieTypeMap.IsVectorOid(oid) => FormatTextVector(vector, oid),
                 DateTime dateTime => dateTime.ToString("O", CultureInfo.InvariantCulture),
                 DateTimeOffset dateTimeOffset => dateTimeOffset.ToString("O", CultureInfo.InvariantCulture),
                 DateOnly dateOnly => dateOnly.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
@@ -39,29 +33,6 @@ namespace Cntryl.Cassie.Types
                 _ => throw new NotSupportedException($"Parameter type '{value.GetType().FullName}' has no text codec.")
             };
             return Encoding.UTF8.GetBytes(text);
-        }
-
-        private static string EncodeTextNetworkAddress(CassieNetworkAddress address, bool expectedCidr)
-        {
-            return address.Address is null || address.IsCidr != expectedCidr
-                || (address.Address.AddressFamily == AddressFamily.InterNetworkV6 && address.Address.ScopeId != 0)
-                ? throw new ArgumentException("The network address value does not match the PostgreSQL type OID.", nameof(address))
-                : address.ToString();
-        }
-
-        private static string FormatTextMacAddress(PhysicalAddress address, int expectedLength)
-        {
-            byte[] bytes = address.GetAddressBytes();
-            return bytes.Length == expectedLength
-                ? string.Join(':', bytes.Select(static value => value.ToString("x2", CultureInfo.InvariantCulture)))
-                : throw new ArgumentException("The MAC address length does not match the PostgreSQL type OID.", nameof(address));
-        }
-
-        private static string EncodeTextBitString(CassieBitString bitString, bool expectedVarying)
-        {
-            return bitString.Value is null || bitString.IsVarying != expectedVarying
-                ? throw new ArgumentException("The bit string value does not match the PostgreSQL type OID.", nameof(bitString))
-                : bitString.Value;
         }
 
         private static string FormatTemporalText(CassieTemporalValue temporal, int oid)
@@ -185,13 +156,6 @@ namespace Cntryl.Cassie.Types
             return value < 0 && value % divisor != 0 ? quotient - 1 : quotient;
         }
 
-        private static string FormatTextVector(CassieVector vector, int oid)
-        {
-            return CassieTypeMap.GetVectorDimension(oid) == vector.Dimension
-                ? "[" + string.Join(",", vector.Select(static value => value.ToString("R", CultureInfo.InvariantCulture))) + "]"
-                : throw new ArgumentException("The vector dimension does not match its PostgreSQL type OID.", nameof(vector));
-        }
-
         internal static byte[]? GetBinaryParameter(object? value, int oid)
         {
             if (value is null or DBNull)
@@ -215,19 +179,6 @@ namespace Cntryl.Cassie.Types
                     return EncodeBinaryArray(values, elementOid);
                 case (int temporalOid, CassieTemporalValue temporal) when temporal.PostgresTypeOid == temporalOid:
                     return EncodeBinaryTemporal(temporal);
-                case (650 or 869, CassieNetworkAddress networkAddress):
-                    return EncodeBinaryNetwork(networkAddress, oid == 650);
-                case (774 or 829, PhysicalAddress macAddress):
-                    return EncodeBinaryMacAddress(macAddress, oid == 774 ? 8 : 6);
-                case (1560 or 1562, CassieBitString bitString) when bitString.Value is not null && bitString.IsVarying == (oid == 1562):
-                    return EncodeBinaryBitString(bitString);
-                case (1560 or 1562, CassieBitString):
-                    throw new ArgumentException("The bit string value does not match the PostgreSQL type OID.", nameof(value));
-                case (3220, CassieLsn lsn):
-                    BinaryPrimitives.WriteUInt64BigEndian(bytes, lsn.Value);
-                    return bytes[..8].ToArray();
-                case (int vectorOid, CassieVector vector) when CassieTypeMap.IsVectorOid(vectorOid):
-                    return EncodeBinaryVector(vector, vectorOid);
                 default:
                     return CassieTypeHandlers.Find(oid)?.EncodeBinary(oid, value);
             }
@@ -528,88 +479,6 @@ namespace Cntryl.Cassie.Types
             return result.Append('}').ToString();
         }
 
-        private static byte[] EncodeBinaryNetwork(CassieNetworkAddress address, bool expectedCidr)
-        {
-            if (address.Address is null || address.IsCidr != expectedCidr
-                || (address.Address.AddressFamily == AddressFamily.InterNetworkV6 && address.Address.ScopeId != 0))
-            {
-                throw new ArgumentException("The network address value does not match the PostgreSQL type OID.", nameof(address));
-            }
-
-            byte[] addressBytes = address.Address.GetAddressBytes();
-            byte family = address.Address.AddressFamily switch
-            {
-                AddressFamily.InterNetwork => 2,
-                AddressFamily.InterNetworkV6 => 3,
-                _ => throw new ArgumentException("Only IPv4 and IPv6 network addresses are supported.", nameof(address))
-            };
-            int width = addressBytes.Length * 8;
-            if ((uint)address.PrefixLength > (uint)width)
-            {
-                throw new ArgumentException("The network prefix length is outside the address family range.", nameof(address));
-            }
-
-            if (address.IsCidr)
-            {
-                for (int bit = address.PrefixLength; bit < width; bit++)
-                {
-                    if ((addressBytes[bit / 8] & (1 << (7 - (bit % 8)))) != 0)
-                    {
-                        throw new ArgumentException("CIDR parameters cannot contain host bits.", nameof(address));
-                    }
-                }
-            }
-
-            return [family, checked((byte)address.PrefixLength), address.IsCidr ? (byte)1 : (byte)0, checked((byte)addressBytes.Length), .. addressBytes];
-        }
-
-        private static byte[] EncodeBinaryMacAddress(PhysicalAddress address, int expectedLength)
-        {
-            byte[] bytes = address.GetAddressBytes();
-            return bytes.Length == expectedLength
-                ? bytes
-                : throw new ArgumentException("The MAC address length does not match the PostgreSQL type OID.", nameof(address));
-        }
-
-        private static byte[] EncodeBinaryBitString(CassieBitString bitString)
-        {
-            if (bitString.Value is null)
-            {
-                throw new ArgumentException("A default bit-string value is invalid.", nameof(bitString));
-            }
-
-            int payloadLength = (bitString.Value.Length + 7) / 8;
-            byte[] bytes = new byte[4 + payloadLength];
-            BinaryPrimitives.WriteInt32BigEndian(bytes, bitString.Value.Length);
-            for (int bit = 0; bit < bitString.Value.Length; bit++)
-            {
-                if (bitString.Value[bit] == '1')
-                {
-                    bytes[4 + (bit / 8)] |= (byte)(1 << (7 - (bit % 8)));
-                }
-            }
-
-            return bytes;
-        }
-
-        private static byte[] EncodeBinaryVector(CassieVector vector, int oid)
-        {
-            if (CassieTypeMap.GetVectorDimension(oid) != vector.Dimension)
-            {
-                throw new ArgumentException("The vector dimension does not match its PostgreSQL type OID.", nameof(vector));
-            }
-
-            byte[] bytes = new byte[4 + (vector.Count * sizeof(float))];
-            BinaryPrimitives.WriteInt16BigEndian(bytes, checked((short)vector.Dimension));
-            BinaryPrimitives.WriteInt16BigEndian(bytes.AsSpan(2), 0);
-            for (int index = 0; index < vector.Count; index++)
-            {
-                BinaryPrimitives.WriteInt32BigEndian(bytes.AsSpan(4 + (index * sizeof(float))), BitConverter.SingleToInt32Bits(vector[index]));
-            }
-
-            return bytes;
-        }
-
         private static string EncodeArrayParameter(Array array, int arrayOid)
         {
             int elementOid = CassieTypeMap.GetArrayElementOid(arrayOid)
@@ -656,15 +525,15 @@ namespace Cntryl.Cassie.Types
                     }
                     else if (item is CassieNetworkAddress networkAddress)
                     {
-                        writer.WriteStringValue(EncodeTextNetworkAddress(networkAddress, elementOid == 650));
+                        writer.WriteStringValue(NetworkAddressHandler.EncodeTextNetworkAddress(networkAddress, elementOid == 650));
                     }
                     else if (item is PhysicalAddress macAddress)
                     {
-                        writer.WriteStringValue(FormatTextMacAddress(macAddress, elementOid == 774 ? 8 : 6));
+                        writer.WriteStringValue(MacAddressHandler.FormatTextMacAddress(macAddress, elementOid == 774 ? 8 : 6));
                     }
                     else if (item is CassieBitString bitString)
                     {
-                        writer.WriteStringValue(EncodeTextBitString(bitString, elementOid == 1562));
+                        writer.WriteStringValue(BitStringHandler.EncodeTextBitString(bitString, elementOid == 1562));
                     }
                     else if (item is CassieLsn lsn)
                     {

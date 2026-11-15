@@ -6,11 +6,12 @@ namespace Cntryl.Cassie.Types.Handlers
     internal static class CassieTypeHandlers
     {
         private static readonly FrozenDictionary<int, CassieTypeHandler> ByOid = Build();
+        private static readonly VectorHandler Vectors = new();
 
-        /// <summary>Returns the handler for a scalar OID, or null when the type has no special conversion.</summary>
+        /// <summary>Returns the handler for a scalar or vector OID, or null when the type has no special conversion.</summary>
         internal static CassieTypeHandler? Find(int oid)
         {
-            return ByOid.GetValueOrDefault(oid);
+            return CassieTypeMap.IsVectorOid(oid) ? Vectors : ByOid.GetValueOrDefault(oid);
         }
 
         private static FrozenDictionary<int, CassieTypeHandler> Build()
@@ -31,6 +32,10 @@ namespace Cntryl.Cassie.Types.Handlers
             Register(handlers, new TimestampTzHandler(), 1184);
             Register(handlers, new TimeTzHandler(), 1266);
             Register(handlers, new IntervalHandler(), 1186);
+            Register(handlers, new NetworkAddressHandler(), 650, 869);
+            Register(handlers, new MacAddressHandler(), 774, 829);
+            Register(handlers, new BitStringHandler(), 1560, 1562);
+            Register(handlers, new LsnHandler(), 3220);
             Register(handlers, new StringHandler(), 18, 19, 25, 114, 1042, 1043);
             Register(handlers, new JsonbHandler(), 3802);
             Register(handlers, new JsonPathHandler(), 4072);
