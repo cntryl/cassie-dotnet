@@ -62,6 +62,7 @@ namespace Cntryl.Cassie.Tests.Types
                 DateTime dateTime => $"DateTime:{dateTime.Ticks}/{dateTime.Kind}",
                 DateTimeOffset offset => $"DateTimeOffset:{offset.UtcTicks}/{offset.Offset}",
                 CassieTemporalValue temporal => $"Temporal:{temporal.Kind}/{temporal.PostgresTypeOid}/{temporal}",
+                CassieTimeWithTimeZone timeWithZone => $"CassieTimeWithTimeZone:{timeWithZone.Time.Ticks}/{timeWithZone.OffsetSeconds.ToString(CultureInfo.InvariantCulture)}",
                 IFormattable formattable => value.GetType().Name + ":" + formattable.ToString(null, CultureInfo.InvariantCulture),
                 _ => value.GetType().Name + ":" + value
             };
