@@ -234,7 +234,9 @@ namespace Cntryl.Cassie.Commands
         /// <inheritdoc />
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
         {
-            return ExecuteDbDataReaderAsync(behavior, CancellationToken.None).GetAwaiter().GetResult();
+            return DbConnection is CassieConnection connection
+                ? connection.RunSynchronously(() => ExecuteDbDataReaderAsync(behavior, CancellationToken.None))
+                : SynchronousCall.Wait(ExecuteDbDataReaderAsync(behavior, CancellationToken.None));
         }
 
         /// <inheritdoc />

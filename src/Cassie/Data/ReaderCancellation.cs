@@ -46,14 +46,27 @@ namespace Cntryl.Cassie.Data
             }
         }
 
-        public Task<(byte Tag, byte[] Payload)> ReadFrameAsync(CancellationToken cancellationToken, bool allowAbortOnCancellation = false)
+        public ValueTask<(byte Tag, byte[] Payload)> ReadFrameAsync(CancellationToken cancellationToken, bool allowAbortOnCancellation = false)
         {
-            return allowAbortOnCancellation || !cancellationToken.CanBeCanceled
-                ? _session.ReadFrameAsync(cancellationToken)
-                : ReadQueryFrameWithCancellationAsync(cancellationToken);
+            if (allowAbortOnCancellation || !cancellationToken.CanBeCanceled)
+            {
+                return _session.ReadFrameAsync(cancellationToken);
+            }
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                // Already canceled: register first so the cancel request starts before any frame is returned.
+                return ReadQueryFrameWithCancellationAsync(null, cancellationToken);
+            }
+
+            // A frame that is already buffered needs no cancellation machinery: nothing can interrupt it.
+            ValueTask<(byte Tag, byte[] Payload)> pending = _session.ReadFrameAsync(CancellationToken.None);
+            return pending.IsCompletedSuccessfully
+                ? pending
+                : ReadQueryFrameWithCancellationAsync(pending, cancellationToken);
         }
 
-        private async Task<(byte Tag, byte[] Payload)> ReadQueryFrameWithCancellationAsync(CancellationToken cancellationToken)
+        private async ValueTask<(byte Tag, byte[] Payload)> ReadQueryFrameWithCancellationAsync(ValueTask<(byte Tag, byte[] Payload)>? pending, CancellationToken cancellationToken)
         {
             using CancellationTokenSource abortDelay = new();
             using CancellationTokenRegistration cancellationRegistration = cancellationToken.UnsafeRegister(static state =>
@@ -66,7 +79,9 @@ namespace Cntryl.Cassie.Data
             try
             {
                 // Finish a frame once reading starts so cancellation cannot leave the stream mid-frame.
-                return await _session.ReadFrameAsync(CancellationToken.None).ConfigureAwait(false);
+                return pending is { } started
+                    ? await started.ConfigureAwait(false)
+                    : await _session.ReadFrameAsync(CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception exception) when ((cancellationToken.IsCancellationRequested || _timedOut) && (exception is IOException or SocketException or ObjectDisposedException))
             {

@@ -173,7 +173,7 @@ namespace Cntryl.Cassie.Connection
         private async Task CancelAndDrainCopyAsync(CancellationToken cancellationToken)
         {
             PgSession session = _session!;
-            if (session.CanCancel && await QueryCanceler.SendAsync(new CassieConnectionStringBuilder(_connectionString), session.BackendProcessId, session.BackendSecretKey, cancellationToken).ConfigureAwait(false))
+            if (session.CanCancel && await QueryCanceler.SendAsync([with(_connectionString)], session.BackendProcessId, session.BackendSecretKey, cancellationToken).ConfigureAwait(false))
             {
                 _ = await DrainCopyCompletionAsync(session, cancellationToken, recovering: true).ConfigureAwait(false);
             }

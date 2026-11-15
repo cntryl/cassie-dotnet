@@ -125,7 +125,9 @@ namespace Cntryl.Cassie.Connection
             }
 
             long serial = _gate.Serial;
-            bool sent = CancelCurrentQueryAsync().GetAwaiter().GetResult();
+            // Cancel is called from another thread while the owner is mid-operation, so it must not touch
+            // the connection's own mode; only the separate cancel connection blocks here.
+            bool sent = SynchronousCall.Wait(CancelCurrentQueryAsync(synchronous: true));
             if (!sent)
             {
                 if (_gate.Serial == serial && _gate.IsActive)
@@ -148,11 +150,11 @@ namespace Cntryl.Cassie.Connection
             }
         }
 
-        internal async Task<bool> CancelCurrentQueryAsync()
+        internal async Task<bool> CancelCurrentQueryAsync(bool synchronous = false)
         {
             PgSession? session = _session;
             return _gate.IsActive && session is not null && session.CanCancel
-                && await QueryCanceler.SendAsync(new CassieConnectionStringBuilder(_connectionString), session.BackendProcessId, session.BackendSecretKey).ConfigureAwait(false);
+                && await QueryCanceler.SendAsync([with(_connectionString)], session.BackendProcessId, session.BackendSecretKey, synchronous).ConfigureAwait(false);
         }
 
         /// <summary>

@@ -25,7 +25,7 @@ namespace Cntryl.Cassie.Tests.Connection
         public void ShouldAcceptKeywordsCaseInsensitivelyGivenLowerCaseNamesWhenValidated()
         {
             // Arrange
-            CassieConnectionStringBuilder builder = new("host=db.example;username=app;ssl mode=Disable;fetch size=10");
+            CassieConnectionStringBuilder builder = [with("host=db.example;username=app;ssl mode=Disable;fetch size=10")];
 
             // Act
             Exception? exception = Record.Exception(builder.ValidateKeywords);
@@ -39,7 +39,7 @@ namespace Cntryl.Cassie.Tests.Connection
         public void ShouldUseDefaultsGivenNoPerformanceKeywordsWhenBuilderIsRead()
         {
             // Arrange
-            CassieConnectionStringBuilder builder = new("Username=app");
+            CassieConnectionStringBuilder builder = [with("Username=app")];
 
             // Act
             int[] values = [builder.FetchSize, builder.CommandTimeout, builder.ConnectionIdleLifetime, builder.ConnectionLifetime];
@@ -52,7 +52,7 @@ namespace Cntryl.Cassie.Tests.Connection
         public void ShouldRejectNonPositiveFetchSizeGivenZeroWhenBuilderIsRead()
         {
             // Arrange
-            CassieConnectionStringBuilder builder = new("Fetch Size=0");
+            CassieConnectionStringBuilder builder = [with("Fetch Size=0")];
 
             // Act
             ArgumentException exception = Assert.Throws<ArgumentException>(() => builder.FetchSize);

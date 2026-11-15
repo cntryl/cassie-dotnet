@@ -22,6 +22,7 @@ namespace Cntryl.Cassie.Connection
         private CassieConnectionPool? _pool;
         private string? _poolKey;
         private bool _ownsPoolSlot;
+        private bool _synchronous;
 
         /// <inheritdoc />
         [AllowNull]
@@ -44,7 +45,7 @@ namespace Cntryl.Cassie.Connection
         {
             get
             {
-                CassieConnectionStringBuilder settings = new(_connectionString);
+                CassieConnectionStringBuilder settings = [with(_connectionString)];
                 return string.IsNullOrWhiteSpace(settings.Database) ? settings.Username : settings.Database;
             }
         }
@@ -84,6 +85,62 @@ namespace Cntryl.Cassie.Connection
             OnStateChange(new StateChangeEventArgs(originalState, state));
         }
 
+        /// <summary>
+        /// Switches the connection to blocking I/O for a synchronous call. Returns false when an enclosing
+        /// synchronous call already did, so only the outermost call switches back.
+        /// </summary>
+        internal bool EnterSynchronous()
+        {
+            if (_synchronous)
+            {
+                return false;
+            }
+
+            _synchronous = true;
+            _session?.SynchronousIO = true;
+            return true;
+        }
+
+        internal void ExitSynchronous()
+        {
+            _synchronous = false;
+            _session?.SynchronousIO = false;
+        }
+
+        /// <summary>Runs an operation on the calling thread using blocking I/O.</summary>
+        internal void RunSynchronously(Func<Task> operation)
+        {
+            bool entered = EnterSynchronous();
+            try
+            {
+                SynchronousCall.Wait(operation());
+            }
+            finally
+            {
+                if (entered)
+                {
+                    ExitSynchronous();
+                }
+            }
+        }
+
+        /// <summary>Runs an operation on the calling thread using blocking I/O.</summary>
+        internal T RunSynchronously<T>(Func<Task<T>> operation)
+        {
+            bool entered = EnterSynchronous();
+            try
+            {
+                return SynchronousCall.Wait(operation());
+            }
+            finally
+            {
+                if (entered)
+                {
+                    ExitSynchronous();
+                }
+            }
+        }
+
         /// <summary>Returns the live session, or throws when the connection is not open.</summary>
         private PgSession RequireSession(string message)
         {
@@ -93,7 +150,7 @@ namespace Cntryl.Cassie.Connection
         /// <inheritdoc />
         public override void ChangeDatabase(string databaseName)
         {
-            ChangeDatabaseAsync(databaseName, CancellationToken.None).GetAwaiter().GetResult();
+            RunSynchronously(() => ChangeDatabaseAsync(databaseName, CancellationToken.None));
         }
 
         /// <inheritdoc />
@@ -126,7 +183,7 @@ namespace Cntryl.Cassie.Connection
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            CassieConnectionStringBuilder settings = new(_connectionString);
+            CassieConnectionStringBuilder settings = [with(_connectionString)];
             string currentDatabase = string.IsNullOrWhiteSpace(settings.Database) ? settings.Username : settings.Database;
             if (string.Equals(currentDatabase, databaseName, StringComparison.Ordinal))
             {
@@ -151,7 +208,7 @@ namespace Cntryl.Cassie.Connection
         /// <inheritdoc />
         public override void Open()
         {
-            OpenAsync(CancellationToken.None).GetAwaiter().GetResult();
+            RunSynchronously(() => OpenAsync(CancellationToken.None));
         }
 
         /// <inheritdoc />
@@ -189,11 +246,12 @@ namespace Cntryl.Cassie.Connection
                 PgSession? session = null;
                 if (pool is not null)
                 {
-                    (session, poolKey, pool) = await RentFromPoolAsync(settings, poolKey!, pool, linked.Token).ConfigureAwait(false);
+                    (session, poolKey, pool) = await RentFromPoolAsync(settings, poolKey!, pool, _synchronous, linked.Token).ConfigureAwait(false);
                     holdsPoolSlot = true;
                 }
 
-                session ??= await PgSessionConnector.ConnectAsync(settings, linked.Token).ConfigureAwait(false);
+                session ??= await PgSessionConnector.ConnectAsync(settings, _synchronous, linked.Token).ConfigureAwait(false);
+                session.SynchronousIO = _synchronous;
                 session.DateStyle.BeginLease();
                 _session = session;
                 _pool = pool;
@@ -217,7 +275,7 @@ namespace Cntryl.Cassie.Connection
 
         private CassieConnectionStringBuilder ValidateSettings()
         {
-            CassieConnectionStringBuilder settings = new(_connectionString);
+            CassieConnectionStringBuilder settings = [with(_connectionString)];
             settings.ValidateKeywords();
             ValidateProtocolString(settings.Host, nameof(CassieConnectionStringBuilder.Host));
             ValidateProtocolString(settings.Username, nameof(CassieConnectionStringBuilder.Username));
@@ -239,13 +297,13 @@ namespace Cntryl.Cassie.Connection
             return settings;
         }
 
-        private static async Task<(PgSession? Session, string PoolKey, CassieConnectionPool Pool)> RentFromPoolAsync(CassieConnectionStringBuilder settings, string poolKey, CassieConnectionPool pool, CancellationToken cancellationToken)
+        private static async Task<(PgSession? Session, string PoolKey, CassieConnectionPool Pool)> RentFromPoolAsync(CassieConnectionStringBuilder settings, string poolKey, CassieConnectionPool pool, bool synchronous, CancellationToken cancellationToken)
         {
             while (true)
             {
                 try
                 {
-                    (PgSession? session, _) = await pool.RentAsync(cancellationToken).ConfigureAwait(false);
+                    (PgSession? session, _) = await pool.RentAsync(synchronous, cancellationToken).ConfigureAwait(false);
                     return (session, poolKey, pool);
                 }
                 catch (ObjectDisposedException) when (!cancellationToken.IsCancellationRequested)
@@ -273,7 +331,7 @@ namespace Cntryl.Cassie.Connection
         /// <inheritdoc />
         public override void Close()
         {
-            CloseAsync().GetAwaiter().GetResult();
+            RunSynchronously(CloseAsync);
         }
 
         /// <inheritdoc />
@@ -374,6 +432,7 @@ namespace Cntryl.Cassie.Connection
                 _ownsPoolSlot = false;
                 _preparedStatementsToClose.Clear();
                 SetState(ConnectionState.Closed);
+                session.SynchronousIO = false;
                 await pool.ReturnAsync(session).ConfigureAwait(false);
                 CassieLogging.ConnectionClosed(Logger);
                 return true;
@@ -391,15 +450,15 @@ namespace Cntryl.Cassie.Connection
         {
             ArgumentNullException.ThrowIfNull(connection);
             string key = connection._poolKey ?? (connection._pool is null
-                ? CassieConnectionPools.GetKey(new CassieConnectionStringBuilder(connection.ConnectionString))
+                ? CassieConnectionPools.GetKey([with(connection.ConnectionString)])
                 : throw new InvalidOperationException("The connection has no pool key."));
-            CassieConnectionPools.ClearAsync(key).GetAwaiter().GetResult();
+            SynchronousCall.Wait(CassieConnectionPools.ClearAsync(key));
         }
 
         /// <summary>Closes idle physical sessions held by every Cassie connection pool.</summary>
         public static void ClearAllPools()
         {
-            CassieConnectionPools.ClearAllAsync().GetAwaiter().GetResult();
+            SynchronousCall.Wait(CassieConnectionPools.ClearAllAsync());
         }
 
         internal static void ValidateSqlText(string sql)

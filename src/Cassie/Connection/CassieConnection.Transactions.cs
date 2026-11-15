@@ -32,7 +32,7 @@ namespace Cntryl.Cassie.Connection
 
         internal CassieTransaction BeginTransactionCore(IsolationLevel isolationLevel)
         {
-            return BeginTransactionCoreAsync(isolationLevel, CancellationToken.None).GetAwaiter().GetResult();
+            return RunSynchronously(() => BeginTransactionCoreAsync(isolationLevel, CancellationToken.None));
         }
 
         /// <inheritdoc />

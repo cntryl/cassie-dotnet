@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
@@ -179,7 +178,7 @@ namespace Cntryl.Cassie.Rest
             return !baseAddress.IsAbsoluteUri || (baseAddress.Scheme != Uri.UriSchemeHttp && baseAddress.Scheme != Uri.UriSchemeHttps)
                 || baseAddress.Query.Length > 0 || baseAddress.Fragment.Length > 0 || baseAddress.UserInfo.Length > 0
                 ? throw new ArgumentException("The REST base address must be an absolute HTTP(S) URI without credentials, a query, or a fragment.", nameof(baseAddress))
-                : baseAddress.AbsoluteUri.EndsWith('/') ? baseAddress : new Uri(baseAddress.AbsoluteUri + "/");
+                : baseAddress.AbsoluteUri.EndsWith('/', StringComparison.Ordinal) ? baseAddress : new Uri(baseAddress.AbsoluteUri + "/");
         }
 
         /// <summary>Disposes the transport created by the URI constructor; a borrowed HTTP client remains usable.</summary>

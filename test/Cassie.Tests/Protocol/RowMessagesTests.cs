@@ -48,12 +48,14 @@ namespace Cntryl.Cassie.Tests.Protocol
             byte[] payload = Convert.FromHexString("000300000002C3A9000000020100FFFFFFFF");
 
             // Act
-            object?[] values = RowMessages.ParseDataRow(payload, [0, 1, 0]);
+            int[] offsets = new int[3];
+            int[] lengths = new int[3];
+            RowMessages.IndexDataRow(payload, offsets, lengths);
 
             // Assert
-            Assert.Equal("é", values[0]);
-            Assert.Equal(new byte[] { 1, 0 }, Assert.IsType<byte[]>(values[1]));
-            Assert.Null(values[2]);
+            Assert.Equal([2, 2, -1], lengths);
+            Assert.Equal("é", RowMessages.DecodeField(payload, offsets[0], lengths[0], 0));
+            Assert.Equal(new byte[] { 1, 0 }, Assert.IsType<byte[]>(RowMessages.DecodeField(payload, offsets[1], lengths[1], 1)));
         }
 
         [Theory]
@@ -71,7 +73,7 @@ namespace Cntryl.Cassie.Tests.Protocol
             // Act
             void Parse()
             {
-                _ = RowMessages.ParseDataRow(payload, [0]);
+                RowMessages.IndexDataRow(payload, new int[1], new int[1]);
             }
 
             // Assert
@@ -87,7 +89,7 @@ namespace Cntryl.Cassie.Tests.Protocol
             // Act
             void Parse()
             {
-                _ = RowMessages.ParseDataRow(payload, [2]);
+                _ = RowMessages.DecodeField(payload, 6, 0, 2);
             }
 
             // Assert

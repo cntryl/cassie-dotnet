@@ -76,12 +76,13 @@ namespace Cntryl.Cassie.Connection
         /// <summary>Gets or sets the maximum age in seconds of a pooled session; zero disables the limit.</summary>
         public int ConnectionLifetime { get => GetInt32("Connection Lifetime", 0); set => this["Connection Lifetime"] = value; }
 
-        private static readonly HashSet<string> KnownKeywords = new(StringComparer.OrdinalIgnoreCase)
-        {
+        private static readonly HashSet<string> KnownKeywords =
+        [
+            with(StringComparer.OrdinalIgnoreCase),
             "Host", "Port", "Database", "Username", "Password", "Timeout", "Application Name", "Options",
             "SSL Mode", "SSL Root Certificate", "Pooling", "Maximum Pool Size", "Fetch Size", "Command Timeout",
             "Connection Idle Lifetime", "Connection Lifetime"
-        };
+        ];
 
         /// <summary>Rejects connection string keywords this provider does not recognize.</summary>
         /// <exception cref="ArgumentException">A keyword is unknown, so it would otherwise be silently ignored.</exception>

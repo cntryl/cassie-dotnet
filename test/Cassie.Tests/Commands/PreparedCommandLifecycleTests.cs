@@ -46,8 +46,9 @@ namespace Cntryl.Cassie.Tests.Commands
                 throw;
             }
 
-            _ = releaseClose.TrySetResult(true);
+            // Observe the pending disposal before the server is allowed to answer.
             bool disposalCompletedBeforeServerResponse = disposal.IsCompleted;
+            _ = releaseClose.TrySetResult(true);
             await disposal;
             await connection.CloseAsync();
 

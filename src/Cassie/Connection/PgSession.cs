@@ -19,7 +19,19 @@ namespace Cntryl.Cassie.Connection
         internal long ReturnedTimestamp { get; set; }
 
         /// <summary>Opens the TCP connection and exposes its stream.</summary>
-        internal async Task ConnectAsync(string host, int port, CancellationToken cancellationToken)
+        internal Task ConnectAsync(string host, int port, bool synchronous, CancellationToken cancellationToken)
+        {
+            if (!synchronous)
+            {
+                return ConnectCoreAsync(host, port, cancellationToken);
+            }
+
+            SynchronousCall.RunBlocking(Client, (Client, host, port), static target => target.Client.Connect(target.host, target.port), cancellationToken);
+            Stream = Client.GetStream();
+            return Task.CompletedTask;
+        }
+
+        private async Task ConnectCoreAsync(string host, int port, CancellationToken cancellationToken)
         {
             await Client.ConnectAsync(host, port, cancellationToken).ConfigureAwait(false);
             Stream = Client.GetStream();
@@ -29,6 +41,22 @@ namespace Cntryl.Cassie.Connection
         internal void UseStream(Stream stream)
         {
             Stream = stream;
+        }
+
+        /// <summary>
+        /// Gets or sets whether session I/O blocks on the calling thread. Set while a synchronous ADO.NET call
+        /// owns the session; it has no effect before the buffered transport is installed.
+        /// </summary>
+        internal bool SynchronousIO
+        {
+            get => Stream is ReadBufferedStream { Synchronous: true };
+            set
+            {
+                if (Stream is ReadBufferedStream transport)
+                {
+                    transport.Synchronous = value;
+                }
+            }
         }
 
         /// <summary>Records what the server reported during startup.</summary>
@@ -42,7 +70,7 @@ namespace Cntryl.Cassie.Connection
         /// <summary>Gets whether the server can be asked to cancel the running statement.</summary>
         internal bool CanCancel => BackendProcessId != 0 && BackendSecretKey != 0;
 
-        internal Task<(byte Tag, byte[] Payload)> ReadFrameAsync(CancellationToken cancellationToken)
+        internal ValueTask<(byte Tag, byte[] Payload)> ReadFrameAsync(CancellationToken cancellationToken)
         {
             return PgFraming.ReadBackendFrameAsync(Stream, cancellationToken);
         }

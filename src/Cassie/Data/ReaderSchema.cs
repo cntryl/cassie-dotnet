@@ -76,7 +76,7 @@ namespace Cntryl.Cassie.Data
         /// <summary>Gets column metadata while preserving unknown origin and constraint values.</summary>
         public static ReadOnlyCollection<DbColumn> CreateColumns(IReadOnlyList<ReaderColumn> fields)
         {
-            List<DbColumn> columns = new(fields.Count);
+            List<DbColumn> columns = [with(fields.Count)];
             for (int ordinal = 0; ordinal < fields.Count; ordinal++)
             {
                 columns.Add(new ReaderDbColumn(fields[ordinal], ordinal));

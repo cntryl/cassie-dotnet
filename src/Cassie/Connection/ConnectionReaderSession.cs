@@ -12,7 +12,7 @@ namespace Cntryl.Cassie.Connection
         public CassieDateStyle? DateStyle => connection.DateStyle;
         public ILogger? Logger => connection.Logger;
 
-        public Task<(byte Tag, byte[] Payload)> ReadFrameAsync(CancellationToken cancellationToken)
+        public ValueTask<(byte Tag, byte[] Payload)> ReadFrameAsync(CancellationToken cancellationToken)
         {
             return PgFraming.ReadBackendFrameAsync(stream, cancellationToken);
         }
@@ -55,6 +55,16 @@ namespace Cntryl.Cassie.Connection
         public Task CloseAsync()
         {
             return connection.CloseAsync();
+        }
+
+        public bool EnterSynchronous()
+        {
+            return connection.EnterSynchronous();
+        }
+
+        public void ExitSynchronous()
+        {
+            connection.ExitSynchronous();
         }
     }
 }

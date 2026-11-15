@@ -1,3 +1,6 @@
+using System.Buffers.Text;
+using System.Buffers.Binary;
+using Cntryl.Cassie.Connection;
 using Cntryl.Cassie.Protocol;
 using Cntryl.Cassie.Diagnostics;
 using Cntryl.Cassie.Types;
@@ -13,12 +16,18 @@ namespace Cntryl.Cassie.Data
     /// <summary>Streams text- or binary-format rows returned by a Cassie query.</summary>
     public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     {
+        private const int Int8Oid = 20;
+        private const int Int2Oid = 21;
+        private const int Int4Oid = 23;
         private const string UnexpectedSuspendedPortalMessage = "Cassie returned an unexpected suspended portal response.";
         private readonly IReaderSession _session;
         private readonly ReaderCancellation _cancellation;
         private short[] _formatCodes = [];
         private readonly List<ReaderColumn> _columns = [];
-        private object?[]? _currentRow;
+        private byte[]? _rowPayload;
+        private int[] _fieldOffsets = [];
+        private int[] _fieldLengths = [];
+        private object?[] _rawValues = [];
         private bool _closed;
         private volatile bool _complete;
         private bool _resultEnded;
@@ -80,7 +89,7 @@ namespace Cntryl.Cassie.Data
                     return false;
                 }
 
-                bool hasRow = ReadAsync(CancellationToken.None).GetAwaiter().GetResult();
+                bool hasRow = Read();
                 if (hasRow)
                 {
                     _prefetchedRow = true;
@@ -148,7 +157,18 @@ namespace Cntryl.Cassie.Data
         /// <inheritdoc />
         public override bool Read()
         {
-            return ReadAsync(CancellationToken.None).GetAwaiter().GetResult();
+            bool entered = _session.EnterSynchronous();
+            try
+            {
+                return SynchronousCall.Wait(ReadAsync(CancellationToken.None));
+            }
+            finally
+            {
+                if (entered)
+                {
+                    _session.ExitSynchronous();
+                }
+            }
         }
 
         /// <inheritdoc />
@@ -168,7 +188,7 @@ namespace Cntryl.Cassie.Data
                     return false;
                 }
 
-                _currentRow = null;
+                _rowPayload = null;
                 if (_singleRow && _rowsReadCurrentResult > 0)
                 {
                     await DrainCurrentResultAsync(cancellationToken).ConfigureAwait(false);
@@ -182,11 +202,7 @@ namespace Cntryl.Cassie.Data
                     {
                         case (byte)'T': ParseRowDescription(payload); _hasCurrentResult = true; break;
                         case (byte)'D':
-                            _currentRow = ParseDataRow(payload);
-                            if (_converted is not null)
-                            {
-                                Array.Clear(_converted);
-                            }
+                            IndexDataRow(payload);
 
                             _lastSequentialOrdinal = -1;
                             _rowsReadCurrentResult++;
@@ -261,7 +277,18 @@ namespace Cntryl.Cassie.Data
         /// <inheritdoc />
         public override bool NextResult()
         {
-            return NextResultAsync(CancellationToken.None).GetAwaiter().GetResult();
+            bool entered = _session.EnterSynchronous();
+            try
+            {
+                return SynchronousCall.Wait(NextResultAsync(CancellationToken.None));
+            }
+            finally
+            {
+                if (entered)
+                {
+                    _session.ExitSynchronous();
+                }
+            }
         }
 
         /// <inheritdoc />
@@ -279,7 +306,7 @@ namespace Cntryl.Cassie.Data
                 {
                     await DrainToReadyAsync(cancellationToken, propagateServerError: true).ConfigureAwait(false);
                     ClearColumns();
-                    _currentRow = null;
+                    _rowPayload = null;
                     _resultEnded = false;
                     _hasCurrentResult = false;
                     _hasRows = false;
@@ -295,7 +322,7 @@ namespace Cntryl.Cassie.Data
                 }
 
                 ClearColumns();
-                _currentRow = null;
+                _rowPayload = null;
                 _resultEnded = false;
                 _hasCurrentResult = false;
                 _hasRows = false;
@@ -468,7 +495,7 @@ namespace Cntryl.Cassie.Data
         /// <inheritdoc />
         public override bool IsDBNull(int ordinal)
         {
-            return GetRowValue(ordinal) is null;
+            return GetFieldLength(ordinal) < 0;
         }
 
         /// <inheritdoc />
@@ -548,34 +575,40 @@ namespace Cntryl.Cassie.Data
         /// <inheritdoc />
         public override short GetInt16(int ordinal)
         {
-            return GetValue(ordinal) switch
-            {
-                short value => value,
-                _ => short.Parse(GetRequiredString(ordinal), CultureInfo.InvariantCulture)
-            };
+            return TryGetIntegerField(ordinal, out long integer) && integer is >= short.MinValue and <= short.MaxValue
+                ? (short)integer
+                : GetValue(ordinal) switch
+                {
+                    short value => value,
+                    _ => short.Parse(GetRequiredString(ordinal), CultureInfo.InvariantCulture)
+                };
         }
 
         /// <inheritdoc />
         public override int GetInt32(int ordinal)
         {
-            return GetValue(ordinal) switch
-            {
-                int value => value,
-                short value => value,
-                _ => int.Parse(GetRequiredString(ordinal), CultureInfo.InvariantCulture)
-            };
+            return TryGetIntegerField(ordinal, out long integer) && integer is >= int.MinValue and <= int.MaxValue
+                ? (int)integer
+                : GetValue(ordinal) switch
+                {
+                    int value => value,
+                    short value => value,
+                    _ => int.Parse(GetRequiredString(ordinal), CultureInfo.InvariantCulture)
+                };
         }
 
         /// <inheritdoc />
         public override long GetInt64(int ordinal)
         {
-            return GetValue(ordinal) switch
-            {
-                long value => value,
-                int value => value,
-                short value => value,
-                _ => long.Parse(GetRequiredString(ordinal), CultureInfo.InvariantCulture)
-            };
+            return TryGetIntegerField(ordinal, out long integer)
+                ? integer
+                : GetValue(ordinal) switch
+                {
+                    long value => value,
+                    int value => value,
+                    short value => value,
+                    _ => long.Parse(GetRequiredString(ordinal), CultureInfo.InvariantCulture)
+                };
         }
 
         /// <inheritdoc />
@@ -593,7 +626,18 @@ namespace Cntryl.Cassie.Data
         /// <inheritdoc />
         public override void Close()
         {
-            CloseAsync().GetAwaiter().GetResult();
+            bool entered = _session.EnterSynchronous();
+            try
+            {
+                SynchronousCall.Wait(CloseAsync());
+            }
+            finally
+            {
+                if (entered)
+                {
+                    _session.ExitSynchronous();
+                }
+            }
         }
 
         /// <inheritdoc />
@@ -678,7 +722,8 @@ namespace Cntryl.Cassie.Data
             return (uint)ordinal < (uint)_columns.Count ? _columns[ordinal] : throw new ArgumentOutOfRangeException(nameof(ordinal), ordinal, "Column ordinal is out of range.");
         }
 
-        private object? GetRowValue(int ordinal)
+        /// <summary>Validates access to a field of the current row and returns its byte length, or -1 for NULL.</summary>
+        private int GetFieldLength(int ordinal)
         {
             EnsureOpen();
             _ = GetColumn(ordinal);
@@ -688,7 +733,63 @@ namespace Cntryl.Cassie.Data
             }
 
             _lastSequentialOrdinal = Math.Max(_lastSequentialOrdinal, ordinal);
-            return _currentRow is null ? throw new InvalidOperationException("The reader is not positioned on a row.") : _currentRow[ordinal];
+            return _rowPayload is null ? throw new InvalidOperationException("The reader is not positioned on a row.") : _fieldLengths[ordinal];
+        }
+
+        /// <summary>Returns the field as a text string or binary byte array, decoding it on first access.</summary>
+        private object? GetRowValue(int ordinal)
+        {
+            int length = GetFieldLength(ordinal);
+            return length < 0
+                ? null
+                : _rawValues[ordinal] ??= RowMessages.DecodeField(_rowPayload!, _fieldOffsets[ordinal], length, _formatCodes[ordinal]);
+        }
+
+        /// <summary>
+        /// Reads an integer column straight from the row bytes, without creating a string or boxing.
+        /// Returns false for anything unusual so the general path reports it exactly as before.
+        /// </summary>
+        private bool TryGetIntegerField(int ordinal, out long value)
+        {
+            value = 0;
+            int length = GetFieldLength(ordinal);
+            if (length < 0)
+            {
+                return false;
+            }
+
+            int typeOid = _columns[ordinal].TypeOid;
+            ReadOnlySpan<byte> field = _rowPayload.AsSpan(_fieldOffsets[ordinal], length);
+            if (_formatCodes[ordinal] == 0)
+            {
+                (long minimum, long maximum) = typeOid switch
+                {
+                    Int2Oid => (short.MinValue, short.MaxValue),
+                    Int4Oid => (int.MinValue, int.MaxValue),
+                    Int8Oid => (long.MinValue, long.MaxValue),
+                    _ => (1L, 0L)
+                };
+                return minimum <= maximum
+                    && Utf8Parser.TryParse(field, out value, out int consumed)
+                    && consumed == length
+                    && value >= minimum
+                    && value <= maximum;
+            }
+
+            switch (typeOid)
+            {
+                case Int2Oid when length == sizeof(short):
+                    value = BinaryPrimitives.ReadInt16BigEndian(field);
+                    return true;
+                case Int4Oid when length == sizeof(int):
+                    value = BinaryPrimitives.ReadInt32BigEndian(field);
+                    return true;
+                case Int8Oid when length == sizeof(long):
+                    value = BinaryPrimitives.ReadInt64BigEndian(field);
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         private string GetRequiredString(int ordinal)
@@ -895,14 +996,14 @@ namespace Cntryl.Cassie.Data
             }
         }
 
-        private Task<(byte Tag, byte[] Payload)> ReadQueryFrameAsync(CancellationToken cancellationToken, bool allowAbortOnCancellation = false)
+        private ValueTask<(byte Tag, byte[] Payload)> ReadQueryFrameAsync(CancellationToken cancellationToken, bool allowAbortOnCancellation = false)
         {
             return _resumePortalAsync is null && _sendExtendedSyncAsync is null
                 ? _cancellation.ReadFrameAsync(cancellationToken, allowAbortOnCancellation)
                 : ReadQueryFrameWithProtocolHandlingAsync(allowAbortOnCancellation, cancellationToken);
         }
 
-        private async Task<(byte Tag, byte[] Payload)> ReadQueryFrameWithProtocolHandlingAsync(bool allowAbortOnCancellation, CancellationToken cancellationToken)
+        private async ValueTask<(byte Tag, byte[] Payload)> ReadQueryFrameWithProtocolHandlingAsync(bool allowAbortOnCancellation, CancellationToken cancellationToken)
         {
             while (true)
             {
@@ -997,7 +1098,10 @@ namespace Cntryl.Cassie.Data
             ClearColumns();
             _formatCodes = new short[fields.Length];
             _converted = null;
-            _currentRow = null;
+            _rowPayload = null;
+            _fieldOffsets = new int[fields.Length];
+            _fieldLengths = new int[fields.Length];
+            _rawValues = new object?[fields.Length];
             _hasRows = false;
             _hasRowsKnown = false;
             _prefetchedRow = false;
@@ -1015,9 +1119,18 @@ namespace Cntryl.Cassie.Data
             _session.HandleParameterStatusMessage(payload);
         }
 
-        private object?[] ParseDataRow(byte[] payload)
+        /// <summary>Positions the reader on a row. Fields are decoded only when a getter asks for them.</summary>
+        private void IndexDataRow(byte[] payload)
         {
-            return RowMessages.ParseDataRow(payload, _formatCodes);
+            int fieldCount = _formatCodes.Length;
+            RowMessages.IndexDataRow(payload, _fieldOffsets.AsSpan(0, fieldCount), _fieldLengths.AsSpan(0, fieldCount));
+            Array.Clear(_rawValues);
+            if (_converted is not null)
+            {
+                Array.Clear(_converted);
+            }
+
+            _rowPayload = payload;
         }
 
         private void ParseCommandComplete(byte[] payload)

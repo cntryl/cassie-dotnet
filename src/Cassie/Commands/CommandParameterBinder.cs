@@ -39,7 +39,7 @@ namespace Cntryl.Cassie.Commands
                 return PrepareSingleParameter(sql, parameters[0]);
             }
 
-            Dictionary<string, DbParameter> bindings = new(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, DbParameter> bindings = [with(StringComparer.OrdinalIgnoreCase)];
             foreach (DbParameter parameter in parameters)
             {
                 if (parameter.Direction != ParameterDirection.Input)
@@ -63,8 +63,8 @@ namespace Cntryl.Cassie.Commands
             List<object?> values = [];
             List<int> typeOids = [];
             List<CassieParameterFormat> parameterFormats = [];
-            Dictionary<string, int> slots = new(StringComparer.OrdinalIgnoreCase);
-            HashSet<string> used = new(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, int> slots = [with(StringComparer.OrdinalIgnoreCase)];
+            HashSet<string> used = [with(StringComparer.OrdinalIgnoreCase)];
             string rewritten = Rewrite(sql, name =>
             {
                 _ = used.Add(name);

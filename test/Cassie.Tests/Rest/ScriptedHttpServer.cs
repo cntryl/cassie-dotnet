@@ -49,7 +49,18 @@ namespace Cntryl.Cassie.Tests.Rest
         {
             while (true)
             {
-                using TcpClient client = await _listener.AcceptTcpClientAsync(_shutdown.Token);
+                TcpClient accepted;
+                try
+                {
+                    accepted = await _listener.AcceptTcpClientAsync(_shutdown.Token);
+                }
+                catch (InvalidOperationException) when (_shutdown.IsCancellationRequested)
+                {
+                    // The listener was stopped between two connections; there is nothing left to serve.
+                    return;
+                }
+
+                using TcpClient client = accepted;
                 NetworkStream stream = client.GetStream();
                 ScriptedHttpRequest request = await ReadRequestAsync(stream, _shutdown.Token);
                 _ = Interlocked.Increment(ref _requests);
@@ -79,7 +90,7 @@ namespace Cntryl.Cassie.Tests.Rest
                 throw new IOException("Invalid HTTP request line.");
             }
 
-            Dictionary<string, string> headers = new(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, string> headers = [with(StringComparer.OrdinalIgnoreCase)];
             while (true)
             {
                 string line = await ReadLineAsync(stream, cancellationToken);

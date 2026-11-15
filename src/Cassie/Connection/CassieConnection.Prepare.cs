@@ -13,7 +13,7 @@ namespace Cntryl.Cassie.Connection
 
         internal string PrepareServerStatement(CassiePreparedCommand prepared, int commandTimeout)
         {
-            return PrepareServerStatementAsync(prepared, commandTimeout, CancellationToken.None).GetAwaiter().GetResult();
+            return RunSynchronously(() => PrepareServerStatementAsync(prepared, commandTimeout, CancellationToken.None));
         }
 
         internal async Task<string> PrepareServerStatementAsync(CassiePreparedCommand prepared, int commandTimeout, CancellationToken cancellationToken)
@@ -53,7 +53,7 @@ namespace Cntryl.Cassie.Connection
 
         internal void CloseServerStatement(string statementName)
         {
-            CloseServerStatementAsync(statementName, CancellationToken.None).GetAwaiter().GetResult();
+            RunSynchronously(() => CloseServerStatementAsync(statementName, CancellationToken.None));
         }
 
         internal async Task CloseServerStatementAsync(string statementName, CancellationToken cancellationToken)

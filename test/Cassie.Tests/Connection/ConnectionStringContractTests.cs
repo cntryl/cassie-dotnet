@@ -15,7 +15,7 @@ namespace Cntryl.Cassie.Tests.Connection
             const string connectionString = "Host=db.example;Port=6432;Database=ledger;Username=app;Password=secret;SSL Mode=Require;SSL Root Certificate=/etc/cassie/ca.pem";
 
             // Act
-            CassieConnectionStringBuilder builder = new(connectionString);
+            CassieConnectionStringBuilder builder = [with(connectionString)];
 
             // Assert
             Assert.Equal("db.example", builder.Host);
@@ -32,7 +32,7 @@ namespace Cntryl.Cassie.Tests.Connection
         {
             // Arrange
             const string options = "-c TimeZone=UTC -c search_path=public";
-            CassieConnectionStringBuilder builder = new($"Options={options}");
+            CassieConnectionStringBuilder builder = [with($"Options={options}")];
 
             // Act
             string parsedOptions = builder.Options;
@@ -78,7 +78,7 @@ namespace Cntryl.Cassie.Tests.Connection
         public void ShouldAllowInfiniteTimeoutGivenZeroSecondsWhenSettingsAreParsed()
         {
             // Arrange
-            CassieConnectionStringBuilder builder = new("Timeout=0");
+            CassieConnectionStringBuilder builder = [with("Timeout=0")];
 
             // Act
             int timeout = builder.Timeout;
@@ -91,7 +91,7 @@ namespace Cntryl.Cassie.Tests.Connection
         public void ShouldParsePoolingSettingsGivenConnectionStringWhenBuilderIsCreated()
         {
             // Arrange
-            CassieConnectionStringBuilder builder = new("Pooling=true;Maximum Pool Size=8");
+            CassieConnectionStringBuilder builder = [with("Pooling=true;Maximum Pool Size=8")];
 
             // Act
             bool pooling = builder.Pooling;
@@ -106,7 +106,7 @@ namespace Cntryl.Cassie.Tests.Connection
         public void ShouldRejectInvalidMaximumPoolSizeGivenConnectionStringWhenBuilderIsRead()
         {
             // Arrange
-            CassieConnectionStringBuilder builder = new("Maximum Pool Size=0");
+            CassieConnectionStringBuilder builder = [with("Maximum Pool Size=0")];
 
             // Act
             ArgumentException exception = Assert.Throws<ArgumentException>(() => _ = builder.MaxPoolSize);

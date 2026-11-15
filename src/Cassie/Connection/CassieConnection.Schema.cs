@@ -19,19 +19,19 @@ namespace Cntryl.Cassie.Connection
         /// <inheritdoc />
         public override DataTable GetSchema()
         {
-            return GetSchemaAsync(CancellationToken.None).GetAwaiter().GetResult();
+            return RunSynchronously(() => GetSchemaAsync(CancellationToken.None));
         }
 
         /// <inheritdoc />
         public override DataTable GetSchema(string collectionName)
         {
-            return GetSchemaAsync(collectionName, null, CancellationToken.None).GetAwaiter().GetResult();
+            return RunSynchronously(() => GetSchemaAsync(collectionName, null, CancellationToken.None));
         }
 
         /// <inheritdoc />
         public override DataTable GetSchema(string collectionName, string?[]? restrictionValues)
         {
-            return GetSchemaAsync(collectionName, restrictionValues, CancellationToken.None).GetAwaiter().GetResult();
+            return RunSynchronously(() => GetSchemaAsync(collectionName, restrictionValues, CancellationToken.None));
         }
 
         /// <inheritdoc />
@@ -210,7 +210,7 @@ namespace Cntryl.Cassie.Connection
 
         private string GetCurrentCatalog()
         {
-            CassieConnectionStringBuilder settings = new(_connectionString);
+            CassieConnectionStringBuilder settings = [with(_connectionString)];
             return string.IsNullOrEmpty(settings.Database) ? settings.Username : settings.Database;
         }
 

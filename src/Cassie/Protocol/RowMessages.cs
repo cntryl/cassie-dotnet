@@ -38,29 +38,33 @@ namespace Cntryl.Cassie.Protocol
                 : throw new IOException("RowDescription contained trailing payload bytes.");
         }
 
-        /// <summary>Parses a DataRow into text strings or binary byte arrays according to each column's format code.</summary>
-        public static object?[] ParseDataRow(byte[] payload, ReadOnlySpan<short> formatCodes)
+        /// <summary>
+        /// Validates a DataRow and records where each field's bytes sit in the payload, without decoding them.
+        /// A NULL field has length -1.
+        /// </summary>
+        public static void IndexDataRow(byte[] payload, Span<int> fieldOffsets, Span<int> fieldLengths)
         {
             ArgumentNullException.ThrowIfNull(payload);
             int offset = 0;
             short count = PgPayload.ReadInt16(payload, ref offset);
-            if (count != formatCodes.Length)
+            if (count != fieldOffsets.Length || count != fieldLengths.Length)
             {
                 throw new IOException("DataRow column count did not match RowDescription.");
             }
 
-            object?[] row = new object?[count];
             for (int i = 0; i < count; i++)
             {
                 int length = PgPayload.ReadInt32(payload, ref offset);
-                if (length == -1)
-                {
-                    continue;
-                }
-
                 if (length < -1)
                 {
                     throw new IOException("DataRow contained an invalid negative field length.");
+                }
+
+                fieldOffsets[i] = offset;
+                fieldLengths[i] = length;
+                if (length == -1)
+                {
+                    continue;
                 }
 
                 if (offset > payload.Length - length)
@@ -68,18 +72,25 @@ namespace Cntryl.Cassie.Protocol
                     throw new IOException("Truncated DataRow value.");
                 }
 
-                row[i] = formatCodes[i] switch
-                {
-                    0 => Encoding.UTF8.GetString(payload, offset, length),
-                    1 => payload.AsSpan(offset, length).ToArray(),
-                    _ => throw new IOException($"Cassie returned unsupported result format {formatCodes[i]}.")
-                };
                 offset += length;
             }
 
-            return offset == payload.Length
-                ? row
-                : throw new IOException("DataRow payload contained trailing bytes.");
+            if (offset != payload.Length)
+            {
+                throw new IOException("DataRow payload contained trailing bytes.");
+            }
+        }
+
+        /// <summary>Decodes one indexed field into a text string or a binary byte array according to its format code.</summary>
+        public static object DecodeField(byte[] payload, int offset, int length, short formatCode)
+        {
+            ArgumentNullException.ThrowIfNull(payload);
+            return formatCode switch
+            {
+                0 => Encoding.UTF8.GetString(payload, offset, length),
+                1 => payload.AsSpan(offset, length).ToArray(),
+                _ => throw new IOException($"Cassie returned unsupported result format {formatCode}.")
+            };
         }
     }
 }

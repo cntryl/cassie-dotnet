@@ -65,7 +65,7 @@ performance.
 ### Provider allocation optimization (2026-10-28)
 
 Three baseline runs and three optimized runs used the same provider base
-revision, Cassie server revision, .NET 10 runtime, macOS ARM64 host, in-memory
+revision, Cassie server revision, .NET 11 runtime, macOS ARM64 host, in-memory
 loopback profile, TLS setting, timeout, and sample counts. Every one of the
 five workload result checks passed in every run. The optimized working tree
 adds command parameter fast paths, direct query-read paths, and pooled small

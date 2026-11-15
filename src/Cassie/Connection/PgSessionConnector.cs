@@ -12,17 +12,27 @@ namespace Cntryl.Cassie.Connection
         private const int AuthenticationOk = 0;
         private const int AuthenticationCleartextPassword = 3;
 
-        public static async Task<PgSession> ConnectAsync(CassieConnectionStringBuilder settings, CancellationToken cancellationToken)
+        public static async Task<PgSession> ConnectAsync(CassieConnectionStringBuilder settings, bool synchronous, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(settings);
             PgSession session = new(new DateStyleTracker(), Stopwatch.GetTimestamp());
             try
             {
-                await session.ConnectAsync(settings.Host, settings.Port, cancellationToken).ConfigureAwait(false);
+                await session.ConnectAsync(settings.Host, settings.Port, synchronous, cancellationToken).ConfigureAwait(false);
                 if (settings.SslMode != CassieSslMode.Disable)
                 {
-                    session.UseStream(await TlsNegotiator.NegotiateAsync(session.Stream, settings, cancellationToken).ConfigureAwait(false));
+                    if (synchronous)
+                    {
+                        session.UseStream(TlsNegotiator.NegotiateBlocking(session.Stream, settings, cancellationToken));
+                    }
+                    else
+                    {
+                        session.UseStream(await TlsNegotiator.NegotiateAsync(session.Stream, settings, cancellationToken).ConfigureAwait(false));
+                    }
                 }
+
+                // Buffer only once the final transport is in place: TLS negotiation must see the raw socket bytes.
+                session.UseStream(new ReadBufferedStream(session.Stream) { Synchronous = synchronous });
 
                 await session.Stream.WriteAsync(SessionMessages.Startup(settings.Username, settings.Database, settings.ApplicationName, settings.Options), cancellationToken).ConfigureAwait(false);
                 (string serverVersion, int processId, int secretKey) = await AuthenticateAsync(session.Stream, settings, session.DateStyle, cancellationToken).ConfigureAwait(false);

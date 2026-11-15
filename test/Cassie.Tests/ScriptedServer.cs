@@ -49,6 +49,11 @@ namespace Cntryl.Cassie.Tests
             return SpinWait.SpinUntil(condition, TimeSpan.FromSeconds(5));
         }
 
+        internal void CountAccepted()
+        {
+            _ = Interlocked.Increment(ref _accepted);
+        }
+
         internal void CountTerminate()
         {
             _ = Interlocked.Increment(ref _terminated);
@@ -90,7 +95,6 @@ namespace Cntryl.Cassie.Tests
                         return;
                     }
 
-                    _ = Interlocked.Increment(ref _accepted);
                     await _handler(session);
                 }
                 catch (Exception exception) when (exception is IOException or SocketException or ObjectDisposedException or EndOfStreamException)
@@ -125,6 +129,9 @@ namespace Cntryl.Cassie.Tests
             BinaryPrimitives.WriteInt32BigEndian(key, 42);
             BinaryPrimitives.WriteInt32BigEndian(key.AsSpan(4), 7);
             await WriteAsync((byte)'K', key);
+
+            // Count the session before the client can observe that startup finished.
+            server.CountAccepted();
             await WriteReadyAsync();
             return true;
         }
