@@ -103,14 +103,14 @@ namespace Cntryl.Cassie.Tests.Live
         {
             // Arrange
             await using LiveRestSession live = await LiveRestSession.OpenAsync();
-            string name = LiveSession.UniqueName("rest_database");
 
             // Act
-            CassieDatabaseInfo created = await live.Client.Admin.CreateDatabaseAsync(name, TestContext.Current.CancellationToken);
+            CassieDatabaseInfo created = await live.CreateDatabaseAsync();
+            string name = created.Name;
             CassieRestQueryResult result = await live.Client.Admin.ExecuteQueryAsync(new(name, "SELECT current_database()"), TestContext.Current.CancellationToken);
 
             // Assert
-            Assert.Equal(name, created.Name);
+            Assert.StartsWith("rest_database", name, StringComparison.Ordinal);
             Assert.Equal(name, Assert.Single(result.Rows)[0].GetString());
             Assert.Contains(await live.Client.Admin.ListDatabasesAsync(TestContext.Current.CancellationToken), database => database.Name == name);
         }

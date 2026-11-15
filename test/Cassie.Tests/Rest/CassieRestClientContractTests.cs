@@ -17,7 +17,7 @@ namespace Cntryl.Cassie.Tests.Rest
             using ScriptedHttpHandler handler = new(async (request, cancellationToken) =>
             {
                 Assert.Equal(HttpMethod.Post, request.Method);
-                Assert.Equal(new Uri(ServiceAddress, "v1/collections"), request.RequestUri);
+                Assert.Equal(new Uri(ServiceAddress, "api/v1/collections"), request.RequestUri);
                 Assert.Equal("application/json", request.Content!.Headers.ContentType!.MediaType);
                 Assert.Contains(request.Headers.Accept, value => value.MediaType == "application/json");
                 JsonObject body = JsonNode.Parse(await request.Content.ReadAsStringAsync(cancellationToken))!.AsObject();
@@ -47,7 +47,7 @@ namespace Cntryl.Cassie.Tests.Rest
             using ScriptedHttpHandler handler = new(async (request, cancellationToken) =>
             {
                 Assert.Equal(HttpMethod.Post, request.Method);
-                Assert.Equal("https://cassie.example/proxy/v1/collections/postgres.public.docs$archive/indexes", request.RequestUri!.OriginalString);
+                Assert.Equal("https://cassie.example/proxy/api/v1/collections/postgres.public.docs$archive/indexes", request.RequestUri!.OriginalString);
                 JsonObject body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(cancellationToken))!.AsObject();
                 Assert.Equal("embedding", body["field"]!.GetValue<string>());
                 Assert.Equal("vector", body["kind"]!.GetValue<string>());
@@ -90,7 +90,7 @@ namespace Cntryl.Cassie.Tests.Rest
                 if (current == 1)
                 {
                     Assert.Equal(HttpMethod.Post, request.Method);
-                    Assert.Equal(new Uri(ServiceAddress, "v1/collections/docs/documents"), request.RequestUri);
+                    Assert.Equal(new Uri(ServiceAddress, "api/v1/collections/docs/documents"), request.RequestUri);
                     JsonObject body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(cancellationToken))!.AsObject();
                     Assert.Equal(1, body["payload"]!["MixedKey"]![0]!.GetValue<int>());
                     Assert.True(body["payload"]!["MixedKey"]![1]!.GetValue<bool>());
@@ -100,7 +100,7 @@ namespace Cntryl.Cassie.Tests.Rest
                     return ScriptedHttpHandler.Json(/*lang=json,strict*/ "{\"id\":\"doc-1\"}");
                 }
 
-                Assert.Equal(new Uri(ServiceAddress, "v1/collections/docs/documents/doc-1"), request.RequestUri);
+                Assert.Equal(new Uri(ServiceAddress, "api/v1/collections/docs/documents/doc-1"), request.RequestUri);
                 Assert.Null(request.Content);
                 if (current == 2)
                 {
@@ -135,7 +135,7 @@ namespace Cntryl.Cassie.Tests.Rest
             using ScriptedHttpHandler handler = new(async (request, cancellationToken) =>
             {
                 Assert.Equal(HttpMethod.Post, request.Method);
-                Assert.Equal(new Uri(ServiceAddress, "v1/collections/docs/search"), request.RequestUri);
+                Assert.Equal(new Uri(ServiceAddress, "api/v1/collections/docs/search"), request.RequestUri);
                 JsonObject body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(cancellationToken))!.AsObject();
                 Assert.Equal("embedding", body["field"]!.GetValue<string>());
                 Assert.Equal("query text", body["query"]!.GetValue<string>());

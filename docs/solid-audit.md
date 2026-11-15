@@ -111,6 +111,10 @@ The subsequent REST client change targets `/v1/...` and the unversioned
 Cassie `main` container. See [REST client](rest-client.md) for
 the explicitly authorized temporary live-contract failures during that migration.
 
+Update, 2026-11-15: the planned `/v1/...` prefix was never served by a published
+server. The client now targets `/api/v1/...`, and the six live REST contracts pass.
+References to pending REST failures below describe the state at the time of this audit.
+
 ## Dependency injection follow-up
 
 The optional `Cntryl.Cassie.DependencyInjection` package adds service registrations while

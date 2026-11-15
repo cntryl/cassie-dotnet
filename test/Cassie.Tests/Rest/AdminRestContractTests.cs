@@ -74,7 +74,7 @@ namespace Cntryl.Cassie.Tests.Rest
             using ScriptedHttpHandler handler = new(async (request, cancellationToken) =>
             {
                 Assert.Equal(HttpMethod.Post, request.Method);
-                Assert.Equal(new Uri(ServiceAddress, "v1/admin/query/execute"), request.RequestUri);
+                Assert.Equal(new Uri(ServiceAddress, "api/v1/admin/query/execute"), request.RequestUri);
                 using JsonDocument body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
                 Assert.Equal("ledger", body.RootElement.GetProperty("database").GetString());
                 Assert.Equal("SELECT 1", body.RootElement.GetProperty("sql").GetString());
@@ -107,7 +107,7 @@ namespace Cntryl.Cassie.Tests.Rest
             // Arrange
             using ScriptedHttpHandler handler = new((request, _) =>
             {
-                Assert.Equal(new Uri(ServiceAddress, "v1/admin/query/validate"), request.RequestUri);
+                Assert.Equal(new Uri(ServiceAddress, "api/v1/admin/query/validate"), request.RequestUri);
                 return Task.FromResult(ScriptedHttpHandler.Json(/*lang=json,strict*/ """{"valid":true,"command":"CREATE TABLE"}"""));
             });
             using HttpClient http = new(handler) { BaseAddress = ServiceAddress };
@@ -128,7 +128,7 @@ namespace Cntryl.Cassie.Tests.Rest
             // Arrange
             using ScriptedHttpHandler handler = new((request, _) =>
             {
-                Assert.Equal(new Uri(ServiceAddress, "v1/admin/query/explain"), request.RequestUri);
+                Assert.Equal(new Uri(ServiceAddress, "api/v1/admin/query/explain"), request.RequestUri);
                 return Task.FromResult(ScriptedHttpHandler.Json(/*lang=json,strict*/ """
                     {"columns":[],"rows":[],"command":"EXPLAIN","plan":{"format_version":7,"nodes":[{"id":1,"unknown_extension":{"preserved":true}}],"analyze":null}}
                     """));
@@ -153,7 +153,7 @@ namespace Cntryl.Cassie.Tests.Rest
             using ScriptedHttpHandler handler = new((request, _) =>
             {
                 Assert.Equal(HttpMethod.Get, request.Method);
-                Assert.Equal(new Uri(ServiceAddress, "v1/admin/query/schema?database=ledger"), request.RequestUri);
+                Assert.Equal(new Uri(ServiceAddress, "api/v1/admin/query/schema?database=ledger"), request.RequestUri);
                 return Task.FromResult(ScriptedHttpHandler.Json(/*lang=json,strict*/ """
                     {"sections":[{"id":"tables","label":"Tables","items":[{"id":"ledger.public.events","kind":"table","label":"events","database":"ledger","schema":"public","name":"events","columns":[{"id":"id","name":"id","data_type":"int4","primary_key":true}]}]}]}
                     """));
@@ -200,7 +200,7 @@ namespace Cntryl.Cassie.Tests.Rest
             // Arrange
             using ScriptedHttpHandler handler = new(async (request, cancellationToken) =>
             {
-                Assert.Equal(new Uri(ServiceAddress, "v1/admin/databases"), request.RequestUri);
+                Assert.Equal(new Uri(ServiceAddress, "api/v1/admin/databases"), request.RequestUri);
                 if (request.Method == HttpMethod.Get)
                 {
                     return ScriptedHttpHandler.Json(/*lang=json,strict*/ """[{"name":"ledger","description":"Read model"},{"name":"postgres"}]""");
@@ -233,7 +233,7 @@ namespace Cntryl.Cassie.Tests.Rest
             using ScriptedHttpHandler handler = new((request, _) =>
             {
                 Assert.Equal(HttpMethod.Delete, request.Method);
-                Assert.Equal(new Uri(ServiceAddress, "v1/admin/query-operations/" + OperationId.ToString("D")), request.RequestUri);
+                Assert.Equal(new Uri(ServiceAddress, "api/v1/admin/query-operations/" + OperationId.ToString("D")), request.RequestUri);
                 Assert.Null(request.Content);
                 return Task.FromResult(ScriptedHttpHandler.Json(/*lang=json,strict*/ """{"operation_id":"00000000-1111-2222-3333-444444444444","cancelled":true}"""));
             });
@@ -276,7 +276,7 @@ namespace Cntryl.Cassie.Tests.Rest
             {
                 Assert.Equal(HttpMethod.Post, request.Method);
                 using JsonDocument body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
-                if (request.RequestUri == new Uri(ServiceAddress, "v1/admin/projections/postgres.public.events/verification-manifests"))
+                if (request.RequestUri == new Uri(ServiceAddress, "api/v1/admin/projections/postgres.public.events/verification-manifests"))
                 {
                     Assert.Equal("node-a", body.RootElement.GetProperty("instance_id").GetString());
                     Assert.Equal(ulong.MaxValue, body.RootElement.GetProperty("generated_ms").GetUInt64());
@@ -285,7 +285,7 @@ namespace Cntryl.Cassie.Tests.Rest
                     return ScriptedHttpHandler.Json(ManifestJson);
                 }
 
-                Assert.Equal(new Uri(ServiceAddress, "v1/admin/projection-consistency-checks"), request.RequestUri);
+                Assert.Equal(new Uri(ServiceAddress, "api/v1/admin/projection-consistency-checks"), request.RequestUri);
                 JsonElement manifest = body.RootElement.GetProperty("manifests")[0];
                 Assert.Equal(ulong.MaxValue, manifest.GetProperty("schema_epoch").GetUInt64());
                 Assert.Equal(ulong.MaxValue, manifest.GetProperty("projection_definition_hash").GetUInt64());
@@ -327,7 +327,7 @@ namespace Cntryl.Cassie.Tests.Rest
             using ScriptedHttpHandler handler = new((request, _) =>
             {
                 Assert.Equal(HttpMethod.Get, request.Method);
-                Assert.Equal(new Uri(ServiceAddress, "v1/admin/projection-consistency-reports"), request.RequestUri);
+                Assert.Equal(new Uri(ServiceAddress, "api/v1/admin/projection-consistency-reports"), request.RequestUri);
                 return Task.FromResult(ScriptedHttpHandler.Json("{\"reports\":[" + ReportJson + "]}"));
             });
             using HttpClient http = new(handler) { BaseAddress = ServiceAddress };

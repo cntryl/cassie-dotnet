@@ -6,6 +6,7 @@ namespace Cntryl.Cassie.Tests.Live
     internal sealed class LiveRestSession : IAsyncDisposable
     {
         private readonly List<string> _collections = [];
+        private readonly List<string> _databases = [];
 
         private LiveRestSession(CassieRestClient client)
         {
@@ -40,6 +41,15 @@ namespace Cntryl.Cassie.Tests.Live
             return name;
         }
 
+        /// <summary>Creates a uniquely named database that this session drops when it is disposed.</summary>
+        public async Task<CassieDatabaseInfo> CreateDatabaseAsync()
+        {
+            string name = LiveSession.UniqueName("rest_database");
+            CassieDatabaseInfo created = await Client.Admin.CreateDatabaseAsync(name, TestContext.Current.CancellationToken);
+            _databases.Add(name);
+            return created;
+        }
+
         public async ValueTask DisposeAsync()
         {
             try
@@ -47,6 +57,12 @@ namespace Cntryl.Cassie.Tests.Live
                 foreach (string name in _collections)
                 {
                     _ = await Client.Admin.ExecuteQueryAsync(new("postgres", $"DROP TABLE IF EXISTS {name}"), CancellationToken.None);
+                }
+
+                // A leftover database changes how the server handles later DDL on other sessions.
+                foreach (string name in _databases)
+                {
+                    _ = await Client.Admin.ExecuteQueryAsync(new("postgres", $"DROP DATABASE {name}"), CancellationToken.None);
                 }
 
                 await Client.LogoutAsync(CancellationToken.None);

@@ -16,14 +16,14 @@ namespace Cntryl.Cassie.Rest
         /// <summary>Lists databases visible to the authenticated role.</summary>
         public async Task<IReadOnlyList<CassieDatabaseInfo>> ListDatabasesAsync(CancellationToken cancellationToken = default)
         {
-            return await _client.SendAsync(HttpMethod.Get, "v1/admin/databases", null, CassieRestJsonContext.Default.CassieDatabaseInfoArray, cancellationToken).ConfigureAwait(false);
+            return await _client.SendAsync(HttpMethod.Get, "api/v1/admin/databases", null, CassieRestJsonContext.Default.CassieDatabaseInfoArray, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>Creates a logical database.</summary>
         public Task<CassieDatabaseInfo> CreateDatabaseAsync(string name, CancellationToken cancellationToken = default)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(name);
-            return _client.SendAsync(HttpMethod.Post, "v1/admin/databases",
+            return _client.SendAsync(HttpMethod.Post, "api/v1/admin/databases",
                 CassieRestClient.CreateJsonContent(new CassieDatabaseCreateRequest(name), CassieRestJsonContext.Default.CassieDatabaseCreateRequest),
                 CassieRestJsonContext.Default.CassieDatabaseInfo, cancellationToken);
         }
@@ -32,7 +32,7 @@ namespace Cntryl.Cassie.Rest
         public Task<CassieCatalogSchema> GetSchemaAsync(string database, CancellationToken cancellationToken = default)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(database);
-            return _client.SendAsync(HttpMethod.Get, "v1/admin/query/schema?database=" + Uri.EscapeDataString(database), null,
+            return _client.SendAsync(HttpMethod.Get, "api/v1/admin/query/schema?database=" + Uri.EscapeDataString(database), null,
                 CassieRestJsonContext.Default.CassieCatalogSchema, cancellationToken);
         }
 
@@ -58,14 +58,14 @@ namespace Cntryl.Cassie.Rest
         /// <remarks>This is separate from canceling a local HTTP request through its cancellation token.</remarks>
         public Task<CassieQueryCancellation> CancelQueryAsync(Guid operationId, CancellationToken cancellationToken = default)
         {
-            return _client.SendAsync(HttpMethod.Delete, "v1/admin/query-operations/" + operationId.ToString("D"), null,
+            return _client.SendAsync(HttpMethod.Delete, "api/v1/admin/query-operations/" + operationId.ToString("D"), null,
                 CassieRestJsonContext.Default.CassieQueryCancellation, cancellationToken);
         }
 
         /// <summary>Exports a projection verification manifest from the current server.</summary>
         public Task<CassieProjectionVerificationManifest> ExportVerificationManifestAsync(string projection, CassieManifestExportOptions? options = null, CancellationToken cancellationToken = default)
         {
-            string path = "v1/admin/projections/" + CassieRestClient.EscapePathSegment(projection, nameof(projection)) + "/verification-manifests";
+            string path = "api/v1/admin/projections/" + CassieRestClient.EscapePathSegment(projection, nameof(projection)) + "/verification-manifests";
             return _client.SendAsync(HttpMethod.Post, path,
                 CassieRestClient.CreateJsonContent(options ?? new CassieManifestExportOptions(), CassieRestJsonContext.Default.CassieManifestExportOptions),
                 CassieRestJsonContext.Default.CassieProjectionVerificationManifest, cancellationToken);
@@ -75,7 +75,7 @@ namespace Cntryl.Cassie.Rest
         public Task<CassieProjectionConsistencyReport> CompareVerificationManifestsAsync(IReadOnlyList<CassieProjectionVerificationManifest> manifests, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(manifests);
-            return _client.SendAsync(HttpMethod.Post, "v1/admin/projection-consistency-checks",
+            return _client.SendAsync(HttpMethod.Post, "api/v1/admin/projection-consistency-checks",
                 CassieRestClient.CreateJsonContent(new CassieManifestComparisonRequest(manifests), CassieRestJsonContext.Default.CassieManifestComparisonRequest),
                 CassieRestJsonContext.Default.CassieProjectionConsistencyReport, cancellationToken);
         }
@@ -83,7 +83,7 @@ namespace Cntryl.Cassie.Rest
         /// <summary>Lists the latest consistency report for each projection.</summary>
         public async Task<IReadOnlyList<CassieProjectionConsistencyReport>> ListProjectionConsistencyReportsAsync(CancellationToken cancellationToken = default)
         {
-            CassieProjectionReportsResult result = await _client.SendAsync(HttpMethod.Get, "v1/admin/projection-consistency-reports", null,
+            CassieProjectionReportsResult result = await _client.SendAsync(HttpMethod.Get, "api/v1/admin/projection-consistency-reports", null,
                 CassieRestJsonContext.Default.CassieProjectionReportsResult, cancellationToken).ConfigureAwait(false);
             return result.Reports;
         }
@@ -128,7 +128,7 @@ namespace Cntryl.Cassie.Rest
             ArgumentNullException.ThrowIfNull(request);
             ArgumentException.ThrowIfNullOrWhiteSpace(request.Database);
             ArgumentException.ThrowIfNullOrWhiteSpace(request.Sql);
-            return _client.SendAsync(HttpMethod.Post, "v1/admin/query/" + operation,
+            return _client.SendAsync(HttpMethod.Post, "api/v1/admin/query/" + operation,
                 CassieRestClient.CreateJsonContent(request, CassieRestJsonContext.Default.CassieAdminQueryRequest), responseType, cancellationToken);
         }
     }
