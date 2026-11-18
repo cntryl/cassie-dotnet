@@ -6,7 +6,8 @@ using Microsoft.Extensions.Logging;
 namespace Cntryl.Cassie.Connection;
 
 /// <summary>Adapts a connection's borrowed query stream to the reader's session contract.</summary>
-internal sealed class ConnectionReaderSession(CassieConnection connection, PgSession session) : IReaderSession
+internal sealed class ConnectionReaderSession(CassieConnection connection, PgSession session,
+    Action<byte>? readyForQuery = null) : IReaderSession
 {
     private readonly Guid _lease = connection.SessionIdentity;
     private readonly long _operation = connection.OperationSerial;
@@ -64,6 +65,7 @@ internal sealed class ConnectionReaderSession(CassieConnection connection, PgSes
         }
 
         connection.HandleReadyForQuery(payload);
+        readyForQuery?.Invoke(payload[0]);
     }
 
     public void ObserveCommandComplete(CommandTag tag)
@@ -74,9 +76,14 @@ internal sealed class ConnectionReaderSession(CassieConnection connection, PgSes
         }
     }
 
-    public Task ReaderClosedAsync()
+    public CleanupDeadline? StartCleanupDeadline()
     {
-        return OwnsOperation ? connection.ReaderClosedAsync() : Task.CompletedTask;
+        return OwnsOperation ? new CleanupDeadline(session, connection.CleanupTimeProvider) : null;
+    }
+
+    public Task ReaderClosedAsync(CleanupDeadline? drainDeadline)
+    {
+        return OwnsOperation ? connection.ReaderClosedAsync(drainDeadline) : Task.CompletedTask;
     }
 
     public Task CloseAsync()

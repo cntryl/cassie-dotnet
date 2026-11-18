@@ -278,7 +278,7 @@ public sealed class SynchronousIoContractTests
         {
             if (!sql.StartsWith("SELECT", StringComparison.Ordinal))
             {
-                await session.WriteCommandCompleteAsync(sql.Split(' ')[0]);
+                await session.WriteCommandCompleteAsync(sql);
                 return;
             }
 

@@ -45,6 +45,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     private readonly Action<CassieException>? _statementFailed;
     private bool _closed;
     private volatile bool _complete;
+    private CleanupDeadline? _drainDeadline;
     private Exception? _statementCloseFailure;
     private bool _completedAfterDeadline;
     private object?[]? _converted;
@@ -312,7 +313,8 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
 
         try
         {
-            if (!await _cancellation.RequestCancelAsync().ConfigureAwait(false))
+            if (!await _cancellation.RequestCancelAsync().WaitAsync(_drainDeadline?.Token ?? CancellationToken.None)
+                    .ConfigureAwait(false))
             {
                 _session.AbortTransport();
                 FinishOperation();
@@ -727,6 +729,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         {
             if (!_complete && _session.IsOpen)
             {
+                _drainDeadline = _session.StartCleanupDeadline();
                 while (!_complete)
                 {
                     while (await ReadAsync(CancellationToken.None).ConfigureAwait(false))
@@ -743,8 +746,14 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         catch (Exception exception)
         {
             drainFailure = exception;
-            propagateDrainFailure = exception is not (IOException or CassieException) ||
+            var drainExpired = _drainDeadline?.Expired == true && CleanupDeadline.IsTransportFailure(exception);
+            propagateDrainFailure = (exception is not (IOException or CassieException) && !drainExpired) ||
                                     ReferenceEquals(exception, _statementCloseFailure);
+        }
+        finally
+        {
+            _drainDeadline?.Dispose();
+            _drainDeadline = null;
         }
 
         _closed = true;
@@ -1396,7 +1405,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
 
         try
         {
-            await _session.ReaderClosedAsync().ConfigureAwait(false);
+            await _session.ReaderClosedAsync(_drainDeadline).ConfigureAwait(false);
         }
         catch (Exception error)
         {
@@ -1551,7 +1560,8 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         {
             await DrainToReadyAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception cleanupError) when (ReferenceEquals(cleanupError, _statementCloseFailure))
+        catch (Exception cleanupError) when (ReferenceEquals(cleanupError, _statementCloseFailure) ||
+                                             (_drainDeadline?.Expired == true && CleanupDeadline.IsTransportFailure(cleanupError)))
         {
             // The original server error belongs to the operation the caller is executing.
         }

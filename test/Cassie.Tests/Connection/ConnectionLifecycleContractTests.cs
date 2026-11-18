@@ -55,7 +55,7 @@ public sealed class ConnectionLifecycleContractTests
     public void ShouldReturnSessionToPoolGivenSyncDisposeWhenMaximumPoolSizeIsOne()
     {
         // Arrange
-        using ScriptedServer server = new(session => session.ServeQueriesAsync(_ => Task.CompletedTask));
+        using ScriptedServer server = new(session => session.ServeQueriesAsync(session.WriteCommandCompleteAsync));
         var connectionString = server.ConnectionString("Pooling=true;Maximum Pool Size=1");
         CassieConnection.ClearAllPools();
         using (CassieConnection first = new() { ConnectionString = connectionString })

@@ -9,6 +9,7 @@ public sealed partial class CassieConnection
     private Task<bool>? _pendingQueryCancel;
     private long _cleanupOperation;
     internal long OperationSerial => _gate.Serial;
+    internal TimeProvider CleanupTimeProvider { get; set; } = TimeProvider.System;
 
     internal void HandleParameterStatusMessage(byte[] payload)
     {
@@ -37,12 +38,17 @@ public sealed partial class CassieConnection
     {
         if (_session is { } session)
         {
-            session.DateStyle.ObserveCommandComplete(tag);
-            if (tag.HasVerb("ROLLBACK") || tag.HasVerb("ABORT") ||
-                tag.Matches("CREATE EXTENSION") || tag.Matches("DROP EXTENSION") || tag.Matches("ALTER EXTENSION"))
-            {
-                session.VectorOid = null;
-            }
+            ObserveCommandComplete(session, tag);
+        }
+    }
+
+    private static void ObserveCommandComplete(PgSession session, CommandTag tag)
+    {
+        session.DateStyle.ObserveCommandComplete(tag);
+        if (tag.HasVerb("ROLLBACK") || tag.HasVerb("ABORT") ||
+            tag.Matches("CREATE EXTENSION") || tag.Matches("DROP EXTENSION") || tag.Matches("ALTER EXTENSION"))
+        {
+            session.VectorOid = null;
         }
     }
 
@@ -87,20 +93,30 @@ public sealed partial class CassieConnection
                 return;
             }
 
-            ActiveTransaction?.ConnectionClosed();
+            ActiveTransaction?.MarkCompleted();
             _gate.End();
             _pendingQueryCancel = null;
-            _session?.Dispose();
-            _session = null;
-            if (_pool is not null && _ownsPoolSlot)
+            try
             {
-                _pool.ReleaseReservedSlot();
+                _session?.Dispose();
             }
+            catch (Exception exception) when (CleanupDeadline.IsTransportFailure(exception))
+            {
+                // The socket is closed even if disposing the stream failed.
+            }
+            finally
+            {
+                _session = null;
+                if (_pool is not null && _ownsPoolSlot)
+                {
+                    _pool.ReleaseReservedSlot();
+                }
 
-            _pool = null;
-            _poolKey = null;
-            _ownsPoolSlot = false;
-            SetState(ConnectionState.Closed);
+                _pool = null;
+                _poolKey = null;
+                _ownsPoolSlot = false;
+                SetState(ConnectionState.Closed);
+            }
         }
     }
 

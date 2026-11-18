@@ -87,7 +87,12 @@ internal sealed class FakeReaderSession : IReaderSession
         CompletedCommands.Add(tag);
     }
 
-    public Task ReaderClosedAsync()
+    public CleanupDeadline? StartCleanupDeadline()
+    {
+        return null;
+    }
+
+    public Task ReaderClosedAsync(CleanupDeadline? drainDeadline)
     {
         ReaderClosures++;
         return ReaderClosedHandler?.Invoke() ?? Task.CompletedTask;

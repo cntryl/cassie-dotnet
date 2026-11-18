@@ -20,7 +20,8 @@ internal interface IReaderSession
     void HandleParameterStatusMessage(byte[] payload);
     void HandleReadyForQuery(ReadOnlySpan<byte> payload);
     void ObserveCommandComplete(CommandTag tag);
-    Task ReaderClosedAsync();
+    CleanupDeadline? StartCleanupDeadline();
+    Task ReaderClosedAsync(CleanupDeadline? drainDeadline);
     Task CloseAsync();
 
     /// <summary>Switches the session to blocking I/O; returns false when an enclosing synchronous call already did.</summary>

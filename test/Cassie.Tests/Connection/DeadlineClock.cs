@@ -1,7 +1,7 @@
 namespace Cntryl.Cassie.Tests.Connection;
 
-/// <summary>A manually advanced clock for the fixed COPY recovery deadline.</summary>
-internal sealed class CopyRecoveryClock : TimeProvider, IDisposable
+/// <summary>A manually advanced clock for provider deadlines.</summary>
+internal sealed class DeadlineClock : TimeProvider, IDisposable
 {
     private readonly Lock _gate = new();
     private readonly TaskCompletionSource _timerCreated = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -48,7 +48,7 @@ internal sealed class CopyRecoveryClock : TimeProvider, IDisposable
         }
     }
 
-    private sealed class RecoveryTimer(CopyRecoveryClock owner, TimerCallback callback, object? state) : ITimer
+    private sealed class RecoveryTimer(DeadlineClock owner, TimerCallback callback, object? state) : ITimer
     {
         private bool _disposed;
         private long _dueTicks = long.MaxValue;

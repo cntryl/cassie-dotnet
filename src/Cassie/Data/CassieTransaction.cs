@@ -1,6 +1,5 @@
 using System.Data;
 using System.Data.Common;
-using System.Net.Sockets;
 using Cntryl.Cassie.Connection;
 
 namespace Cntryl.Cassie.Data;
@@ -106,16 +105,7 @@ public sealed class CassieTransaction : DbTransaction
     {
         if (disposing && !_completed && _connection.State == ConnectionState.Open)
         {
-            try
-            {
-                Rollback();
-            }
-            catch (Exception exception) when (exception is CassieException or IOException or SocketException
-                                                  or ObjectDisposedException or InvalidOperationException
-                                                  or TimeoutException)
-            {
-                CompleteLocally();
-            }
+            _connection.RunSynchronously(() => _connection.DisposeTransactionAsync(this));
         }
 
         base.Dispose(disposing);
@@ -126,16 +116,7 @@ public sealed class CassieTransaction : DbTransaction
     {
         if (!_completed && _connection.State == ConnectionState.Open)
         {
-            try
-            {
-                await RollbackAsync().ConfigureAwait(false);
-            }
-            catch (Exception exception) when (exception is CassieException or IOException or SocketException
-                                                  or ObjectDisposedException or InvalidOperationException
-                                                  or TimeoutException)
-            {
-                CompleteLocally();
-            }
+            await _connection.DisposeTransactionAsync(this).ConfigureAwait(false);
         }
 
         await base.DisposeAsync().ConfigureAwait(false);
@@ -146,11 +127,10 @@ public sealed class CassieTransaction : DbTransaction
         _connection.RunSynchronously(() => CompleteAsync(sql, CancellationToken.None));
     }
 
-    private async Task CompleteAsync(string sql, CancellationToken cancellationToken)
+    private Task CompleteAsync(string sql, CancellationToken cancellationToken)
     {
         EnsureActive();
-        await _connection.ExecuteControlQueryAsync(sql, cancellationToken).ConfigureAwait(false);
-        CompleteLocally();
+        return _connection.EndTransactionAsync(this, sql, cancellationToken);
     }
 
     private void ExecuteSavepoint(string operation, string name)
@@ -175,14 +155,9 @@ public sealed class CassieTransaction : DbTransaction
         }
     }
 
-    private void CompleteLocally()
+    internal void MarkCompleted()
     {
         _completed = true;
         _connection.CompleteTransaction(this);
-    }
-
-    internal void ConnectionClosed()
-    {
-        CompleteLocally();
     }
 }
