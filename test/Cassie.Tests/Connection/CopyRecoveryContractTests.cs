@@ -13,6 +13,45 @@ namespace Cntryl.Cassie.Tests.Connection;
 public sealed class CopyRecoveryContractTests
 {
     [Fact]
+    public async Task ShouldDiscardSessionGivenPartialCopyFrameWhenWriteDeadlineExpires()
+    {
+        // Arrange
+        var token = TestContext.Current.CancellationToken;
+        TaskCompletionSource<byte> dataStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        using ScriptedServer server = new(async session =>
+        {
+            _ = await session.ReadFrameAsync();
+            await session.WriteAsync((byte)'G', [0, 0, 0]);
+            var prefix = new byte[6];
+            await session.Stream.ReadExactlyAsync(prefix, token);
+            dataStarted.SetResult(prefix[0]);
+            await release.Task;
+        });
+        await using CassieConnection connection = new() { ConnectionString = server.ConnectionString("Pooling=false") };
+        await connection.OpenAsync(token);
+        using var command = connection.CreateCommand();
+        command.CommandText = "COPY ledger FROM STDIN";
+        command.CommandTimeout = 1;
+        using MemoryStream source = new(new byte[16 * 1024 * 1024], false);
+
+        try
+        {
+            // Act
+            _ = await Assert.ThrowsAsync<TimeoutException>(() => command.CopyFromAsync(source, token));
+
+            // Assert
+            Assert.Equal((byte)'d', await dataStarted.Task.WaitAsync(TimeSpan.FromSeconds(3), token));
+            Assert.Equal(ConnectionState.Closed, connection.State);
+            Assert.Equal(0, server.CancelRequests);
+        }
+        finally
+        {
+            release.SetResult();
+        }
+    }
+
+    [Fact]
     public async Task ShouldBoundRecoveryGivenSilentCopyFailPeerWhenInputStreamFails()
     {
         // Arrange

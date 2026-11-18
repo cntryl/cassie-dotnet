@@ -297,6 +297,7 @@ public sealed class DatabaseChangeContractTests
         Assert.Equal(80877102, BinaryPrimitives.ReadInt32BigEndian(cancel.AsSpan(4)));
         Assert.Equal(1234, BinaryPrimitives.ReadInt32BigEndian(cancel.AsSpan(8)));
         Assert.Equal(5678, BinaryPrimitives.ReadInt32BigEndian(cancel.AsSpan(12)));
+        cancelClient.Dispose();
         _ = cancelReceived.TrySetResult(true);
         byte[] error =
         [

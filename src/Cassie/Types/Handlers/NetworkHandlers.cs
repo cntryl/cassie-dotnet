@@ -266,27 +266,11 @@ internal sealed class LsnHandler : CassieTypeHandler
     }
 }
 
-/// <summary>Handles the dimension-specific vector OIDs.</summary>
-internal sealed class VectorHandler : CassieTypeHandler
+/// <summary>Encodes and decodes pgvector values independently of their database-specific OID.</summary>
+internal static class VectorHandler
 {
-    internal override object? DecodeBinary(int oid, byte[] value)
+    internal static CassieVector DecodeBinary(ReadOnlySpan<byte> bytes, int typeModifier)
     {
-        return DecodeBinaryVector(value, CassieTypeMap.GetVectorDimension(oid));
-    }
-
-    internal override string? EncodeText(int oid, object value)
-    {
-        return value is CassieVector vector ? FormatTextVector(vector, oid) : null;
-    }
-
-    internal override byte[]? EncodeBinary(int oid, object value)
-    {
-        return value is CassieVector vector ? EncodeBinaryVector(vector, oid) : null;
-    }
-
-    private static CassieVector DecodeBinaryVector(byte[] value, int expectedDimension)
-    {
-        ReadOnlySpan<byte> bytes = value;
         if (bytes.Length < 4)
         {
             throw new FormatException("Cassie returned a truncated binary vector header.");
@@ -294,7 +278,7 @@ internal sealed class VectorHandler : CassieTypeHandler
 
         int dimension = BinaryPrimitives.ReadInt16BigEndian(bytes);
         var reserved = BinaryPrimitives.ReadInt16BigEndian(bytes[2..]);
-        if (dimension < 1 || dimension != expectedDimension || reserved != 0 ||
+        if (dimension < 1 || (typeModifier >= 0 && dimension != typeModifier) || reserved != 0 ||
             bytes.Length != 4 + (dimension * sizeof(float)))
         {
             throw new FormatException("Cassie returned an invalid binary vector frame.");
@@ -315,22 +299,14 @@ internal sealed class VectorHandler : CassieTypeHandler
         return new CassieVector(components);
     }
 
-    private static string FormatTextVector(CassieVector vector, int oid)
+    internal static string EncodeText(CassieVector vector)
     {
-        return CassieTypeMap.GetVectorDimension(oid) == vector.Dimension
-            ? "[" + string.Join(",", vector.Select(static value => value.ToString("R", CultureInfo.InvariantCulture))) +
-              "]"
-            : throw new ArgumentException("The vector dimension does not match its PostgreSQL type OID.",
-                nameof(vector));
+        return "[" + string.Join(",", vector.Select(static value => value.ToString("R", CultureInfo.InvariantCulture))) +
+               "]";
     }
 
-    private static byte[] EncodeBinaryVector(CassieVector vector, int oid)
+    internal static byte[] EncodeBinary(CassieVector vector)
     {
-        if (CassieTypeMap.GetVectorDimension(oid) != vector.Dimension)
-        {
-            throw new ArgumentException("The vector dimension does not match its PostgreSQL type OID.", nameof(vector));
-        }
-
         var bytes = new byte[4 + (vector.Count * sizeof(float))];
         BinaryPrimitives.WriteInt16BigEndian(bytes, checked((short)vector.Dimension));
         BinaryPrimitives.WriteInt16BigEndian(bytes.AsSpan(2), 0);

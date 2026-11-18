@@ -42,9 +42,8 @@ internal static class RowMessages
     ///     Validates a DataRow and records where each field's bytes sit in the payload, without decoding them.
     ///     A NULL field has length -1.
     /// </summary>
-    public static void IndexDataRow(byte[] payload, Span<int> fieldOffsets, Span<int> fieldLengths)
+    public static void IndexDataRow(ReadOnlySpan<byte> payload, Span<int> fieldOffsets, Span<int> fieldLengths)
     {
-        ArgumentNullException.ThrowIfNull(payload);
         var offset = 0;
         var count = PgPayload.ReadInt16(payload, ref offset);
         if (count != fieldOffsets.Length || count != fieldLengths.Length)

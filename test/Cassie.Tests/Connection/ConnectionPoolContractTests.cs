@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
@@ -12,6 +13,34 @@ namespace Cntryl.Cassie.Tests.Connection;
 [Collection(nameof(PoolLifecycleContractTests))]
 public sealed class ConnectionPoolContractTests
 {
+    [Fact]
+    public async Task ShouldLeaveSessionAvailableGivenWarmPoolWhenOpenIsAlreadyCanceled()
+    {
+        // Arrange
+        using ScriptedServer server = new(session => session.ServeQueriesAsync(sql =>
+            session.WriteCommandCompleteAsync(sql)));
+        await using CassieConnection connection = new()
+        {
+            ConnectionString = server.ConnectionString("Pooling=true;Maximum Pool Size=1")
+        };
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        await connection.CloseAsync();
+        List<ConnectionState> states = [];
+        connection.StateChange += (_, change) => states.Add(change.CurrentState);
+
+        // Act
+        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => connection.OpenAsync(new CancellationToken(true)));
+
+        // Assert
+        Assert.Empty(states);
+        Assert.Equal(ConnectionState.Closed, connection.State);
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(1, server.Accepted);
+        await connection.CloseAsync();
+        CassieConnection.ClearPool(connection);
+    }
+
     [Fact]
     [SuppressMessage("Reliability", "CA2025",
         Justification = "The test stops the listener and awaits the peer in finally before disposing the listener.")]

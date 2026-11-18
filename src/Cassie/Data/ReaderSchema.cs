@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
-using Cntryl.Cassie.Types;
 
 namespace Cntryl.Cassie.Data;
 
@@ -69,7 +68,7 @@ internal static class ReaderSchema
                 DBNull.Value,
                 DBNull.Value,
                 column.FieldType,
-                CassieTypeMap.GetDataTypeName(column.TypeOid));
+                column.DataTypeName);
         }
 
         return table;
@@ -93,7 +92,7 @@ internal static class ReaderSchema
         {
             1042 or 1043 when column.TypeModifier >= 4 => column.TypeModifier - 4,
             1700 when column.TypeModifier >= 4 => (column.TypeModifier - 4) >> 16,
-            _ when CassieTypeMap.IsVectorOid(column.TypeOid) => CassieTypeMap.GetVectorDimension(column.TypeOid),
+            _ when column.IsVector && column.TypeModifier > 0 => column.TypeModifier,
             _ => column.TypeSize
         };
     }
@@ -135,7 +134,7 @@ internal static class ReaderSchema
             NumericPrecision = GetNumericPrecision(column) is short precision ? precision : null;
             NumericScale = GetNumericScale(column) is short scale ? scale : null;
             DataType = column.FieldType;
-            DataTypeName = CassieTypeMap.GetDataTypeName(column.TypeOid);
+            DataTypeName = column.DataTypeName;
             AllowDBNull = null;
             BaseCatalogName = null;
             BaseColumnName = null;

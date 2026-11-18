@@ -19,10 +19,13 @@ internal sealed class FakeReaderSession : IReaderSession
     public List<CommandTag> CompletedCommands { get; } = [];
     public List<CancellationToken> ReadTokens { get; } = [];
     public Func<Task<bool>>? CancelHandler { get; set; }
+    public Func<Task>? CloseHandler { get; set; }
+    public Func<Task>? ReaderClosedHandler { get; set; }
     public Func<CancellationToken, Task<(byte Tag, byte[] Payload)>>? ReadHandler { get; set; }
 
     public bool IsOpen { get; private set; } = true;
     public CassieDateStyle? DateStyle => null;
+    public int? VectorOid { get; set; }
     public ILogger? Logger => null;
 
     public bool EnterSynchronous()
@@ -34,12 +37,22 @@ internal sealed class FakeReaderSession : IReaderSession
     {
     }
 
-    public ValueTask<(byte Tag, byte[] Payload)> ReadFrameAsync(CancellationToken cancellationToken)
+    public ValueTask<(byte Tag, byte[] Payload)> ReadFrameAsync(RowPayloadBuffer? rowBuffer, CancellationToken cancellationToken)
     {
         ReadTokens.Add(cancellationToken);
         return ReadHandler is null
             ? ValueTask.FromResult(_frames.Dequeue())
             : new ValueTask<(byte Tag, byte[] Payload)>(ReadHandler(cancellationToken));
+    }
+
+    public ValueTask WritePortalPageAsync(ReadOnlyMemory<byte> frames, CancellationToken cancellationToken)
+    {
+        throw new NotSupportedException();
+    }
+
+    public Task WriteExtendedSyncAsync(CancellationToken cancellationToken)
+    {
+        throw new NotSupportedException();
     }
 
     public Task<bool> CancelCurrentQueryAsync()
@@ -77,14 +90,14 @@ internal sealed class FakeReaderSession : IReaderSession
     public Task ReaderClosedAsync()
     {
         ReaderClosures++;
-        return Task.CompletedTask;
+        return ReaderClosedHandler?.Invoke() ?? Task.CompletedTask;
     }
 
     public Task CloseAsync()
     {
         ConnectionClosures++;
         IsOpen = false;
-        return Task.CompletedTask;
+        return CloseHandler?.Invoke() ?? Task.CompletedTask;
     }
 
     public void Enqueue(byte tag, byte[] payload)

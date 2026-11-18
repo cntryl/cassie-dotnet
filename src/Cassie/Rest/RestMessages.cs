@@ -11,3 +11,5 @@ internal sealed record RestDeleteResponse(bool? Deleted);
 internal sealed record RestLogoutResponse(bool? LoggedOut);
 
 internal sealed record RestErrorResponse(string? Error);
+
+internal sealed record RestQueryCancellation(Guid OperationId, bool? Canceled, bool? Cancelled);

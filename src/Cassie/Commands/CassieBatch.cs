@@ -197,14 +197,13 @@ public sealed class CassieBatch : DbBatch
     /// </remarks>
     public override void Prepare()
     {
-        var (commands, prepared) = ValidateForPrepare();
         if (DbConnection is CassieConnection connection)
         {
-            for (var index = 0; index < commands.Length; index++)
-            {
-                commands[index].PreparedStatement.Request();
-                _ = commands[index].PreparedStatement.EnsurePrepared(connection, prepared[index], Timeout);
-            }
+            connection.RunSynchronously(() => PrepareAsync(CancellationToken.None));
+        }
+        else
+        {
+            SynchronousCall.Wait(PrepareAsync(CancellationToken.None));
         }
     }
 
@@ -220,11 +219,14 @@ public sealed class CassieBatch : DbBatch
         var (commands, prepared) = ValidateForPrepare();
         if (DbConnection is CassieConnection connection)
         {
+            var budget = connection.StartCommandBudget(Timeout, cancellationToken);
             for (var index = 0; index < commands.Length; index++)
             {
+                prepared[index] = await connection.ResolveVectorTypesAsync(prepared[index], false, budget, cancellationToken)
+                    .ConfigureAwait(false);
                 commands[index].PreparedStatement.Request();
                 _ = await commands[index].PreparedStatement
-                    .EnsurePreparedAsync(connection, prepared[index], Timeout, cancellationToken).ConfigureAwait(false);
+                    .EnsurePreparedAsync(connection, prepared[index], budget, cancellationToken).ConfigureAwait(false);
             }
         }
     }
@@ -304,6 +306,7 @@ public sealed class CassieBatch : DbBatch
         var preparedCommands = PrepareAll(commands);
         foreach (var prepared in preparedCommands)
         {
+            CassieConnection.ValidateSqlText(prepared.Sql);
             _ = ParameterizedQueryBatch.EncodeParameters(prepared);
         }
 
@@ -390,9 +393,21 @@ public sealed class CassieBatch : DbBatch
 
             // Local validation comes first, so a bad parameter never opens a connection or touches a transaction.
             var prepared = PrepareAll(commands);
+            foreach (var command in prepared)
+            {
+                CassieConnection.ValidateSqlText(command.Sql);
+            }
+
             EncodedParameters[] encoded =
                 [.. prepared.Select(static command => ParameterizedQueryBatch.EncodeParameters(command))];
             (connection, owned) = await AcquireConnectionAsync(preOpened, cancellationToken).ConfigureAwait(false);
+            var budget = connection.StartCommandBudget(Timeout, cancellationToken);
+
+            for (var index = 0; index < prepared.Length; index++)
+            {
+                prepared[index] = await connection.ResolveVectorTypesAsync(prepared[index], false, budget, cancellationToken)
+                    .ConfigureAwait(false);
+            }
 
             // Prepared statements belong to the caller's session; an owned connection is new for each execution.
             var statementNames = new string?[commands.Length];
@@ -403,7 +418,7 @@ public sealed class CassieBatch : DbBatch
                     if (commands[index].PreparedStatement.IsRequested)
                     {
                         statementNames[index] = await commands[index].PreparedStatement
-                            .EnsurePreparedAsync(connection, prepared[index], Timeout, cancellationToken)
+                            .EnsurePreparedAsync(connection, prepared[index], budget, cancellationToken)
                             .ConfigureAwait(false);
                     }
                 }
@@ -414,7 +429,7 @@ public sealed class CassieBatch : DbBatch
                 prepared,
                 encoded,
                 statementNames,
-                Timeout,
+                budget,
                 owned ? behavior | CommandBehavior.CloseConnection : behavior,
                 operationScope,
                 tag =>

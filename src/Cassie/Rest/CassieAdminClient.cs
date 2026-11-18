@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
 
@@ -66,11 +67,16 @@ public sealed class CassieAdminClient
 
     /// <summary>Requests and waits for server cancellation of an operation owned by this REST session.</summary>
     /// <remarks>This is separate from canceling a local HTTP request through its cancellation token.</remarks>
-    public Task<CassieQueryCancellation> CancelQueryAsync(Guid operationId,
+    public async Task<CassieQueryCancellation> CancelQueryAsync(Guid operationId,
         CancellationToken cancellationToken = default)
     {
-        return _client.SendAsync(HttpMethod.Delete, "api/v1/admin/query-operations/" + operationId.ToString("D"), null,
-            CassieRestJsonContext.Default.CassieQueryCancellation, cancellationToken);
+        var response = await _client.SendAsync(HttpMethod.Delete,
+            "api/v1/admin/query-operations/" + operationId.ToString("D"), null,
+            CassieRestJsonContext.Default.RestQueryCancellation, cancellationToken).ConfigureAwait(false);
+        var acknowledged = (response.Canceled ?? response.Cancelled) is true && response.Cancelled is not false;
+        return response.OperationId == operationId && operationId != Guid.Empty && acknowledged
+            ? new CassieQueryCancellation(response.OperationId, true)
+            : throw new JsonException("Cassie did not acknowledge cancellation of the requested operation.");
     }
 
     /// <summary>Exports a projection verification manifest from the current server.</summary>

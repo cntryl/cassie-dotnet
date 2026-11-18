@@ -10,6 +10,9 @@ namespace Cntryl.Cassie.Types;
 /// <summary>Fixed built-in metadata shared by parameter inference, schema, and codecs.</summary>
 internal static class CassieTypeMap
 {
+    // This marker is replaced with the installed vector type OID before Parse.
+    internal const int VectorParameterOid = -1;
+
     // A pair is declared once. Reverse lookup and array names are derived from this catalog.
     // Text arrays intentionally remain strings; binary arrays retain their shape in CassieArray.
     private static readonly BuiltInType[] Types =
@@ -145,7 +148,7 @@ internal static class CassieTypeMap
         return value switch
         {
             CassieTemporalValue temporal => temporal.PostgresTypeOid,
-            CassieVector vector => GetVectorOid(vector.Dimension),
+            CassieVector => VectorParameterOid,
             CassieNetworkAddress address => address.IsCidr ? 650 : 869,
             CassieBitString bits => bits.IsVarying ? 1562 : 1560,
             PhysicalAddress address => GetMacAddressOid(address),
@@ -221,27 +224,9 @@ internal static class CassieTypeMap
 
     internal static string GetDataTypeName(int oid)
     {
-        return IsVectorOid(oid) ? $"vector({GetVectorDimension(oid)})"
-            : Scalars.TryGetValue(oid, out var scalar) ? scalar.Name
+        return Scalars.TryGetValue(oid, out var scalar) ? scalar.Name
             : Arrays.TryGetValue(oid, out var element) ? element.ArrayName
             : oid.ToString(CultureInfo.InvariantCulture);
-    }
-
-    internal static bool IsVectorOid(int oid)
-    {
-        return oid is >= 100001 and <= 132767;
-    }
-
-    internal static int GetVectorDimension(int oid)
-    {
-        return IsVectorOid(oid) ? oid - 100000 : throw new ArgumentOutOfRangeException(nameof(oid));
-    }
-
-    internal static int GetVectorOid(int dimension)
-    {
-        return dimension is >= 1 and <= short.MaxValue
-            ? 100000 + dimension
-            : throw new ArgumentOutOfRangeException(nameof(dimension));
     }
 
     internal static bool IsArrayOid(int oid)
@@ -271,7 +256,7 @@ internal static class CassieTypeMap
 
     internal static bool SupportsBinaryResult(int oid)
     {
-        return IsVectorOid(oid) || IsArrayOid(oid) || (Scalars.TryGetValue(oid, out var type) && type.BinaryResult);
+        return IsArrayOid(oid) || (Scalars.TryGetValue(oid, out var type) && type.BinaryResult);
     }
 
     [return:
@@ -288,7 +273,6 @@ internal static class CassieTypeMap
     internal static Type GetClrType(int oid, short formatCode)
     {
         return formatCode != 1 ? GetClrType(oid)
-            : IsVectorOid(oid) ? typeof(CassieVector)
             : IsArrayOid(oid) ? typeof(CassieArray)
             : Scalars.TryGetValue(oid, out var type) ? type.BinaryClrType
             : typeof(string);

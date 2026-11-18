@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Net.Sockets;
 using System.Text;
@@ -62,6 +63,7 @@ public sealed partial class CassieConnection
         using CommandDeadline deadline = new(commandTimeout, cancellationToken);
         var copyMode = false;
         var writingFrame = false;
+        byte[]? buffer = null;
         try
         {
             writingFrame = true;
@@ -71,18 +73,19 @@ public sealed partial class CassieConnection
             await AwaitCopyStartAsync(session, BackendMessage.CopyInResponse, "input", "COPY FROM STDIN",
                 deadline.Token).ConfigureAwait(false);
             copyMode = true;
-            var buffer = new byte[CopyBufferSize];
+            buffer = ArrayPool<byte>.Shared.Rent(CopyBufferSize + PgFraming.HeaderLength);
+            var payload = buffer.AsMemory(PgFraming.HeaderLength, CopyBufferSize);
             while (true)
             {
-                var bytesRead = await source.ReadAsync(buffer, deadline.Token).ConfigureAwait(false);
+                var bytesRead = await source.ReadAsync(payload, deadline.Token).ConfigureAwait(false);
                 if (bytesRead == 0)
                 {
                     break;
                 }
 
                 writingFrame = true;
-                await session
-                    .WriteFrameAsync(FrontendMessage.CopyData, buffer.AsSpan(0, bytesRead).ToArray(), deadline.Token)
+                PgFraming.WriteHeader(buffer, FrontendMessage.CopyData, bytesRead);
+                await session.WriteRawAsync(buffer.AsMemory(0, PgFraming.HeaderLength + bytesRead), deadline.Token)
                     .ConfigureAwait(false);
                 writingFrame = false;
             }
@@ -131,6 +134,11 @@ public sealed partial class CassieConnection
         }
         finally
         {
+            if (buffer is not null)
+            {
+                ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+            }
+
             AbortIfStillActive();
         }
     }

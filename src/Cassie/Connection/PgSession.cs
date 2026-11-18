@@ -15,6 +15,8 @@ internal sealed class PgSession(DateStyleTracker dateStyle, long createdTimestam
     internal int BackendProcessId { get; private set; }
     internal int BackendSecretKey { get; private set; }
     internal DateStyleTracker DateStyle { get; } = dateStyle;
+    internal HashSet<string>? StatementsToClose { get; set; }
+    internal int? VectorOid { get; set; }
     internal long CreatedTimestamp { get; } = createdTimestamp;
     internal long ReturnedTimestamp { get; set; }
 

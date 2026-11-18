@@ -8,6 +8,7 @@ namespace Cntryl.Cassie.Connection;
 /// <remarks>Disposal prevents new connections. Existing connections and the logger factory remain caller-owned.</remarks>
 public sealed class CassieDataSource : DbDataSource
 {
+    private readonly Lazy<int> _defaultCommandTimeout;
     private int _disposed;
 
     /// <summary>Creates a data source without opening a connection.</summary>
@@ -15,6 +16,7 @@ public sealed class CassieDataSource : DbDataSource
     {
         ArgumentNullException.ThrowIfNull(connectionString);
         ConnectionString = connectionString;
+        _defaultCommandTimeout = new Lazy<int>(() => CassieConnection.CommandTimeoutFrom(connectionString));
     }
 
     /// <inheritdoc />
@@ -46,7 +48,7 @@ public sealed class CassieDataSource : DbDataSource
     protected override DbBatch CreateDbBatch()
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        return new CassieBatch(this) { Timeout = CassieConnection.CommandTimeoutFrom(ConnectionString) };
+        return new CassieBatch(this) { Timeout = _defaultCommandTimeout.Value };
     }
 
     /// <inheritdoc />

@@ -164,9 +164,8 @@ public sealed class CodecCharacterizationTests
         yield return ("bit-empty", 1560, new CassieBitString("", false));
         yield return ("lsn", 3220, new CassieLsn(0x16B374D848UL));
         yield return ("lsn-text-oid", 25, new CassieLsn(5));
-        yield return ("vector3", 100003, new CassieVector(1f, 2.5f, -3f));
-        yield return ("vector-wrong-dim", 100002, new CassieVector(1f, 2.5f, -3f));
-        yield return ("vector-nan", 100001, new CassieVector(1f));
+        yield return ("vector3", CassieTypeMap.VectorParameterOid, new CassieVector(1f, 2.5f, -3f));
+        yield return ("vector-single", CassieTypeMap.VectorParameterOid, new CassieVector(1f));
         yield return ("uuid", 2950, new Guid("6f9619ff-8b86-d011-b42d-00c04fc964ff"));
         yield return ("uuid-string", 2950, "6f9619ff-8b86-d011-b42d-00c04fc964ff");
         yield return ("int4-array", 1007, new[] { 1, 2, 3 });
@@ -224,7 +223,6 @@ public sealed class CodecCharacterizationTests
             (650, "020808010A000000"), (869, "0220000401020304"), (869, "02"), (774, "08002B0102030405"),
             (829, "08002B010203"), (829, "08"),
             (1560, "0000000580"), (1562, "0000000480"), (1560, "00"), (3220, "00000016B374D848"), (3220, "00"),
-            (100003, "00030000" + "3F800000" + "40200000" + "C0400000"), (100003, "0003000000"), (100002, "0003000000"),
             (2950, "6F9619FF8B86D011B42D00C04FC964FF"), (2950, "6F"),
             (3802, "017B7D"), (3802, "007B7D"), (3802, ""), (4072, "01242E61"), (4072, "00"), (4072, ""),
             (1007, "00000001000000000000001700000002000000010000000400000001000000040000000200000004"),

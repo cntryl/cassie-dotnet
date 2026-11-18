@@ -6,6 +6,9 @@ namespace Cntryl.Cassie.Connection;
 public sealed partial class CassieConnection
 {
     private static readonly TimeSpan CancelWatchdogDelay = TimeSpan.FromSeconds(5);
+    private Task<bool>? _pendingQueryCancel;
+    private long _cleanupOperation;
+    internal long OperationSerial => _gate.Serial;
 
     internal void HandleParameterStatusMessage(byte[] payload)
     {
@@ -32,10 +35,18 @@ public sealed partial class CassieConnection
 
     internal void ObserveCommandComplete(CommandTag tag)
     {
-        _session?.DateStyle.ObserveCommandComplete(tag);
+        if (_session is { } session)
+        {
+            session.DateStyle.ObserveCommandComplete(tag);
+            if (tag.HasVerb("ROLLBACK") || tag.HasVerb("ABORT") ||
+                tag.Matches("CREATE EXTENSION") || tag.Matches("DROP EXTENSION") || tag.Matches("ALTER EXTENSION"))
+            {
+                session.VectorOid = null;
+            }
+        }
     }
 
-    private async Task RefreshDateStyleIfNeededAsync(CancellationToken cancellationToken)
+    private async Task RefreshDateStyleIfNeededAsync(CommandBudget budget, CancellationToken cancellationToken)
     {
         var tracker = _session?.DateStyle;
         if (tracker is null || !tracker.CanRefresh || _state != ConnectionState.Open || _gate.IsActive)
@@ -46,7 +57,7 @@ public sealed partial class CassieConnection
         tracker.BeginRefresh();
         try
         {
-            var reader = await ExecuteQueryAsync("SHOW DateStyle", cancellationToken).ConfigureAwait(false);
+            var reader = await ExecuteQueryCoreAsync("SHOW DateStyle", budget, CommandBehavior.Default, null, false, cancellationToken).ConfigureAwait(false);
             try
             {
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -67,40 +78,20 @@ public sealed partial class CassieConnection
         }
     }
 
-    internal async Task ReaderClosedAsync()
-    {
-        _gate.End();
-        if (_preparedStatementsToClose.Count == 0)
-        {
-            return;
-        }
-
-        _gate.Begin();
-        try
-        {
-            while (_preparedStatementsToClose.Count > 0 && _state == ConnectionState.Open)
-            {
-                var statement = _preparedStatementsToClose[0];
-                _preparedStatementsToClose.RemoveAt(0);
-                await CloseServerStatementCoreAsync(statement, CancellationToken.None).ConfigureAwait(false);
-            }
-        }
-        finally
-        {
-            if (_state == ConnectionState.Open)
-            {
-                _gate.End();
-            }
-        }
-    }
-
-    internal void AbortTransport()
+    internal void AbortTransport(long? expectedOperation = null)
     {
         lock (_abortGate)
         {
+            if (expectedOperation is long serial && (!_gate.IsActive || _gate.Serial != serial))
+            {
+                return;
+            }
+
             ActiveTransaction?.ConnectionClosed();
             _gate.End();
+            _pendingQueryCancel = null;
             _session?.Dispose();
+            _session = null;
             if (_pool is not null && _ownsPoolSlot)
             {
                 _pool.ReleaseReservedSlot();
@@ -109,29 +100,32 @@ public sealed partial class CassieConnection
             _pool = null;
             _poolKey = null;
             _ownsPoolSlot = false;
-            _preparedStatementsToClose.Clear();
+            SetState(ConnectionState.Closed);
         }
-
-        SetState(ConnectionState.Closed);
     }
 
     /// <summary>Requests server-side cancellation and aborts the session if the server does not finish the statement.</summary>
     internal void RequestCancel()
     {
-        if (!_gate.IsActive)
+        long serial;
+        Task<bool> cancel;
+        lock (_abortGate)
         {
-            return;
+            if (!_gate.IsActive || _gate.Serial == _cleanupOperation)
+            {
+                return;
+            }
+
+            serial = _gate.Serial;
+            cancel = CancelCurrentQueryAsync(serial);
         }
 
-        var serial = _gate.Serial;
-        // Cancel is called from another thread while the owner is mid-operation, so it must not touch
-        // the connection's own mode; only the separate cancel connection blocks here.
-        var sent = SynchronousCall.Wait(CancelCurrentQueryAsync(true));
+        var sent = SynchronousCall.Wait(cancel);
         if (!sent)
         {
             if (_gate.Serial == serial && _gate.IsActive)
             {
-                AbortTransport();
+                AbortTransport(expectedOperation: serial);
             }
 
             return;
@@ -145,81 +139,19 @@ public sealed partial class CassieConnection
         await Task.Delay(CancelWatchdogDelay).ConfigureAwait(false);
         if (_gate.IsActive && _gate.Serial == serial)
         {
-            AbortTransport();
+            AbortTransport(expectedOperation: serial);
         }
     }
 
-    internal async Task<bool> CancelCurrentQueryAsync(bool synchronous = false)
+    internal Task<bool> CancelCurrentQueryAsync(long expectedOperation)
     {
-        var session = _session;
-        return _gate.IsActive && session is not null && session.CanCancel
-               && await QueryCanceler.SendAsync([with(_connectionString)], session.BackendProcessId,
-                   session.BackendSecretKey, synchronous).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    ///     Writes one request, then reads until ReadyForQuery. Returns the server error if one arrived; any other
-    ///     failure before ReadyForQuery leaves the stream out of sync, so the transport is aborted.
-    /// </summary>
-    private async Task<CassieException?> RunSyncedRequestAsync(PgSession session, Func<Task> writeRequest,
-        CancellationToken readToken)
-    {
-        var ready = false;
-        CassieException? serverError = null;
-        try
+        lock (_abortGate)
         {
-            await writeRequest().ConfigureAwait(false);
-            while (!ready)
-            {
-                var (tag, payload) = await session.ReadFrameAsync(readToken).ConfigureAwait(false);
-                if (tag == BackendMessage.ErrorResponse)
-                {
-                    serverError = ServerErrorParser.Parse(payload);
-                }
-                else if (tag == BackendMessage.ReadyForQuery)
-                {
-                    HandleReadyForQuery(payload);
-                    ready = true;
-                }
-            }
-
-            return serverError;
-        }
-        catch
-        {
-            if (!ready)
-            {
-                AbortTransport();
-            }
-
-            throw;
-        }
-    }
-
-    internal async Task ExecutePortalPageAsync(CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        try
-        {
-            await _session!.WriteRawAsync(_portalPageFrames, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch
-        {
-            AbortTransport();
-            throw;
-        }
-    }
-
-    internal async Task SyncExtendedQueryAsync()
-    {
-        try
-        {
-            await _session!.WriteFrameAsync(FrontendMessage.Sync, [], CancellationToken.None).ConfigureAwait(false);
-        }
-        catch
-        {
-            AbortTransport();
-            throw;
+            return _gate.IsActive && _gate.Serial == expectedOperation && _gate.Serial != _cleanupOperation &&
+                   _session is { CanCancel: true } session
+                ? _pendingQueryCancel ??= QueryCanceler.SendAsync([with(_connectionString)],
+                    session.BackendProcessId, session.BackendSecretKey)
+                : Task.FromResult(false);
         }
     }
 }

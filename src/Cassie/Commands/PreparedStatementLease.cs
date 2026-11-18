@@ -20,29 +20,30 @@ internal sealed class PreparedStatementLease
         IsRequested = true;
     }
 
-    public string EnsurePrepared(CassieConnection connection, CassiePreparedCommand prepared, int commandTimeout)
-    {
-        if (Matches(connection, prepared))
-        {
-            return _statementName!;
-        }
-
-        Release();
-        var statementName = connection.PrepareServerStatement(prepared, commandTimeout);
-        Remember(connection, prepared, statementName);
-        return statementName;
-    }
-
     public async Task<string> EnsurePreparedAsync(CassieConnection connection, CassiePreparedCommand prepared,
-        int commandTimeout, CancellationToken cancellationToken)
+        CommandBudget budget, CancellationToken cancellationToken)
     {
         if (Matches(connection, prepared))
         {
             return _statementName!;
         }
 
-        await ReleaseAsync(cancellationToken).ConfigureAwait(false);
-        var statementName = await connection.PrepareServerStatementAsync(prepared, commandTimeout, cancellationToken)
+        if (CanRelease())
+        {
+            using var deadline = new CommandDeadline(budget, cancellationToken);
+            deadline.ThrowIfExpired();
+            try
+            {
+                await ReleaseAsync(deadline.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                deadline.ThrowIfExpired();
+                throw;
+            }
+        }
+
+        var statementName = await connection.PrepareServerStatementAsync(prepared, budget, cancellationToken)
             .ConfigureAwait(false);
         Remember(connection, prepared, statementName);
         return statementName;
@@ -54,7 +55,7 @@ internal sealed class PreparedStatementLease
         {
             if (CanRelease())
             {
-                _connection!.CloseServerStatement(_statementName!);
+                _connection!.CloseServerStatement(_statementName!, _sessionIdentity);
             }
         }
         catch (Exception exception) when (exception is IOException or SocketException or ObjectDisposedException
@@ -74,7 +75,7 @@ internal sealed class PreparedStatementLease
         {
             if (CanRelease())
             {
-                await _connection!.CloseServerStatementAsync(_statementName!, cancellationToken).ConfigureAwait(false);
+                await _connection!.CloseServerStatementAsync(_statementName!, _sessionIdentity, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (Exception exception) when (exception is IOException or SocketException or ObjectDisposedException

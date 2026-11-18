@@ -1,6 +1,7 @@
 using System.Data;
 using System.Globalization;
 using Cntryl.Cassie.Commands;
+using Cntryl.Cassie.Data;
 using Cntryl.Cassie.Protocol;
 
 namespace Cntryl.Cassie.Connection;
@@ -8,107 +9,186 @@ namespace Cntryl.Cassie.Connection;
 public sealed partial class CassieConnection
 {
     private const string UndefinedPreparedStatementSqlState = "26000";
-    private readonly List<string> _preparedStatementsToClose = [];
+    private const int StatementCloseGroupSize = 64;
     private int _nextPreparedStatementId;
 
-    internal string PrepareServerStatement(CassiePreparedCommand prepared, int commandTimeout)
-    {
-        return RunSynchronously(() => PrepareServerStatementAsync(prepared, commandTimeout, CancellationToken.None));
-    }
-
-    internal async Task<string> PrepareServerStatementAsync(CassiePreparedCommand prepared, int commandTimeout,
+    internal async Task<string> PrepareServerStatementAsync(CassiePreparedCommand prepared, CommandBudget budget,
         CancellationToken cancellationToken)
     {
-        ValidateSqlText(prepared.Sql);
-        ParameterizedQueryBatch.ValidateParameterCount(prepared);
         var session = RequireSession("The connection must be open to prepare a command.");
-        if (_gate.IsActive)
-        {
-            throw new InvalidOperationException("A reader is already active on this connection.");
-        }
-
+        ThrowIfReaderActive();
         var statementName = "cassie_dotnet_" + session.BackendProcessId.ToString(CultureInfo.InvariantCulture) + "_" +
                             Interlocked.Increment(ref _nextPreparedStatementId).ToString(CultureInfo.InvariantCulture) +
                             "_" + Guid.NewGuid().ToString("N");
-        _gate.Begin();
-        try
+        using MemoryStream request = new();
+        using var parse = ExtendedQueryMessages.Parse(statementName, prepared.Sql, prepared.ParameterTypeOids);
+        using var describe = ExtendedQueryMessages.DescribeStatement(statementName);
+        PgWriter.AppendFrame(request, FrontendMessage.Parse, parse);
+        PgWriter.AppendFrame(request, FrontendMessage.Describe, describe);
+        PgWriter.AppendFrame(request, FrontendMessage.Sync, []);
+
+        var reader = await RunReaderAsync(
+            token => session.WriteBatchAsync(request, token),
+            () => new CassieDataReader(new ConnectionReaderSession(this, session), budget, CommandBehavior.Default),
+            budget, cancellationToken).ConfigureAwait(false);
+        await using (reader.ConfigureAwait(false))
         {
-            using CommandDeadline deadline = new(commandTimeout, cancellationToken);
-            var serverError = await RunSyncedRequestAsync(
-                session,
-                async () =>
-                {
-                    await session.WriteFrameAsync(FrontendMessage.Parse,
-                        ExtendedQueryMessages.Parse(statementName, prepared.Sql, prepared.ParameterTypeOids),
-                        cancellationToken).ConfigureAwait(false);
-                    await session.WriteFrameAsync(FrontendMessage.Describe,
-                            ExtendedQueryMessages.DescribeStatement(statementName), cancellationToken)
-                        .ConfigureAwait(false);
-                    await session.WriteFrameAsync(FrontendMessage.Sync, [], cancellationToken).ConfigureAwait(false);
-                },
-                deadline.Token).ConfigureAwait(false);
-            return serverError is not null ? throw serverError : statementName;
+            _ = await reader.NextResultAsync(cancellationToken).ConfigureAwait(false);
         }
-        finally
+
+        return statementName;
+    }
+
+    internal void CloseServerStatement(string statementName, Guid lease)
+    {
+        RunSynchronously(() => CloseServerStatementAsync(statementName, lease, CancellationToken.None));
+    }
+
+    internal Task CloseServerStatementAsync(string statementName, Guid lease, CancellationToken cancellationToken)
+    {
+        PgSession? session;
+        long serial;
+        lock (_abortGate)
         {
-            if (_state == ConnectionState.Open)
+            session = _session;
+            if (_state != ConnectionState.Open || session is null || SessionIdentity != lease)
+            {
+                return Task.CompletedTask;
+            }
+
+            _ = (session.StatementsToClose ??= []).Add(statementName);
+            if (_gate.IsActive)
+            {
+                return Task.CompletedTask;
+            }
+
+            _gate.Begin();
+            serial = _cleanupOperation = _gate.Serial;
+        }
+
+        return FlushStatementClosesAsync(session, serial, cancellationToken);
+    }
+
+    internal Task ReaderClosedAsync()
+    {
+        PgSession session;
+        long serial;
+        Task<bool>? pendingCancel;
+        lock (_abortGate)
+        {
+            pendingCancel = _pendingQueryCancel;
+            _pendingQueryCancel = null;
+            if (_session is not { } current ||
+                (pendingCancel is null && current.StatementsToClose is not { Count: > 0 }))
             {
                 _gate.End();
+                return Task.CompletedTask;
             }
+
+            session = current;
+            // ReadyForQuery retires the query, but its cancel must settle before further wire I/O.
+            _gate.Begin();
+            serial = _cleanupOperation = _gate.Serial;
         }
+
+        return FinishQueryAsync(session, serial, pendingCancel);
     }
 
-    internal void CloseServerStatement(string statementName)
+    private async Task FinishQueryAsync(PgSession session, long serial, Task<bool>? pendingCancel)
     {
-        RunSynchronously(() => CloseServerStatementAsync(statementName, CancellationToken.None));
-    }
-
-    internal async Task CloseServerStatementAsync(string statementName, CancellationToken cancellationToken)
-    {
-        if (_state != ConnectionState.Open || _session is null)
+        if (pendingCancel is not null && !await pendingCancel.ConfigureAwait(false))
         {
+            AbortTransport(expectedOperation: serial);
             return;
         }
 
-        if (_gate.IsActive)
-        {
-            if (!_preparedStatementsToClose.Contains(statementName, StringComparer.Ordinal))
-            {
-                _preparedStatementsToClose.Add(statementName);
-            }
+        await FlushStatementClosesAsync(session, serial, CancellationToken.None).ConfigureAwait(false);
+    }
 
-            return;
-        }
-
-        _gate.Begin();
+    private async Task FlushStatementClosesAsync(PgSession session, long serial, CancellationToken cancellationToken)
+    {
+        CassieException? firstError = null;
         try
         {
-            await CloseServerStatementCoreAsync(statementName, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            if (_state == ConnectionState.Open)
+            while (true)
             {
-                await ReaderClosedAsync().ConfigureAwait(false);
+                string[] group;
+                lock (_abortGate)
+                {
+                    if (!ReferenceEquals(session, _session) || _gate.Serial != serial)
+                    {
+                        throw new IOException("The connection closed before prepared statement cleanup completed.");
+                    }
+
+                    if (session.StatementsToClose is not { Count: > 0 } pending)
+                    {
+                        _gate.End();
+                        break;
+                    }
+
+                    group = [.. pending.Take(StatementCloseGroupSize)];
+                    pending.ExceptWith(group);
+                }
+
+                using MemoryStream request = new();
+                foreach (var statement in group)
+                {
+                    using var close = ExtendedQueryMessages.CloseStatement(statement);
+                    PgWriter.AppendFrame(request, FrontendMessage.Close, close);
+                    PgWriter.AppendFrame(request, FrontendMessage.Sync, []);
+                }
+
+                await session.WriteBatchAsync(request, cancellationToken).ConfigureAwait(false);
+                for (var index = 0; index < group.Length; index++)
+                {
+                    var error = await ReadStatementCloseAsync(session, cancellationToken).ConfigureAwait(false);
+                    if (error is not null && error.SqlState != UndefinedPreparedStatementSqlState)
+                    {
+                        firstError ??= error;
+                    }
+                }
             }
+        }
+        catch
+        {
+            AbortTransport(expectedOperation: serial);
+            throw;
+        }
+
+        if (firstError is not null)
+        {
+            throw firstError;
         }
     }
 
-    private async Task CloseServerStatementCoreAsync(string statementName, CancellationToken cancellationToken)
+    private async Task<CassieException?> ReadStatementCloseAsync(PgSession session, CancellationToken cancellationToken)
     {
-        var session = _session!;
-        var serverError = await RunSyncedRequestAsync(
-            session,
-            async () =>
-            {
-                await session.WriteFrameAsync(FrontendMessage.Close,
-                    ExtendedQueryMessages.CloseStatement(statementName), cancellationToken).ConfigureAwait(false);
-                await session.WriteFrameAsync(FrontendMessage.Sync, [], cancellationToken).ConfigureAwait(false);
-            },
-            cancellationToken).ConfigureAwait(false);
-        if (serverError is not null && serverError.SqlState != UndefinedPreparedStatementSqlState)
+        var acknowledged = false;
+        CassieException? error = null;
+        while (true)
         {
-            throw serverError;
+            var (tag, payload) = await session.ReadFrameAsync(cancellationToken).ConfigureAwait(false);
+            switch (tag)
+            {
+                case BackendMessage.CloseComplete when !acknowledged && payload.Length == 0:
+                    acknowledged = true;
+                    break;
+                case BackendMessage.ErrorResponse when !acknowledged:
+                    error = ServerErrorParser.Parse(payload);
+                    acknowledged = true;
+                    break;
+                case BackendMessage.ReadyForQuery when acknowledged:
+                    HandleReadyForQuery(payload);
+                    return error;
+                case BackendMessage.ParameterStatus:
+                    HandleParameterStatusMessage(payload);
+                    break;
+                case BackendMessage.NoticeResponse:
+                case BackendMessage.NotificationResponse:
+                    break;
+                default:
+                    throw new IOException("Cassie returned an unexpected response while closing prepared statements.");
+            }
         }
     }
 }

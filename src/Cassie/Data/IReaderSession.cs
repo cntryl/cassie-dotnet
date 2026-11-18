@@ -9,8 +9,11 @@ internal interface IReaderSession
 {
     bool IsOpen { get; }
     CassieDateStyle? DateStyle { get; }
+    int? VectorOid { get; }
     ILogger? Logger { get; }
-    ValueTask<(byte Tag, byte[] Payload)> ReadFrameAsync(CancellationToken cancellationToken);
+    ValueTask<(byte Tag, byte[] Payload)> ReadFrameAsync(RowPayloadBuffer? rowBuffer, CancellationToken cancellationToken);
+    ValueTask WritePortalPageAsync(ReadOnlyMemory<byte> frames, CancellationToken cancellationToken);
+    Task WriteExtendedSyncAsync(CancellationToken cancellationToken);
     Task<bool> CancelCurrentQueryAsync();
     void AbortTransport();
     Task RejectCopyFromAsync();

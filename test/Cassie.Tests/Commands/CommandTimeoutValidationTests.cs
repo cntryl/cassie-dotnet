@@ -7,6 +7,31 @@ namespace Cntryl.Cassie.Tests.Commands;
 
 public sealed class CommandTimeoutValidationTests
 {
+    [Fact]
+    public void ShouldUpdateDefaultsGivenNewConnectionStringWhenCommandsAndBatchesAreCreated()
+    {
+        // Arrange
+        using CassieConnection connection = new() { ConnectionString = "Username=app;Command Timeout=12" };
+        using var originalCommand = connection.CreateCommand();
+        using var originalBatch = connection.CreateBatch();
+
+        // Act
+        connection.ConnectionString = "Username=app;Command Timeout=0";
+        using var nextCommand = connection.CreateCommand();
+        using var nextBatch = connection.CreateBatch();
+        connection.ConnectionString = "invalid connection string";
+        using var fallbackCommand = connection.CreateCommand();
+        using var fallbackBatch = connection.CreateBatch();
+
+        // Assert
+        Assert.Equal(12, originalCommand.CommandTimeout);
+        Assert.Equal(12, originalBatch.Timeout);
+        Assert.Equal(0, nextCommand.CommandTimeout);
+        Assert.Equal(0, nextBatch.Timeout);
+        Assert.Equal(30, fallbackCommand.CommandTimeout);
+        Assert.Equal(30, fallbackBatch.Timeout);
+    }
+
     [Theory]
     [InlineData(-1)]
     [InlineData(2_147_484)]

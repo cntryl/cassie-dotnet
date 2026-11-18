@@ -6,6 +6,7 @@ using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using Cntryl.Cassie.Connection;
 using Cntryl.Cassie.Diagnostics;
@@ -34,8 +35,8 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     private readonly bool _closeConnectionOnClose;
     private readonly List<ReaderColumn> _columns = [];
     private readonly CassieDiagnostics.OperationScope? _operationScope;
-    private readonly Func<CancellationToken, Task>? _resumePortalAsync;
-    private readonly Func<Task>? _sendExtendedSyncAsync;
+    private readonly byte[]? _portalPageFrames;
+    private readonly RowPayloadBuffer _rowBuffer = new();
     private readonly bool _sequentialAccess;
     private readonly IReaderSession _session;
     private readonly bool _singleResult;
@@ -44,6 +45,8 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     private readonly Action<CassieException>? _statementFailed;
     private bool _closed;
     private volatile bool _complete;
+    private Exception? _statementCloseFailure;
+    private bool _completedAfterDeadline;
     private object?[]? _converted;
     private int _extendedSyncSent;
     private int[] _fieldLengths = [];
@@ -61,23 +64,26 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     private byte[]? _rowPayload;
     private int _rowsReadCurrentResult;
 
+    internal CassieDataReader(IReaderSession session, int commandTimeout, CommandBehavior behavior)
+        : this(session, new CommandBudget(commandTimeout), behavior)
+    {
+    }
+
     internal CassieDataReader(
         IReaderSession session,
-        int commandTimeout,
+        CommandBudget budget,
         CommandBehavior behavior,
         CassieDiagnostics.OperationScope? operationScope = null,
-        Func<CancellationToken, Task>? resumePortalAsync = null,
-        Func<Task>? sendExtendedSyncAsync = null,
+        byte[]? portalPageFrames = null,
         Action<CommandTag?>? statementCompleted = null,
         Action<CassieException>? statementFailed = null)
     {
         _statementCompleted = statementCompleted;
         _statementFailed = statementFailed;
         _session = session;
-        _cancellation = new ReaderCancellation(session, commandTimeout);
+        _cancellation = new ReaderCancellation(session, budget, _rowBuffer);
         _operationScope = operationScope;
-        _resumePortalAsync = resumePortalAsync;
-        _sendExtendedSyncAsync = sendExtendedSyncAsync;
+        _portalPageFrames = portalPageFrames;
         _closeConnectionOnClose = (behavior & CommandBehavior.CloseConnection) != 0;
         _sequentialAccess = (behavior & CommandBehavior.SequentialAccess) != 0;
         _singleRow = (behavior & CommandBehavior.SingleRow) != 0;
@@ -141,7 +147,8 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         {
             await InitializeCoreAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception exception) when (_cancellation.IsTimeoutTransportFailure(exception))
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested &&
+                                          _cancellation.IsTimeoutTransportFailure(exception))
         {
             _session.AbortTransport();
             throw ReaderCancellation.CreateTimeoutException(exception);
@@ -185,6 +192,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
             else if (tag == (byte)'Z')
             {
                 await MarkReadyAsync(payload).ConfigureAwait(false);
+                ThrowIfCompletionCanceled(cancellationToken);
             }
         }
     }
@@ -261,7 +269,10 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
                         return false;
                     case (byte)'E':
                         throw await ReadServerErrorAsync(payload, cancellationToken).ConfigureAwait(false);
-                    case (byte)'Z': await MarkReadyAsync(payload).ConfigureAwait(false); break;
+                    case (byte)'Z':
+                        await MarkReadyAsync(payload).ConfigureAwait(false);
+                        ThrowIfCompletionCanceled(cancellationToken);
+                        break;
                     case (byte)'G': await _session.RejectCopyFromAsync().ConfigureAwait(false); break;
                     case (byte)'s': throw new IOException(UnexpectedSuspendedPortalMessage);
                 }
@@ -275,7 +286,8 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
             await CancelAndDrainAsync().ConfigureAwait(false);
             throw;
         }
-        catch (Exception exception) when (_cancellation.IsTimeoutTransportFailure(exception))
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested &&
+                                          _cancellation.IsTimeoutTransportFailure(exception))
         {
             _session.AbortTransport();
             var timeout = ReaderCancellation.CreateTimeoutException(exception);
@@ -307,15 +319,15 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
                 return;
             }
 
-            await EnsureExtendedSyncSentAsync().ConfigureAwait(false);
             using CancellationTokenSource drainTimeout = new(TimeSpan.FromSeconds(5));
+            await EnsureExtendedSyncSentAsync(true, drainTimeout.Token).ConfigureAwait(false);
             await DrainToReadyAsync(drainTimeout.Token, true).ConfigureAwait(false);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is IOException or OperationCanceledException or
+                                          ObjectDisposedException or System.Net.Sockets.SocketException or CassieException)
         {
             _session.AbortTransport();
             FinishOperation(exception);
-            throw;
         }
     }
 
@@ -392,7 +404,10 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
                         throw await ReadServerErrorAsync(payload, cancellationToken).ConfigureAwait(false);
                     case (byte)'G': await _session.RejectCopyFromAsync().ConfigureAwait(false); break;
                     case (byte)'s': throw new IOException(UnexpectedSuspendedPortalMessage);
-                    case (byte)'Z': await MarkReadyAsync(payload).ConfigureAwait(false); break;
+                    case (byte)'Z':
+                        await MarkReadyAsync(payload).ConfigureAwait(false);
+                        ThrowIfCompletionCanceled(cancellationToken);
+                        break;
                 }
             }
 
@@ -404,7 +419,8 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
             await CancelAndDrainAsync().ConfigureAwait(false);
             throw;
         }
-        catch (Exception exception) when (_cancellation.IsTimeoutTransportFailure(exception))
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested &&
+                                          _cancellation.IsTimeoutTransportFailure(exception))
         {
             _session.AbortTransport();
             var timeout = ReaderCancellation.CreateTimeoutException(exception);
@@ -452,7 +468,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     /// <inheritdoc />
     public override string GetDataTypeName(int ordinal)
     {
-        return CassieTypeMap.GetDataTypeName(GetColumn(ordinal).TypeOid);
+        return GetColumn(ordinal).DataTypeName;
     }
 
     /// <inheritdoc />
@@ -470,10 +486,12 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
             return cached;
         }
 
+        var column = GetColumn(ordinal);
         var value = raw switch
         {
-            string text => CassieResultCodec.ConvertValue(text, GetColumn(ordinal).TypeOid, _session.DateStyle),
-            byte[] bytes => CassieResultCodec.ConvertBinaryValue(bytes, GetColumn(ordinal).TypeOid),
+            string text => CassieResultCodec.ConvertValue(text, column.TypeOid, _session.DateStyle),
+            byte[] bytes when column.IsVector => VectorHandler.DecodeBinary(bytes, column.TypeModifier),
+            byte[] bytes => CassieResultCodec.ConvertBinaryValue(bytes, column.TypeOid),
             _ => raw
         };
         cache[ordinal] = value;
@@ -695,6 +713,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     }
 
     /// <inheritdoc />
+    [SuppressMessage("Design", "CA1031", Justification = "Cleanup preserves the original drain failure.")]
     public override async Task CloseAsync()
     {
         if (_closed)
@@ -702,9 +721,11 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
             return;
         }
 
+        Exception? drainFailure = null;
+        var propagateDrainFailure = false;
         try
         {
-            if (!_complete)
+            if (!_complete && _session.IsOpen)
             {
                 while (!_complete)
                 {
@@ -719,33 +740,39 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
                 }
             }
         }
-        catch (IOException exception)
-        {
-            MarkOperationFailed(exception);
-            _session.AbortTransport();
-        }
-        catch (CassieException exception)
-        {
-            MarkOperationFailed(exception);
-            // Closing a reader discards any unread server error after the
-            // protocol has been drained back to ReadyForQuery.
-        }
         catch (Exception exception)
         {
-            FinishOperation(exception);
-            throw;
+            drainFailure = exception;
+            propagateDrainFailure = exception is not (IOException or CassieException) ||
+                                    ReferenceEquals(exception, _statementCloseFailure);
+        }
+
+        _closed = true;
+        try
+        {
+            await StopCancellationAsync().ConfigureAwait(false);
+            if (!_complete && _session.IsOpen)
+            {
+                _session.AbortTransport();
+            }
+
+            if (_closeConnectionOnClose)
+            {
+                await _session.CloseAsync().ConfigureAwait(false);
+            }
+        }
+        catch when (drainFailure is not null)
+        {
+            propagateDrainFailure = true;
         }
         finally
         {
-            await _cancellation.DisposeAsync().ConfigureAwait(false);
-
-            _closed = true;
-            FinishOperation();
+            FinishOperation(drainFailure);
         }
 
-        if (_closeConnectionOnClose)
+        if (propagateDrainFailure)
         {
-            await _session.CloseAsync().ConfigureAwait(false);
+            ExceptionDispatchInfo.Throw(drainFailure!);
         }
     }
 
@@ -1188,6 +1215,8 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
 
     internal ValueTask StopCancellationAsync()
     {
+        _rowPayload = null;
+        _rowBuffer.Release();
         return _cancellation.DisposeAsync();
     }
 
@@ -1245,16 +1274,21 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
             }
         }
 
-        if (propagateServerError && serverError is not null)
+        if (propagateServerError)
         {
-            throw TranslateServerError(serverError, cancellationToken);
+            if (serverError is not null)
+            {
+                throw TranslateServerError(serverError, cancellationToken);
+            }
+
+            ThrowIfCompletionCanceled(cancellationToken);
         }
     }
 
     private ValueTask<(byte Tag, byte[] Payload)> ReadQueryFrameAsync(CancellationToken cancellationToken,
         bool allowAbortOnCancellation = false)
     {
-        return _resumePortalAsync is null && _sendExtendedSyncAsync is null
+        return _portalPageFrames is null
             ? _cancellation.ReadFrameAsync(cancellationToken, allowAbortOnCancellation)
             : ReadQueryFrameWithProtocolHandlingAsync(allowAbortOnCancellation, cancellationToken);
     }
@@ -1268,32 +1302,84 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
                 .ConfigureAwait(false);
             if (tag == (byte)'s')
             {
-                if (_resumePortalAsync is null || payload.Length != 0)
+                if (_portalPageFrames is null || payload.Length != 0)
                 {
                     throw new IOException(UnexpectedSuspendedPortalMessage);
                 }
 
-                await _resumePortalAsync(cancellationToken).ConfigureAwait(false);
+                await WritePortalPageAsync(cancellationToken).ConfigureAwait(false);
                 continue;
             }
 
             if (tag is (byte)'C' or (byte)'I' or (byte)'E')
             {
-                await EnsureExtendedSyncSentAsync().ConfigureAwait(false);
+                await EnsureExtendedSyncSentAsync(allowAbortOnCancellation, cancellationToken).ConfigureAwait(false);
             }
 
             return (tag, payload);
         }
     }
 
-    private async Task EnsureExtendedSyncSentAsync()
+    private async Task WritePortalPageAsync(CancellationToken cancellationToken)
     {
-        if (_sendExtendedSyncAsync is null || Interlocked.Exchange(ref _extendedSyncSent, 1) != 0)
+        using var deadline = new CommandDeadline(_cancellation.Budget, cancellationToken);
+        if (deadline.TimedOut || cancellationToken.IsCancellationRequested || !_cancellation.TryBeginWrite())
+        {
+            await CancelAndDrainAsync().ConfigureAwait(false);
+            deadline.ThrowIfExpired();
+            throw new TimeoutException("The command exceeded CommandTimeout.");
+        }
+
+        var dispatched = false;
+        try
+        {
+            await _session.WritePortalPageAsync(_portalPageFrames, deadline.Token).ConfigureAwait(false);
+            dispatched = true;
+        }
+        catch (Exception exception) when (deadline.IsCancellationRequested &&
+            exception is OperationCanceledException or IOException or ObjectDisposedException or System.Net.Sockets.SocketException)
+        {
+            deadline.ThrowIfExpired();
+            throw;
+        }
+        finally
+        {
+            _cancellation.EndWrite(dispatched);
+            if (!dispatched)
+            {
+                _session.AbortTransport();
+            }
+        }
+    }
+
+    private async Task EnsureExtendedSyncSentAsync(bool recovering, CancellationToken cancellationToken)
+    {
+        if (_portalPageFrames is null || Interlocked.Exchange(ref _extendedSyncSent, 1) != 0)
         {
             return;
         }
 
-        await _sendExtendedSyncAsync().ConfigureAwait(false);
+        // Sync is needed to recover the session even after the ordinary write budget has expired.
+        var useRecoveryBudget = recovering || _cancellation.TimedOut || cancellationToken.IsCancellationRequested;
+        using var recoveryTimeout = useRecoveryBudget && !recovering
+            ? new CancellationTokenSource(TimeSpan.FromSeconds(5))
+            : null;
+        using var deadline = new CommandDeadline(useRecoveryBudget ? default : _cancellation.Budget,
+            recoveryTimeout?.Token ?? cancellationToken);
+        try
+        {
+            await _session.WriteExtendedSyncAsync(deadline.Token).ConfigureAwait(false);
+        }
+        catch
+        {
+            _session.AbortTransport();
+            if (!useRecoveryBudget)
+            {
+                deadline.ThrowIfExpired();
+            }
+
+            throw;
+        }
     }
 
     private async Task MarkReadyAsync(byte[] payload)
@@ -1304,11 +1390,30 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         }
 
         _session.HandleReadyForQuery(payload);
+        _completedAfterDeadline = _cancellation.TimedOut;
         _complete = true;
-        await _cancellation.DisposeAsync().ConfigureAwait(false);
+        await StopCancellationAsync().ConfigureAwait(false);
 
-        await _session.ReaderClosedAsync().ConfigureAwait(false);
+        try
+        {
+            await _session.ReaderClosedAsync().ConfigureAwait(false);
+        }
+        catch (Exception error)
+        {
+            _statementCloseFailure = error;
+            throw;
+        }
+
         FinishOperation();
+    }
+
+    private void ThrowIfCompletionCanceled(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (_completedAfterDeadline)
+        {
+            throw new TimeoutException("The command exceeded CommandTimeout before ReadyForQuery.");
+        }
     }
 
     private async Task DrainCurrentResultAsync(CancellationToken cancellationToken)
@@ -1368,9 +1473,12 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         {
             var field = fields[i];
             _formatCodes[i] = field.FormatCode;
+            var isVector = _session.VectorOid is { } vectorOid && vectorOid != 0 && field.TypeOid == vectorOid;
             _columns.Add(new ReaderColumn(field.Name, field.TableOid, field.AttributeNumber, field.TypeOid,
-                field.TypeSize, field.TypeModifier, CassieResultCodec.GetClrType(field.TypeOid, field.FormatCode),
-                field.FormatCode));
+                field.TypeSize, field.TypeModifier, isVector && field.FormatCode == 1
+                    ? typeof(CassieVector)
+                    : CassieResultCodec.GetClrType(field.TypeOid, field.FormatCode),
+                field.FormatCode, isVector));
         }
     }
 
@@ -1383,7 +1491,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     private void IndexDataRow(byte[] payload)
     {
         var fieldCount = _formatCodes.Length;
-        RowMessages.IndexDataRow(payload, _fieldOffsets.AsSpan(0, fieldCount), _fieldLengths.AsSpan(0, fieldCount));
+        RowMessages.IndexDataRow(_rowBuffer.GetPayload(payload), _fieldOffsets.AsSpan(0, fieldCount), _fieldLengths.AsSpan(0, fieldCount));
         Array.Clear(_rawValues);
         if (_converted is not null)
         {
@@ -1439,18 +1547,25 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         var error = ServerErrorParser.Parse(payload);
         _statementFailed?.Invoke(error);
         MarkOperationFailed(error);
-        await DrainToReadyAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await DrainToReadyAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception cleanupError) when (ReferenceEquals(cleanupError, _statementCloseFailure))
+        {
+            // The original server error belongs to the operation the caller is executing.
+        }
+
         return TranslateServerError(error, cancellationToken);
     }
 
     private Exception TranslateServerError(CassieException error, CancellationToken cancellationToken)
     {
-        return error.SqlState != "57014"
-            ? error
-            : _cancellation.TimedOut
-                ? new TimeoutException("The command exceeded CommandTimeout and was cancelled by Cassie.")
-                : cancellationToken.IsCancellationRequested
-                    ? new OperationCanceledException("The query was canceled.", error, cancellationToken)
+        return error.SqlState != "57014" ? error
+            : cancellationToken.IsCancellationRequested
+                ? new OperationCanceledException("The query was canceled.", error, cancellationToken)
+                : _cancellation.TimedOut
+                    ? new TimeoutException("The command exceeded CommandTimeout and was cancelled by Cassie.", error)
                     : error;
     }
 }

@@ -6,28 +6,26 @@ namespace Cntryl.Cassie.Protocol;
 /// <summary>Bounds-checked big-endian readers over a received message payload.</summary>
 internal static class PgPayload
 {
-    public static short ReadInt16(byte[] bytes, ref int offset)
+    public static short ReadInt16(ReadOnlySpan<byte> bytes, ref int offset)
     {
-        ArgumentNullException.ThrowIfNull(bytes);
         if (offset > bytes.Length - sizeof(short))
         {
             throw new IOException("Truncated pgwire frame.");
         }
 
-        var value = BinaryPrimitives.ReadInt16BigEndian(bytes.AsSpan(offset));
+        var value = BinaryPrimitives.ReadInt16BigEndian(bytes[offset..]);
         offset += sizeof(short);
         return value;
     }
 
-    public static int ReadInt32(byte[] bytes, ref int offset)
+    public static int ReadInt32(ReadOnlySpan<byte> bytes, ref int offset)
     {
-        ArgumentNullException.ThrowIfNull(bytes);
         if (offset > bytes.Length - sizeof(int))
         {
             throw new IOException("Truncated pgwire frame.");
         }
 
-        var value = BinaryPrimitives.ReadInt32BigEndian(bytes.AsSpan(offset));
+        var value = BinaryPrimitives.ReadInt32BigEndian(bytes[offset..]);
         offset += sizeof(int);
         return value;
     }

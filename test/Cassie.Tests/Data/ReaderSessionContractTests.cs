@@ -8,6 +8,38 @@ namespace Cntryl.Cassie.Tests.Data;
 public sealed class ReaderSessionContractTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldCloseConnectionAndPreserveDrainFailureGivenCloseConnectionWhenDrainThrows(bool synchronized)
+    {
+        // Arrange
+        FakeReaderSession session = new();
+        session.Enqueue((byte)'T', OneInt32Column(false));
+        var drainFailure = new TimeoutException("Drain failed.");
+        await using CassieDataReader reader = new(session, 0, CommandBehavior.CloseConnection);
+        await reader.InitializeAsync(TestContext.Current.CancellationToken);
+        if (synchronized)
+        {
+            session.Enqueue((byte)'Z', [(byte)'I']);
+            session.ReaderClosedHandler = () => Task.FromException(drainFailure);
+        }
+        else
+        {
+            session.ReadHandler = _ => Task.FromException<(byte, byte[])>(drainFailure);
+        }
+
+        session.CloseHandler = () => Task.FromException(new InvalidOperationException("Cleanup failed."));
+        // Act
+        var failure = await Assert.ThrowsAsync<TimeoutException>(reader.CloseAsync);
+
+        // Assert
+        Assert.Same(drainFailure, failure);
+        Assert.Equal(1, session.ConnectionClosures);
+        Assert.Equal(synchronized ? 0 : 1, session.Aborts);
+        Assert.True(reader.IsClosed);
+    }
+
+    [Theory]
     [InlineData("initialize", false)]
     [InlineData("read", false)]
     [InlineData("next", false)]

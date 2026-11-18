@@ -15,6 +15,7 @@ namespace Cntryl.Cassie.Tests.Commands;
 public sealed class ExtendedQueryContractTests
 {
     private static readonly byte[] BinaryInt42 = [0, 0, 0, 42];
+    private const int InstalledVectorOid = 25173;
     private static readonly CassieVector Vector123 = new(1, 2, 3);
     private static readonly byte[] BinaryVector123 = [0, 3, 0, 0, 0x3f, 0x80, 0, 0, 0x40, 0, 0, 0, 0x40, 0x40, 0, 0];
 
@@ -588,7 +589,7 @@ public sealed class ExtendedQueryContractTests
             (interval, 1186, "1 months 2 days 11045006007 microseconds"),
             (time, 1083, "01:02:03.456789"),
             (timeWithTimeZone, 1266, "03:04:05.006007+02:00"),
-            (new CassieVector(1, 2, 3), 100003, "[1,2,3]")
+            (new CassieVector(1, 2, 3), InstalledVectorOid, "[1,2,3]")
         ];
 
         // Act
@@ -660,7 +661,7 @@ public sealed class ExtendedQueryContractTests
         // Arrange
 
         // Act
-        var binding = AssertBoundParameterAsync(Vector123, 100003, BinaryVector123);
+        var binding = AssertBoundParameterAsync(Vector123, InstalledVectorOid, BinaryVector123);
 
         // Assert
         return binding;
@@ -1263,7 +1264,7 @@ public sealed class ExtendedQueryContractTests
             (3220, "16/B374D848", "16/B374D848", typeof(string)),
             (3802, Encoding.UTF8.GetString(json), Encoding.UTF8.GetString(json), typeof(string)),
             (4072, "$.ready", "$.ready", typeof(string)),
-            (100003, "[1,2,3]", "[1,2,3]", typeof(string)),
+            (InstalledVectorOid, "[1,2,3]", "[1,2,3]", typeof(string)),
             (1007, "[1,2]", "[1,2]", typeof(string)),
             (1003, "[\"cassie\"]", "[\"cassie\"]", typeof(string)),
             (2249, "record-value", "record-value", typeof(string)),
@@ -1777,7 +1778,7 @@ public sealed class ExtendedQueryContractTests
 
         // Act
         // Assert
-        return AssertBoundParameterAsync(42, 23, BinaryInt42, resultFormat: 1, resultOid: 100003,
+        return AssertBoundParameterAsync(42, 23, BinaryInt42, resultFormat: 1, resultOid: InstalledVectorOid,
             encodedResult: BinaryVector123, verifyResult: reader =>
             {
                 Assert.Equal(typeof(CassieVector), reader.GetFieldType(0));
@@ -2046,6 +2047,31 @@ public sealed class ExtendedQueryContractTests
         }
 
         await WriteFrameAsync(stream, (byte)'Z', [(byte)'I']);
+        if (resultFormat != 0 || typeOid == InstalledVectorOid)
+        {
+            var catalog = await ReadFrontendFrameAsync(stream);
+            Assert.Equal((byte)'Q', catalog[0]);
+            Assert.Equal(CassieConnection.VectorCatalogQuery, Encoding.UTF8.GetString(catalog.AsSpan(1, catalog.Length - 2)));
+            using MemoryStream oidDescription = new();
+            WriteInt16(oidDescription, 1);
+            WriteCString(oidDescription, "objid");
+            WriteInt32(oidDescription, 0);
+            WriteInt16(oidDescription, 0);
+            WriteInt32(oidDescription, 26);
+            WriteInt16(oidDescription, 4);
+            WriteInt32(oidDescription, -1);
+            WriteInt16(oidDescription, 0);
+            await WriteFrameAsync(stream, (byte)'T', oidDescription.ToArray());
+            if (typeOid == InstalledVectorOid || resultOid == InstalledVectorOid)
+            {
+                var oidText = Encoding.UTF8.GetBytes(InstalledVectorOid.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                await WriteFrameAsync(stream, (byte)'D', [0, 1, 0, 0, 0, (byte)oidText.Length, .. oidText]);
+            }
+
+            await WriteFrameAsync(stream, (byte)'C', "SELECT 1\0"u8.ToArray());
+            await WriteFrameAsync(stream, (byte)'Z', [(byte)'I']);
+        }
+
         var parse = await ReadFrontendFrameAsync(stream);
         var bind = await ReadFrontendFrameAsync(stream);
         var describe = await ReadFrontendFrameAsync(stream);
@@ -2104,7 +2130,7 @@ public sealed class ExtendedQueryContractTests
             774 => 8,
             829 => 6,
             17 or 25 or 1042 or 1043 or 114 or 650 or 869 or 1560 or 1562 or 1700 or 3802 or 4072 => -1,
-            >= 100001 and <= 132767 => -1,
+            InstalledVectorOid => -1,
             _ when arrayType => -1,
             _ => 4
         };

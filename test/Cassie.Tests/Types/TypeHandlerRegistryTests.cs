@@ -42,8 +42,6 @@ public sealed class TypeHandlerRegistryTests
     [InlineData(3802)]
     [InlineData(4072)]
     [InlineData(4191)]
-    [InlineData(100001)]
-    [InlineData(132767)]
     public void ShouldFindHandlerGivenBinaryCapableScalarOidWhenRegistryIsQueried(int oid)
     {
         // Arrange
@@ -62,6 +60,8 @@ public sealed class TypeHandlerRegistryTests
     [InlineData(2287)]
     [InlineData(1007)]
     [InlineData(100000)]
+    [InlineData(100001)]
+    [InlineData(132767)]
     [InlineData(132768)]
     [InlineData(9999)]
     public void ShouldFindNoHandlerGivenRecordArrayOrUnknownOidWhenRegistryIsQueried(int oid)

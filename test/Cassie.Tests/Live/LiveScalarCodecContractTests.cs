@@ -1,7 +1,9 @@
 using System.Data;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.NetworkInformation;
 using Cntryl.Cassie.Commands;
+using Cntryl.Cassie.Connection;
 using Cntryl.Cassie.Types;
 using Xunit;
 
@@ -54,6 +56,11 @@ public sealed class LiveScalarCodecContractTests : IAsyncLifetime
     {
         // Arrange
         var (value, expected) = TextParameterCase(caseName);
+        if (value is CassieVector)
+        {
+            await InstallVectorAsync(_live.Connection);
+        }
+
         using var command = _live.CreateCommand();
         command.CommandText = "SELECT @value";
         _ = command.Parameters.Add(new CassieParameter
@@ -310,23 +317,74 @@ public sealed class LiveScalarCodecContractTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ShouldRoundTripVectorGivenBinaryParameterWhenResultIsBinary()
+    [SuppressMessage("Security", "CA2100", Justification = "The database identifier is a fixed prefix and a generated hexadecimal GUID.")]
+    public async Task ShouldRoundTripVectorGivenIndependentCatalogOidsWhenResultsAreBinary()
     {
         // Arrange
-        using var command = _live.CreateCommand();
-        command.CommandText = "SELECT @vector AS vector";
-        command.BinaryResults = true;
-        _ = command.Parameters.Add(new CassieParameter { ParameterName = "vector", Value = new CassieVector(1, 2, 3) });
+        var token = TestContext.Current.CancellationToken;
+        await InstallVectorAsync(_live.Connection);
+        var primaryOid = await ReadVectorOidAsync(_live.Connection);
+        var database = LiveSession.UniqueName("cassie_live_vector");
+        using var create = _live.CreateCommand();
+        create.CommandText = $"CREATE DATABASE {database}";
+        _ = await create.ExecuteNonQueryAsync(token);
+        try
+        {
+            var settings = new CassieConnectionStringBuilder(_live.ConnectionString)
+            {
+                Database = database
+            };
+            await using CassieConnection other = new() { ConnectionString = settings.ConnectionString };
+            await other.OpenAsync(token);
+            using var command = other.CreateCommand();
+            command.CommandText = "SELECT @vector AS bare, @vector::vector(3) AS dimensioned";
+            command.BinaryResults = true;
+            _ = command.Parameters.Add(new CassieParameter
+            { ParameterName = "vector", Value = new CassieVector(1, 2, 3) });
 
-        // Act
-        await using var reader = await LiveSession.ReadFirstRowAsync(command);
+            // Act
+            var missing = await Assert.ThrowsAsync<InvalidOperationException>(() => command.ExecuteScalarAsync(token));
+            await InstallVectorAsync(other);
+            var secondaryOid = await ReadVectorOidAsync(other);
+            await command.PrepareAsync(token);
+            await using (var reader = await command.ExecuteReaderAsync(CommandBehavior.SchemaOnly, token))
+            {
+                Assert.Equal("vector", reader.GetDataTypeName(0));
+                Assert.Equal("vector(3)", reader.GetDataTypeName(1));
+            }
 
-        // Assert
-        var vector = Assert.IsType<CassieVector>(reader.GetValue(0));
-        Assert.Equal(3, vector.Dimension);
-        Assert.Equal(1f, vector[0]);
-        Assert.Equal(2f, vector[1]);
-        Assert.Equal(3f, vector[2]);
+            foreach (var connection in new[] { other, _live.Connection })
+            {
+                command.Connection = connection;
+                await using var reader = await LiveSession.ReadFirstRowAsync(command);
+                Assert.Equal([1f, 2f, 3f], Assert.IsType<CassieVector>(reader.GetValue(0)));
+                Assert.Equal([1f, 2f, 3f], Assert.IsType<CassieVector>(reader.GetValue(1)));
+            }
+
+            // Assert
+            Assert.Contains("Install the vector extension", missing.Message, StringComparison.Ordinal);
+            Assert.NotEqual(primaryOid, secondaryOid);
+        }
+        finally
+        {
+            using var drop = _live.CreateCommand();
+            drop.CommandText = $"DROP DATABASE {database}";
+            _ = await drop.ExecuteNonQueryAsync(CancellationToken.None);
+        }
+    }
+
+    private static async Task InstallVectorAsync(CassieConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "CREATE EXTENSION IF NOT EXISTS vector";
+        _ = await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<uint> ReadVectorOidAsync(CassieConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = CassieConnection.VectorCatalogQuery;
+        return Assert.IsType<uint>(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]

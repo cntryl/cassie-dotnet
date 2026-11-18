@@ -179,6 +179,88 @@ public sealed class PreparedStatementLeaseTests
         _ = Assert.Single(closed);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldDrainGroupedClosesGivenDeferredStatementsWhenReaderFinishes(bool loseSync)
+    {
+        // Arrange
+        var token = TestContext.Current.CancellationToken;
+        using ScriptedServer server = new(async session =>
+        {
+            Assert.Equal((byte)'Q', (await session.ReadFrameAsync()).Tag);
+            await session.WriteIntRowDescriptionAsync();
+            await session.WriteCommandCompleteAsync("SELECT 0");
+            await session.WriteReadyAsync();
+            for (var group = 0; group < 2; group++)
+            {
+                var count = group == 0 ? 64 : 2;
+                List<string> names = [];
+                for (var index = 0; index < count; index++)
+                {
+                    var (tag, payload) = await session.ReadFrameAsync();
+                    Assert.Equal((byte)'C', tag);
+                    Assert.Equal((byte)'S', (await session.ReadFrameAsync()).Tag);
+                    var offset = 1;
+                    names.Add(PgPayload.ReadCString(payload, ref offset));
+                }
+
+                if (loseSync)
+                {
+                    await session.WriteReadyAsync();
+                    return;
+                }
+
+                Assert.Equal(count, names.Distinct(StringComparer.Ordinal).Count());
+                for (var index = 0; index < count; index++)
+                {
+                    if (group == 0 && index < 3)
+                    {
+                        var state = index == 0 ? "26000" : "XX000";
+                        var message = index == 1 ? "first failure" : "other failure";
+                        await BatchPeer.ReplyWithErrorAsync(session, state, message);
+                    }
+                    else
+                    {
+                        await session.WriteAsync((byte)'3', []);
+                    }
+
+                    await session.WriteReadyAsync();
+                }
+            }
+
+            await session.ServeQueriesAsync(session.WriteCommandCompleteAsync);
+        });
+        await using CassieConnection connection = new() { ConnectionString = server.ConnectionString("Pooling=false") };
+        await connection.OpenAsync(token);
+        using var query = connection.CreateCommand();
+        query.CommandText = "SELECT 1";
+        await using var reader = await query.ExecuteReaderAsync(token);
+        for (var index = 0; index < 66; index++)
+        {
+            await connection.CloseServerStatementAsync(index.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                connection.SessionIdentity, token);
+        }
+
+        await connection.CloseServerStatementAsync("0", connection.SessionIdentity, token);
+
+        // Act
+        var failure = await Record.ExceptionAsync(() => reader.CloseAsync().WaitAsync(TimeSpan.FromSeconds(4), token));
+
+        // Assert
+        if (loseSync)
+        {
+            _ = Assert.IsType<IOException>(failure);
+            Assert.Equal(ConnectionState.Closed, connection.State);
+        }
+        else
+        {
+            Assert.Equal("first failure", Assert.IsType<CassieException>(failure).Message);
+            Assert.Equal(ConnectionState.Open, connection.State);
+            _ = await query.ExecuteNonQueryAsync(token);
+        }
+    }
+
     private static async Task ServePreparedAsync(ScriptedSession session, ConcurrentQueue<string> prepared,
         ConcurrentQueue<string> closed, ConcurrentQueue<string> bound)
     {

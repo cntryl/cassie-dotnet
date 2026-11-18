@@ -232,8 +232,10 @@ public sealed class AdminRestContractTests
         Assert.Equal(2, handler.Requests);
     }
 
-    [Fact]
-    public async Task ShouldUseOperationResourceGivenRegisteredOperationWhenQueryIsCanceled()
+    [Theory]
+    [InlineData("canceled")]
+    [InlineData("cancelled")]
+    public async Task ShouldUseOperationResourceGivenRegisteredOperationWhenQueryIsCanceled(string field)
     {
         // Arrange
         using ScriptedHttpHandler handler = new((request, _) =>
@@ -242,8 +244,8 @@ public sealed class AdminRestContractTests
             Assert.Equal(new Uri(ServiceAddress, "api/v1/admin/query-operations/" + OperationId.ToString("D")),
                 request.RequestUri);
             Assert.Null(request.Content);
-            return Task.FromResult(ScriptedHttpHandler.Json( /*lang=json,strict*/
-                """{"operation_id":"00000000-1111-2222-3333-444444444444","cancelled":true}"""));
+            return Task.FromResult(ScriptedHttpHandler.Json(
+                $$"""{"operation_id":"00000000-1111-2222-3333-444444444444","{{field}}":true}"""));
         });
         using HttpClient http = new(handler) { BaseAddress = ServiceAddress };
         using CassieRestClient client = new(http);
@@ -254,6 +256,26 @@ public sealed class AdminRestContractTests
         // Assert
         Assert.Equal(OperationId, result.OperationId);
         Assert.True(result.Cancelled);
+    }
+
+    [Theory]
+    [InlineData( /*lang=json,strict*/ """{"operation_id":"00000000-1111-2222-3333-444444444444"}""")]
+    [InlineData( /*lang=json,strict*/ """{"operation_id":"00000000-1111-2222-3333-444444444444","canceled":false}""")]
+    [InlineData( /*lang=json,strict*/ """{"operation_id":"00000000-1111-2222-3333-444444444444","canceled":true,"cancelled":false}""")]
+    [InlineData( /*lang=json,strict*/ """{"operation_id":"11111111-1111-2222-3333-444444444444","canceled":true}""")]
+    public async Task ShouldRejectInvalidAcknowledgementGivenSuccessStatusWhenQueryIsCanceled(string json)
+    {
+        // Arrange
+        using ScriptedHttpHandler handler = new((_, _) => Task.FromResult(ScriptedHttpHandler.Json(json)));
+        using HttpClient http = new(handler) { BaseAddress = ServiceAddress };
+        using CassieRestClient client = new(http);
+
+        // Act
+        var failure = await Assert.ThrowsAsync<JsonException>(() =>
+            client.Admin.CancelQueryAsync(OperationId, TestContext.Current.CancellationToken));
+
+        // Assert
+        Assert.Contains("acknowledge", failure.Message, StringComparison.Ordinal);
     }
 
     [Theory]

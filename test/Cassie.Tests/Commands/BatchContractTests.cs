@@ -15,6 +15,44 @@ namespace Cntryl.Cassie.Tests.Commands;
 
 public sealed class BatchContractTests
 {
+    [Fact]
+    public async Task ShouldReturnOwnedSessionGivenAcknowledgedTimeoutWhenClosingBatchReader()
+    {
+        // Arrange
+        ScriptedServer? peer = null;
+        using ScriptedServer server = new(async session =>
+        {
+            while ((await session.ReadFrameAsync()).Tag != (byte)'S')
+            {
+            }
+
+            await session.WriteIntRowDescriptionAsync();
+            while (peer!.CancelRequests == 0)
+            {
+                await Task.Delay(10, TestContext.Current.CancellationToken);
+            }
+
+            await BatchPeer.ReplyWithErrorAsync(session, "57014", "query canceled");
+            await session.WriteReadyAsync();
+            await session.ServeQueriesAsync(session.WriteCommandCompleteAsync);
+        });
+        peer = server;
+        await using CassieDataSource source = new(server.ConnectionString("Pooling=true;Maximum Pool Size=1"));
+        await using var batch = source.CreateBatch();
+        batch.Timeout = 1;
+        batch.BatchCommands.Add(new CassieBatchCommand("SELECT 1"));
+        await using var reader = await batch.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        _ = await Assert.ThrowsAsync<TimeoutException>(reader.CloseAsync);
+
+        // Assert
+        await using var next = await source.OpenConnectionAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(1, server.Accepted);
+        await next.CloseAsync();
+        CassieConnection.ClearPool(next);
+    }
+
     private static readonly TimeSpan Guard = TimeSpan.FromSeconds(10);
 
     [Fact]

@@ -26,7 +26,7 @@ namespace Cntryl.Cassie.Rest;
 [JsonSerializable(typeof(CassieCatalogSchema))]
 [JsonSerializable(typeof(CassieQueryValidationResult))]
 [JsonSerializable(typeof(CassieQueryExplanation))]
-[JsonSerializable(typeof(CassieQueryCancellation))]
+[JsonSerializable(typeof(RestQueryCancellation))]
 [JsonSerializable(typeof(CassieManifestExportOptions))]
 [JsonSerializable(typeof(CassieProjectionVerificationManifest))]
 [JsonSerializable(typeof(CassieManifestComparisonRequest))]

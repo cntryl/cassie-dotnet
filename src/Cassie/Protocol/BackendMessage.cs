@@ -3,6 +3,9 @@ namespace Cntryl.Cassie.Protocol;
 /// <summary>Message tags the server sends to the client.</summary>
 internal static class BackendMessage
 {
+    public const byte CloseComplete = (byte)'3';
+    public const byte NoticeResponse = (byte)'N';
+    public const byte NotificationResponse = (byte)'A';
     public const byte Authentication = (byte)'R';
     public const byte BackendKeyData = (byte)'K';
     public const byte ParameterStatus = (byte)'S';

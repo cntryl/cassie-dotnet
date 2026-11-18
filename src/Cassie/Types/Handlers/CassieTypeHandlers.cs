@@ -9,7 +9,6 @@ namespace Cntryl.Cassie.Types.Handlers;
 internal static class CassieTypeHandlers
 {
     private static readonly FrozenDictionary<int, CassieTypeHandler> ByOid = Build();
-    private static readonly VectorHandler Vectors = new();
 
     // Types whose GetFieldValue<T> conversion differs from a plain cast of the boxed value.
     private static readonly FrozenDictionary<Type, object> FieldReaders = new Dictionary<Type, object>
@@ -26,7 +25,7 @@ internal static class CassieTypeHandlers
     /// <summary>Returns the handler for a scalar or vector OID, or null when the type has no special conversion.</summary>
     internal static CassieTypeHandler? Find(int oid)
     {
-        return CassieTypeMap.IsVectorOid(oid) ? Vectors : ByOid.GetValueOrDefault(oid);
+        return ByOid.GetValueOrDefault(oid);
     }
 
     /// <summary>Returns the reader for a CLR type that needs a conversion beyond casting the boxed column value, or null.</summary>

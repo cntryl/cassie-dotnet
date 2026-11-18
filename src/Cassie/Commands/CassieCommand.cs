@@ -216,17 +216,13 @@ public sealed class CassieCommand : DbCommand
     /// <inheritdoc />
     public override void Prepare()
     {
-        if (CommandType is not (CommandType.Text or CommandType.StoredProcedure))
+        if (DbConnection is CassieConnection connection)
         {
-            throw new NotSupportedException($"Cassie cannot prepare command type '{CommandType}'.");
+            connection.RunSynchronously(() => PrepareAsync(CancellationToken.None));
         }
-
-        var prepared = PrepareParameters();
-        _preparedStatement.Request();
-        if (DbConnection is CassieConnection connection && connection.State == ConnectionState.Open)
+        else
         {
-            connection.ValidateCommandTransaction(DbTransaction);
-            _ = _preparedStatement.EnsurePrepared(connection, prepared, CommandTimeout);
+            SynchronousCall.Wait(PrepareAsync(CancellationToken.None));
         }
     }
 
@@ -243,7 +239,12 @@ public sealed class CassieCommand : DbCommand
         if (DbConnection is CassieConnection connection && connection.State == ConnectionState.Open)
         {
             connection.ValidateCommandTransaction(DbTransaction);
-            _ = await _preparedStatement.EnsurePreparedAsync(connection, prepared, CommandTimeout, cancellationToken)
+            CassieConnection.ValidateSqlText(prepared.Sql);
+            ParameterizedQueryBatch.ValidateParameterCount(prepared);
+            var budget = connection.StartCommandBudget(CommandTimeout, cancellationToken);
+            prepared = await connection.ResolveVectorTypesAsync(prepared, false, budget, cancellationToken)
+                .ConfigureAwait(false);
+            _ = await _preparedStatement.EnsurePreparedAsync(connection, prepared, budget, cancellationToken)
                 .ConfigureAwait(false);
         }
     }
@@ -312,26 +313,29 @@ public sealed class CassieCommand : DbCommand
         try
         {
             var prepared = PrepareParameters();
-            string? statementName = null;
-            EncodedParameters? encodedParameters = null;
-            if (_preparedStatement.IsRequested)
+            CassieConnection.ValidateSqlText(prepared.Sql);
+            ParameterizedQueryBatch.ValidateParameterCount(prepared);
+            var schemaOnly = (behavior & CommandBehavior.SchemaOnly) != 0;
+            var extended = prepared.ParameterNames.Count != 0 || BinaryResults || schemaOnly ||
+                           _preparedStatement.IsRequested;
+            var encoded = extended && !schemaOnly ? ParameterizedQueryBatch.EncodeParameters(prepared) : null;
+            var budget = connection.StartCommandBudget(CommandTimeout, cancellationToken);
+            if (extended)
             {
-                if ((behavior & CommandBehavior.SchemaOnly) == 0)
-                {
-                    encodedParameters = ParameterizedQueryBatch.EncodeParameters(prepared);
-                }
-
-                statementName = await _preparedStatement
-                    .EnsurePreparedAsync(connection, prepared, CommandTimeout, cancellationToken).ConfigureAwait(false);
+                prepared = await connection.ResolveVectorTypesAsync(prepared, BinaryResults || schemaOnly, budget,
+                    cancellationToken).ConfigureAwait(false);
             }
 
-            return await (prepared.ParameterNames.Count == 0 && !BinaryResults
-                                                             && (behavior & CommandBehavior.SchemaOnly) == 0
-                                                             && statementName is null
-                ? connection.ExecuteQueryAsync(prepared.Sql, cancellationToken, CommandTimeout, behavior,
-                    operationScope)
-                : connection.ExecuteParameterizedQueryAsync(prepared, CommandTimeout, cancellationToken, behavior,
-                    BinaryResults, statementName, operationScope, encodedParameters)).ConfigureAwait(false);
+            var statementName = _preparedStatement.IsRequested
+                ? await _preparedStatement.EnsurePreparedAsync(connection, prepared, budget, cancellationToken)
+                    .ConfigureAwait(false)
+                : null;
+
+            return await (extended
+                ? connection.ExecuteParameterizedQueryAsync(prepared, budget, cancellationToken, behavior,
+                    BinaryResults, statementName, operationScope, encoded)
+                : connection.ExecuteQueryCoreAsync(prepared.Sql, budget, behavior, operationScope, true, cancellationToken))
+                .ConfigureAwait(false);
         }
         catch (Exception exception)
         {

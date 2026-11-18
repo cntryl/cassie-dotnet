@@ -24,6 +24,7 @@ internal sealed class CassieConnectionPool(int maximumPoolSize, TimeSpan idleLif
     {
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var (outcome, session) = TryRent();
             switch (outcome)
             {
@@ -52,6 +53,7 @@ internal sealed class CassieConnectionPool(int maximumPoolSize, TimeSpan idleLif
     {
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var (outcome, session) = TryRent();
             switch (outcome)
             {

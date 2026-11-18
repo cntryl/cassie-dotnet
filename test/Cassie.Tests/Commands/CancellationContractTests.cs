@@ -12,6 +12,57 @@ namespace Cntryl.Cassie.Tests.Commands;
 public sealed class CancellationContractTests
 {
     [Fact]
+    public async Task ShouldBlockSessionReuseGivenPendingCancelSocketWhenReadyForQueryArrives()
+    {
+        // Arrange
+        var token = TestContext.Current.CancellationToken;
+        TaskCompletionSource releaseCancel = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource sentReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        ScriptedServer? peer = null;
+        using ScriptedServer server = new(async session =>
+        {
+            _ = await session.ReadFrameAsync();
+            await session.WriteIntRowDescriptionAsync();
+            while (peer!.CancelRequests == 0)
+            {
+                await Task.Delay(10, token);
+            }
+
+            await BatchPeer.ReplyWithErrorAsync(session, "57014", "query canceled");
+            await session.WriteReadyAsync();
+            sentReady.SetResult();
+            await session.ServeQueriesAsync(session.WriteCommandCompleteAsync);
+        }, acknowledgeCancel: () => releaseCancel.Task);
+        peer = server;
+        await using CassieConnection connection = new() { ConnectionString = server.ConnectionString("Pooling=false") };
+        await connection.OpenAsync(token);
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT 1";
+        await using var reader = await command.ExecuteReaderAsync(token);
+        using CancellationTokenSource caller = new();
+        var reading = reader.ReadAsync(caller.Token);
+        await caller.CancelAsync();
+
+        try
+        {
+            // Act
+            await sentReady.Task.WaitAsync(TimeSpan.FromSeconds(2), token);
+            _ = await Assert.ThrowsAsync<TimeoutException>(() => reading.WaitAsync(TimeSpan.FromMilliseconds(150), token));
+        }
+        finally
+        {
+            releaseCancel.SetResult();
+        }
+
+        // Assert
+        var canceled = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reading);
+        Assert.Equal(caller.Token, canceled.CancellationToken);
+        await reader.CloseAsync();
+        _ = await command.ExecuteNonQueryAsync(token);
+        Assert.Equal(ConnectionState.Open, connection.State);
+    }
+
+    [Fact]
     public async Task ShouldCancelActiveQueryGivenReaderWaitsForRowWhenCommandIsCancelled()
     {
         // Arrange
@@ -186,6 +237,7 @@ public sealed class CancellationContractTests
         Assert.Equal(80877102, IPAddress.NetworkToHostOrder(BitConverter.ToInt32(cancel, 4)));
         Assert.Equal(1234, IPAddress.NetworkToHostOrder(BitConverter.ToInt32(cancel, 8)));
         Assert.Equal(5678, IPAddress.NetworkToHostOrder(BitConverter.ToInt32(cancel, 12)));
+        cancelClient.Dispose();
         byte[] error =
         [
             (byte)'S', .. Encoding.UTF8.GetBytes("ERROR"), 0, (byte)'C', .. Encoding.UTF8.GetBytes("57014"), 0,
@@ -235,6 +287,7 @@ public sealed class CancellationContractTests
             Assert.Equal(80877102, IPAddress.NetworkToHostOrder(BitConverter.ToInt32(cancel, 4)));
             Assert.Equal(1234, IPAddress.NetworkToHostOrder(BitConverter.ToInt32(cancel, 8)));
             Assert.Equal(5678, IPAddress.NetworkToHostOrder(BitConverter.ToInt32(cancel, 12)));
+            cancelClient.Dispose();
             byte[] error =
             [
                 (byte)'S', .. Encoding.UTF8.GetBytes("ERROR"), 0, (byte)'C', .. Encoding.UTF8.GetBytes("57014"), 0,

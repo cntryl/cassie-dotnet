@@ -1,4 +1,6 @@
 using System.Net.Sockets;
+using Cntryl.Cassie.Connection;
+using Cntryl.Cassie.Protocol;
 
 namespace Cntryl.Cassie.Data;
 
@@ -8,26 +10,69 @@ internal sealed class ReaderCancellation : IAsyncDisposable
     private readonly Lock _cancelRequestLock = new();
     private readonly Timer? _commandTimer;
     private readonly IReaderSession _session;
+    private readonly RowPayloadBuffer? _rowBuffer;
     private Task<bool>? _cancelRequestTask;
     private volatile bool _complete;
     private volatile bool _timedOut;
+    private bool _writing;
+    private bool _timeoutWhileWriting;
 
-    public ReaderCancellation(IReaderSession session, int commandTimeout)
+    public CommandBudget Budget { get; }
+
+    public ReaderCancellation(IReaderSession session, int commandTimeout) : this(session, new CommandBudget(commandTimeout))
+    {
+    }
+
+    public ReaderCancellation(IReaderSession session, CommandBudget budget, RowPayloadBuffer? rowBuffer = null)
     {
         _session = session;
-        if (commandTimeout > 0)
+        _rowBuffer = rowBuffer;
+        Budget = budget;
+        if (budget.HasTimeout)
         {
             _commandTimer = new Timer(static state => ((ReaderCancellation)state!).CancelForTimeout(), this,
-                TimeSpan.FromSeconds(commandTimeout), Timeout.InfiniteTimeSpan);
+                budget.Remaining, Timeout.InfiniteTimeSpan);
         }
     }
 
-    public bool TimedOut => _timedOut;
+    public bool TimedOut => _timedOut || (!_complete && Budget.Remaining == TimeSpan.Zero);
+
+    public bool TryBeginWrite()
+    {
+        lock (_cancelRequestLock)
+        {
+            if (TimedOut)
+            {
+                return false;
+            }
+
+            _writing = true;
+            return true;
+        }
+    }
+
+    public void EndWrite(bool dispatched)
+    {
+        lock (_cancelRequestLock)
+        {
+            _writing = false;
+            if (!dispatched)
+            {
+                _complete = true;
+            }
+        }
+
+        if (dispatched && (_timeoutWhileWriting || TimedOut))
+        {
+            CancelForTimeout();
+        }
+    }
 
     public async ValueTask DisposeAsync()
     {
         lock (_cancelRequestLock)
         {
+            _timedOut = TimedOut;
             _complete = true;
         }
 
@@ -39,7 +84,7 @@ internal sealed class ReaderCancellation : IAsyncDisposable
 
     public bool IsTimeoutTransportFailure(Exception exception)
     {
-        return _timedOut && exception is IOException or SocketException or ObjectDisposedException;
+        return TimedOut && exception is IOException or SocketException or ObjectDisposedException;
     }
 
     public static TimeoutException CreateTimeoutException(Exception inner)
@@ -53,7 +98,7 @@ internal sealed class ReaderCancellation : IAsyncDisposable
     {
         if (allowAbortOnCancellation || !cancellationToken.CanBeCanceled)
         {
-            return _session.ReadFrameAsync(cancellationToken);
+            return _session.ReadFrameAsync(_rowBuffer, cancellationToken);
         }
 
         if (cancellationToken.IsCancellationRequested)
@@ -63,7 +108,7 @@ internal sealed class ReaderCancellation : IAsyncDisposable
         }
 
         // A frame that is already buffered needs no cancellation machinery: nothing can interrupt it.
-        var pending = _session.ReadFrameAsync(CancellationToken.None);
+        var pending = _session.ReadFrameAsync(_rowBuffer, CancellationToken.None);
         return pending.IsCompletedSuccessfully
             ? pending
             : ReadQueryFrameWithCancellationAsync(pending, cancellationToken);
@@ -85,7 +130,7 @@ internal sealed class ReaderCancellation : IAsyncDisposable
             // Finish a frame once reading starts so cancellation cannot leave the stream mid-frame.
             return pending is { } started
                 ? await started.ConfigureAwait(false)
-                : await _session.ReadFrameAsync(CancellationToken.None).ConfigureAwait(false);
+                : await _session.ReadFrameAsync(_rowBuffer, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception exception) when ((cancellationToken.IsCancellationRequested || _timedOut) &&
                                           exception is IOException or SocketException or ObjectDisposedException)
@@ -157,12 +202,22 @@ internal sealed class ReaderCancellation : IAsyncDisposable
 
     private void CancelForTimeout()
     {
-        if (_complete)
+        lock (_cancelRequestLock)
         {
-            return;
+            if (_complete || _timedOut)
+            {
+                return;
+            }
+
+            if (_writing)
+            {
+                _timeoutWhileWriting = true;
+                return;
+            }
+
+            _timedOut = true;
         }
 
-        _timedOut = true;
         _ = ObserveCancelRequestAsync();
         _ = AbortAfterCancellationGracePeriodAsync(CancellationToken.None);
     }

@@ -15,6 +15,7 @@ public sealed partial class CassieConnection : DbConnection
     private const int DefaultFetchSize = 128;
     private readonly Lock _abortGate = new();
     private readonly OperationGate _gate = new();
+    private int? _defaultCommandTimeout;
     private string _connectionString = string.Empty;
     private bool _ownsPoolSlot;
     private CassieConnectionPool? _pool;
@@ -37,7 +38,12 @@ public sealed partial class CassieConnection : DbConnection
                     "The connection string cannot be changed while the connection is open.");
             }
 
-            _connectionString = value ?? string.Empty;
+            var connectionString = value ?? string.Empty;
+            if (_connectionString != connectionString)
+            {
+                _connectionString = connectionString;
+                _defaultCommandTimeout = null;
+            }
         }
     }
 
@@ -230,6 +236,7 @@ public sealed partial class CassieConnection : DbConnection
 
     private async Task OpenCoreAsync(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (_state != ConnectionState.Closed)
         {
             throw new InvalidOperationException("The connection is already open or opening.");
@@ -253,6 +260,7 @@ public sealed partial class CassieConnection : DbConnection
         var holdsPoolSlot = false;
         try
         {
+            linked.Token.ThrowIfCancellationRequested();
             SetState(ConnectionState.Connecting);
             PgSession? session = null;
             if (pool is not null)
@@ -266,10 +274,13 @@ public sealed partial class CassieConnection : DbConnection
                 .ConfigureAwait(false);
             session.SynchronousIO = _synchronous;
             session.DateStyle.BeginLease();
+            session.VectorOid = null;
+            session.StatementsToClose = null;
             _session = session;
             _pool = pool;
             _poolKey = poolKey;
             _ownsPoolSlot = pool is not null;
+            _pendingQueryCancel = null;
             SessionIdentity = Guid.NewGuid();
             SetState(ConnectionState.Open);
             CassieLogging.ConnectionOpened(Logger);
@@ -322,8 +333,9 @@ public sealed partial class CassieConnection : DbConnection
                 var (session, _) = await pool.RentAsync(synchronous, cancellationToken).ConfigureAwait(false);
                 return (session, poolKey, pool);
             }
-            catch (ObjectDisposedException) when (!cancellationToken.IsCancellationRequested)
+            catch (ObjectDisposedException)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 // The pool was cleared while this opener waited; join the replacement pool.
                 (poolKey, pool) = CassieConnectionPools.Get(settings);
             }
@@ -391,7 +403,13 @@ public sealed partial class CassieConnection : DbConnection
 
     private async Task CloseCoreAsync()
     {
-        if (_pool is not null && _session is not null && _state == ConnectionState.Open && !_gate.IsActive &&
+        if (_gate.IsActive)
+        {
+            AbortTransport();
+            return;
+        }
+
+        if (_pool is not null && _session is not null && _state == ConnectionState.Open &&
             await TryReturnToPoolAsync().ConfigureAwait(false))
         {
             return;
@@ -418,7 +436,6 @@ public sealed partial class CassieConnection : DbConnection
         _pool = null;
         _poolKey = null;
         _ownsPoolSlot = false;
-        _preparedStatementsToClose.Clear();
         SetState(ConnectionState.Closed);
         if (poolToRelease is not null && releasePoolSlot)
         {
@@ -449,7 +466,6 @@ public sealed partial class CassieConnection : DbConnection
             _pool = null;
             _poolKey = null;
             _ownsPoolSlot = false;
-            _preparedStatementsToClose.Clear();
             SetState(ConnectionState.Closed);
             session.SynchronousIO = false;
             await pool.ReturnAsync(session).ConfigureAwait(false);

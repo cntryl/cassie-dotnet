@@ -225,6 +225,7 @@ public sealed class PortalStreamingContractTests
         Assert.Equal(80877102, BinaryPrimitives.ReadInt32BigEndian(cancel.AsSpan(sizeof(int))));
         Assert.Equal(1234, BinaryPrimitives.ReadInt32BigEndian(cancel.AsSpan(sizeof(int) * 2)));
         Assert.Equal(5678, BinaryPrimitives.ReadInt32BigEndian(cancel.AsSpan(sizeof(int) * 3)));
+        cancelClient.Dispose();
         byte[] error =
         [
             (byte)'S', .. Encoding.UTF8.GetBytes("ERROR"), 0, (byte)'C', .. Encoding.UTF8.GetBytes("57014"), 0,

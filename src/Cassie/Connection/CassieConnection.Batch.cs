@@ -35,7 +35,7 @@ public sealed partial class CassieConnection
     ///     connection and its transaction untouched.
     /// </summary>
     internal async Task<CassieDataReader> ExecuteBatchAsync(IReadOnlyList<CassiePreparedCommand> commands,
-        IReadOnlyList<EncodedParameters> encodedParameters, IReadOnlyList<string?> statementNames, int commandTimeout,
+        IReadOnlyList<EncodedParameters> encodedParameters, IReadOnlyList<string?> statementNames, CommandBudget budget,
         CommandBehavior behavior, CassieDiagnostics.OperationScope? operationScope,
         Action<CommandTag?> statementCompleted, Action<CassieException> statementFailed,
         CancellationToken cancellationToken)
@@ -48,23 +48,22 @@ public sealed partial class CassieConnection
         {
             for (var index = 0; index < commands.Count; index++)
             {
-                ValidateSqlText(commands[index].Sql);
                 ParameterizedQueryBatch.AppendExecuteRequest(request, commands[index], statementNames[index], false,
                     ExecuteAllFrame, encodedParameters[index]);
             }
 
             PgWriter.AppendFrame(request, FrontendMessage.Sync, []);
-            await RefreshDateStyleIfNeededAsync(cancellationToken).ConfigureAwait(false);
+            await RefreshDateStyleIfNeededAsync(budget, cancellationToken).ConfigureAwait(false);
             foreach (var prepared in commands)
             {
                 session.DateStyle.ObserveSql(prepared.Sql);
             }
 
             return await RunReaderAsync(
-                () => session.WriteBatchAsync(request, cancellationToken),
-                () => new CassieDataReader(new ConnectionReaderSession(this, session.Stream), commandTimeout, behavior,
+                token => session.WriteBatchAsync(request, token),
+                () => new CassieDataReader(new ConnectionReaderSession(this, session), budget, behavior,
                     operationScope, statementCompleted: statementCompleted, statementFailed: statementFailed),
-                false,
+                budget,
                 cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -75,7 +74,7 @@ public sealed partial class CassieConnection
 
     private int DefaultCommandTimeout()
     {
-        return CommandTimeoutFrom(_connectionString);
+        return _defaultCommandTimeout ??= CommandTimeoutFrom(_connectionString);
     }
 
     internal static int CommandTimeoutFrom(string connectionString)

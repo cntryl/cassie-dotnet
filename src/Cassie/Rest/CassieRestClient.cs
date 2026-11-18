@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
@@ -179,20 +180,83 @@ public sealed class CassieRestClient : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        // Buffering is deliberate: HttpClient.Timeout and the caller token cover the full body, not only response headers.
-        using var response = await _httpClient
-            .SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken).ConfigureAwait(false);
-        return !response.IsSuccessStatusCode
-            ? throw new CassieRestException(response.StatusCode,
-                await ReadErrorAsync(response, cancellationToken).ConfigureAwait(false))
-            : await response.Content.ReadFromJsonAsync(typeInfo, cancellationToken).ConfigureAwait(false)
-              ?? throw new JsonException("Cassie returned a null response.");
+        return await SendRequestAsync(request, typeInfo, cancellationToken).ConfigureAwait(false);
     }
 
-    private static async Task<string> ReadErrorAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    private async Task<T> SendRequestAsync<T>(HttpRequestMessage request, JsonTypeInfo<T> typeInfo,
+        CancellationToken cancellationToken)
+    {
+        var timeout = _httpClient.Timeout;
+        using var deadline = timeout == Timeout.InfiniteTimeSpan
+            ? null
+            : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline?.CancelAfter(timeout);
+        var token = deadline?.Token ?? cancellationToken;
+        try
+        {
+            using var response = await _httpClient
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
+            var limit = _httpClient.MaxResponseContentBufferSize;
+            return response.IsSuccessStatusCode
+                ? await ReadSuccessAsync(response.Content, typeInfo, limit, token).ConfigureAwait(false)
+                  ?? throw new JsonException("Cassie returned a null response.")
+                : throw new CassieRestException(response.StatusCode,
+                    await ReadErrorAsync(response, limit, token).ConfigureAwait(false));
+        }
+        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException("The REST request was canceled.", exception, cancellationToken);
+        }
+        catch (OperationCanceledException exception) when (deadline?.IsCancellationRequested == true)
+        {
+            throw new TaskCanceledException("The REST request exceeded the configured HttpClient.Timeout.",
+                new TimeoutException("The REST response deadline elapsed.", exception), token);
+        }
+    }
+
+    private static async Task<T?> ReadSuccessAsync<T>(HttpContent content, JsonTypeInfo<T> typeInfo, long limit,
+        CancellationToken cancellationToken)
+    {
+        if (content.Headers.ContentLength > limit)
+        {
+            throw BoundedRestResponseStream.LimitExceeded(limit);
+        }
+
+        var contentStream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        using var bounded = new BoundedRestResponseStream(contentStream, limit);
+        var charset = content.Headers.ContentType?.CharSet;
+        if (charset is not null)
+        {
+            Encoding encoding;
+            try
+            {
+                encoding = Encoding.GetEncoding(charset.Trim('"'));
+            }
+            catch (ArgumentException exception)
+            {
+                throw new InvalidOperationException("The REST response declares an invalid charset.", exception);
+            }
+
+            if (encoding.CodePage != Encoding.UTF8.CodePage)
+            {
+                var transcoded = Encoding.CreateTranscodingStream(bounded, encoding, Encoding.UTF8, leaveOpen: true);
+                await using (transcoded.ConfigureAwait(false))
+                {
+                    return await JsonSerializer.DeserializeAsync(transcoded, typeInfo, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+            }
+        }
+
+        return await JsonSerializer.DeserializeAsync(bounded, typeInfo, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<string> ReadErrorAsync(HttpResponseMessage response, long limit,
+        CancellationToken cancellationToken)
     {
         try
         {
+            await response.Content.LoadIntoBufferAsync(limit, cancellationToken).ConfigureAwait(false);
             var error = await response.Content
                 .ReadFromJsonAsync(CassieRestJsonContext.Default.RestErrorResponse, cancellationToken)
                 .ConfigureAwait(false);
@@ -201,9 +265,9 @@ public sealed class CassieRestClient : IDisposable
                 return error.Error;
             }
         }
-        catch (JsonException)
+        catch (Exception exception) when (exception is JsonException or HttpRequestException or InvalidOperationException)
         {
-            // Proxies and infrastructure can return non-JSON errors; retain the HTTP status in either case.
+            // Keep the HTTP status when the body is unavailable, oversized, or not a Cassie error.
         }
 
         return response.ReasonPhrase ?? $"HTTP {(int)response.StatusCode}";

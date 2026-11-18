@@ -1,4 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+using Cntryl.Cassie.Types;
 
 namespace Cntryl.Cassie.Data;
 
@@ -16,4 +18,10 @@ internal sealed record ReaderColumn(
         DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties |
                                    DynamicallyAccessedMemberTypes.PublicFields)]
     Type FieldType,
-    short FormatCode);
+    short FormatCode,
+    bool IsVector = false)
+{
+    internal string DataTypeName => !IsVector
+        ? CassieTypeMap.GetDataTypeName(TypeOid)
+        : TypeModifier > 0 ? "vector(" + TypeModifier.ToString(CultureInfo.InvariantCulture) + ")" : "vector";
+}

@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using Cntryl.Cassie.Connection;
 
 namespace Cntryl.Cassie.Tests;
 
@@ -10,18 +11,24 @@ internal sealed class ScriptedServer : IDisposable
 {
     private const int CancelRequestCode = 80877102;
     private readonly Func<ScriptedSession, Task> _handler;
+    private readonly Func<Task>? _acknowledgeCancel;
     private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
     private int _accepted;
     private int _cancelRequests;
     private int _terminated;
 
-    internal ScriptedServer(Func<ScriptedSession, Task> handler)
+    internal ScriptedServer(Func<ScriptedSession, Task> handler, bool handlesVectorCatalog = true,
+        Func<Task>? acknowledgeCancel = null)
     {
         _handler = handler;
+        HandlesVectorCatalog = handlesVectorCatalog;
+        _acknowledgeCancel = acknowledgeCancel;
         _listener.Start();
         Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
         _ = Task.Run(AcceptLoopAsync);
     }
+
+    internal bool HandlesVectorCatalog { get; }
 
     internal int Port { get; }
 
@@ -96,6 +103,11 @@ internal sealed class ScriptedServer : IDisposable
                 if (!regular)
                 {
                     _ = Interlocked.Increment(ref _cancelRequests);
+                    if (_acknowledgeCancel is not null)
+                    {
+                        await _acknowledgeCancel();
+                    }
+
                     return;
                 }
 
@@ -141,6 +153,23 @@ internal sealed class ScriptedSession(ScriptedServer server, TcpClient client)
 
     /// <summary>Reads one frontend frame; the tag is followed by the payload.</summary>
     internal async Task<(byte Tag, byte[] Payload)> ReadFrameAsync()
+    {
+        while (true)
+        {
+            var frame = await ReadFrameCoreAsync();
+            if (!server.HandlesVectorCatalog || frame.Tag != (byte)'Q' ||
+                Encoding.UTF8.GetString(frame.Payload.AsSpan(0, frame.Payload.Length - 1)) != CassieConnection.VectorCatalogQuery)
+            {
+                return frame;
+            }
+
+            await WriteIntRowDescriptionAsync("objid");
+            await WriteCommandCompleteAsync("SELECT 0");
+            await WriteReadyAsync();
+        }
+    }
+
+    private async Task<(byte Tag, byte[] Payload)> ReadFrameCoreAsync()
     {
         var header = new byte[5];
         await Stream.ReadExactlyAsync(header);
