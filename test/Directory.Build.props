@@ -8,8 +8,9 @@
     <PackageReference Include="Cntryl.Conventions.Testing.Analyzers" Version="1.0.1" PrivateAssets="all"/>
     <PackageReference Include="Cntryl.Conventions.Testing.CodeFixes" Version="1.0.1" PrivateAssets="all"/>
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="11.0.0" PrivateAssets="all"/>
-    <PackageReference Include="Microsoft.Testing.Extensions.Telemetry" Version="$(CassieTestingPlatformVersion)" PrivateAssets="all"/>
     <PackageReference Include="Microsoft.Testing.Extensions.TrxReport.Abstractions" Version="$(CassieTestingPlatformVersion)" PrivateAssets="all"/>
     <PackageReference Include="Microsoft.Testing.Platform.MSBuild" Version="$(CassieTestingPlatformVersion)" PrivateAssets="all"/>
+    <!-- The optional runner telemetry extension through 2.5.3 calls an overload removed in Application Insights 3.x. -->
+    <PrunePackageReference Include="Microsoft.Testing.Extensions.Telemetry" Version="2.5.3"/>
   </ItemGroup>
 </Project>
