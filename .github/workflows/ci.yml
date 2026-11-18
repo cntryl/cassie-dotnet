@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 25
     services:
       cassie:
-        image: ghcr.io/cntryl/cassie:main
+        image: ghcr.io/cntryl/cassie:latest
         ports:
           - 127.0.0.1:5432:5432
           - 127.0.0.1:8080:8080
