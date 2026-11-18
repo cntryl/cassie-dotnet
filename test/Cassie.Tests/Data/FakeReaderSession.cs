@@ -3,93 +3,92 @@ using Cntryl.Cassie.Data;
 using Cntryl.Cassie.Protocol;
 using Microsoft.Extensions.Logging;
 
-namespace Cntryl.Cassie.Tests.Data
+namespace Cntryl.Cassie.Tests.Data;
+
+internal sealed class FakeReaderSession : IReaderSession
 {
-    internal sealed class FakeReaderSession : IReaderSession
+    private readonly Queue<(byte Tag, byte[] Payload)> _frames = new();
+    private int _aborts;
+    private int _cancelRequests;
+    public int CancelRequests => Volatile.Read(ref _cancelRequests);
+    public int Aborts => Volatile.Read(ref _aborts);
+    public int ReaderClosures { get; private set; }
+    public int ConnectionClosures { get; private set; }
+    public List<byte[]> ReadyMessages { get; } = [];
+    public List<byte[]> ParameterStatuses { get; } = [];
+    public List<CommandTag> CompletedCommands { get; } = [];
+    public List<CancellationToken> ReadTokens { get; } = [];
+    public Func<Task<bool>>? CancelHandler { get; set; }
+    public Func<CancellationToken, Task<(byte Tag, byte[] Payload)>>? ReadHandler { get; set; }
+
+    public bool IsOpen { get; private set; } = true;
+    public CassieDateStyle? DateStyle => null;
+    public ILogger? Logger => null;
+
+    public bool EnterSynchronous()
     {
-        private readonly Queue<(byte Tag, byte[] Payload)> _frames = new();
-        private int _cancelRequests;
-        private int _aborts;
+        return false;
+    }
 
-        public bool IsOpen { get; private set; } = true;
-        public CassieDateStyle? DateStyle => null;
-        public ILogger? Logger => null;
-        public int CancelRequests => Volatile.Read(ref _cancelRequests);
-        public int Aborts => Volatile.Read(ref _aborts);
-        public int ReaderClosures { get; private set; }
-        public int ConnectionClosures { get; private set; }
-        public List<byte[]> ReadyMessages { get; } = [];
-        public List<byte[]> ParameterStatuses { get; } = [];
-        public List<CommandTag> CompletedCommands { get; } = [];
-        public List<CancellationToken> ReadTokens { get; } = [];
-        public Func<Task<bool>>? CancelHandler { get; set; }
-        public Func<CancellationToken, Task<(byte Tag, byte[] Payload)>>? ReadHandler { get; set; }
+    public void ExitSynchronous()
+    {
+    }
 
-        public bool EnterSynchronous()
-        {
-            return false;
-        }
+    public ValueTask<(byte Tag, byte[] Payload)> ReadFrameAsync(CancellationToken cancellationToken)
+    {
+        ReadTokens.Add(cancellationToken);
+        return ReadHandler is null
+            ? ValueTask.FromResult(_frames.Dequeue())
+            : new ValueTask<(byte Tag, byte[] Payload)>(ReadHandler(cancellationToken));
+    }
 
-        public void ExitSynchronous()
-        {
-        }
+    public Task<bool> CancelCurrentQueryAsync()
+    {
+        _ = Interlocked.Increment(ref _cancelRequests);
+        return CancelHandler?.Invoke() ?? Task.FromResult(true);
+    }
 
-        public void Enqueue(byte tag, byte[] payload)
-        {
-            _frames.Enqueue((tag, payload));
-        }
+    public void AbortTransport()
+    {
+        _ = Interlocked.Increment(ref _aborts);
+        IsOpen = false;
+    }
 
-        public ValueTask<(byte Tag, byte[] Payload)> ReadFrameAsync(CancellationToken cancellationToken)
-        {
-            ReadTokens.Add(cancellationToken);
-            return ReadHandler is null
-                ? ValueTask.FromResult(_frames.Dequeue())
-                : new ValueTask<(byte Tag, byte[] Payload)>(ReadHandler(cancellationToken));
-        }
+    public Task RejectCopyFromAsync()
+    {
+        return Task.CompletedTask;
+    }
 
-        public Task<bool> CancelCurrentQueryAsync()
-        {
-            _ = Interlocked.Increment(ref _cancelRequests);
-            return CancelHandler?.Invoke() ?? Task.FromResult(true);
-        }
+    public void HandleParameterStatusMessage(byte[] payload)
+    {
+        ParameterStatuses.Add(payload);
+    }
 
-        public void AbortTransport()
-        {
-            _ = Interlocked.Increment(ref _aborts);
-            IsOpen = false;
-        }
+    public void HandleReadyForQuery(ReadOnlySpan<byte> payload)
+    {
+        ReadyMessages.Add(payload.ToArray());
+    }
 
-        public Task RejectCopyFromAsync()
-        {
-            return Task.CompletedTask;
-        }
+    public void ObserveCommandComplete(CommandTag tag)
+    {
+        CompletedCommands.Add(tag);
+    }
 
-        public void HandleParameterStatusMessage(byte[] payload)
-        {
-            ParameterStatuses.Add(payload);
-        }
+    public Task ReaderClosedAsync()
+    {
+        ReaderClosures++;
+        return Task.CompletedTask;
+    }
 
-        public void HandleReadyForQuery(ReadOnlySpan<byte> payload)
-        {
-            ReadyMessages.Add(payload.ToArray());
-        }
+    public Task CloseAsync()
+    {
+        ConnectionClosures++;
+        IsOpen = false;
+        return Task.CompletedTask;
+    }
 
-        public void ObserveCommandComplete(CommandTag tag)
-        {
-            CompletedCommands.Add(tag);
-        }
-
-        public Task ReaderClosedAsync()
-        {
-            ReaderClosures++;
-            return Task.CompletedTask;
-        }
-
-        public Task CloseAsync()
-        {
-            ConnectionClosures++;
-            IsOpen = false;
-            return Task.CompletedTask;
-        }
+    public void Enqueue(byte tag, byte[] payload)
+    {
+        _frames.Enqueue((tag, payload));
     }
 }

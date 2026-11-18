@@ -1,9 +1,8 @@
-namespace Cntryl.Cassie.Connection
+namespace Cntryl.Cassie.Connection;
+
+internal enum CassieDateOrder
 {
-    internal enum CassieDateOrder
-    {
-        Mdy,
-        Dmy,
-        Ymd
-    }
+    Mdy,
+    Dmy,
+    Ymd
 }

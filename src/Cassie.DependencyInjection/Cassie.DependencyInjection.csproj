@@ -5,7 +5,7 @@
     <RepositoryUrl>https://github.com/cntryl/cassie-dotnet</RepositoryUrl>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../Cassie/Cassie.csproj" />
-    <None Update="README.md" Pack="true" PackagePath="/" />
+    <ProjectReference Include="../Cassie/Cassie.csproj"/>
+    <None Update="README.md" Pack="true" PackagePath="/"/>
   </ItemGroup>
 </Project>

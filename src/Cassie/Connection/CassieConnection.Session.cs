@@ -1,225 +1,225 @@
-using Cntryl.Cassie.Data;
-using Cntryl.Cassie.Protocol;
 using System.Data;
+using Cntryl.Cassie.Protocol;
 
-namespace Cntryl.Cassie.Connection
+namespace Cntryl.Cassie.Connection;
+
+public sealed partial class CassieConnection
 {
-    public sealed partial class CassieConnection
+    private static readonly TimeSpan CancelWatchdogDelay = TimeSpan.FromSeconds(5);
+
+    internal void HandleParameterStatusMessage(byte[] payload)
     {
-        private static readonly TimeSpan CancelWatchdogDelay = TimeSpan.FromSeconds(5);
-
-        internal void HandleParameterStatusMessage(byte[] payload)
+        try
         {
+            var (name, value) = ParameterStatusMessage.Parse(payload);
+            _session?.DateStyle.ApplyParameterStatus(name, value);
+        }
+        catch (IOException)
+        {
+            AbortTransport();
+            throw;
+        }
+    }
+
+    internal void HandleReadyForQuery(ReadOnlySpan<byte> payload)
+    {
+        if (_session is null || !_session.DateStyle.TryObserveReadyForQuery(payload))
+        {
+            AbortTransport();
+            throw new IOException("Cassie returned an invalid ReadyForQuery transaction status.");
+        }
+    }
+
+    internal void ObserveCommandComplete(CommandTag tag)
+    {
+        _session?.DateStyle.ObserveCommandComplete(tag);
+    }
+
+    private async Task RefreshDateStyleIfNeededAsync(CancellationToken cancellationToken)
+    {
+        var tracker = _session?.DateStyle;
+        if (tracker is null || !tracker.CanRefresh || _state != ConnectionState.Open || _gate.IsActive)
+        {
+            return;
+        }
+
+        tracker.BeginRefresh();
+        try
+        {
+            var reader = await ExecuteQueryAsync("SHOW DateStyle", cancellationToken).ConfigureAwait(false);
             try
             {
-                (string name, string value) = ParameterStatusMessage.Parse(payload);
-                _session?.DateStyle.ApplyParameterStatus(name, value);
-            }
-            catch (IOException)
-            {
-                AbortTransport();
-                throw;
-            }
-        }
-
-        internal void HandleReadyForQuery(ReadOnlySpan<byte> payload)
-        {
-            if (_session is null || !_session.DateStyle.TryObserveReadyForQuery(payload))
-            {
-                AbortTransport();
-                throw new IOException("Cassie returned an invalid ReadyForQuery transaction status.");
-            }
-        }
-
-        internal void ObserveCommandComplete(CommandTag tag)
-        {
-            _session?.DateStyle.ObserveCommandComplete(tag);
-        }
-
-        private async Task RefreshDateStyleIfNeededAsync(CancellationToken cancellationToken)
-        {
-            DateStyleTracker? tracker = _session?.DateStyle;
-            if (tracker is null || !tracker.CanRefresh || _state != ConnectionState.Open || _gate.IsActive)
-            {
-                return;
-            }
-
-            tracker.BeginRefresh();
-            try
-            {
-                CassieDataReader reader = await ExecuteQueryAsync("SHOW DateStyle", cancellationToken).ConfigureAwait(false);
-                try
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                    {
-                        throw new IOException("Cassie did not return DateStyle from SHOW DateStyle.");
-                    }
+                    throw new IOException("Cassie did not return DateStyle from SHOW DateStyle.");
+                }
 
-                    tracker.ApplyParameterStatus("DateStyle", reader.GetString(0));
-                }
-                finally
-                {
-                    await reader.DisposeAsync().ConfigureAwait(false);
-                }
+                tracker.ApplyParameterStatus("DateStyle", reader.GetString(0));
             }
             finally
             {
-                tracker.EndRefresh();
+                await reader.DisposeAsync().ConfigureAwait(false);
             }
         }
-
-        internal async Task ReaderClosedAsync()
+        finally
         {
-            _gate.End();
-            if (_preparedStatementsToClose.Count == 0)
-            {
-                return;
-            }
+            tracker.EndRefresh();
+        }
+    }
 
-            _gate.Begin();
-            try
-            {
-                while (_preparedStatementsToClose.Count > 0 && _state == ConnectionState.Open)
-                {
-                    string statement = _preparedStatementsToClose[0];
-                    _preparedStatementsToClose.RemoveAt(0);
-                    await CloseServerStatementCoreAsync(statement, CancellationToken.None).ConfigureAwait(false);
-                }
-            }
-            finally
-            {
-                if (_state == ConnectionState.Open)
-                {
-                    _gate.End();
-                }
-            }
+    internal async Task ReaderClosedAsync()
+    {
+        _gate.End();
+        if (_preparedStatementsToClose.Count == 0)
+        {
+            return;
         }
 
-        internal void AbortTransport()
+        _gate.Begin();
+        try
         {
-            lock (_abortGate)
+            while (_preparedStatementsToClose.Count > 0 && _state == ConnectionState.Open)
             {
-                ActiveTransaction?.ConnectionClosed();
+                var statement = _preparedStatementsToClose[0];
+                _preparedStatementsToClose.RemoveAt(0);
+                await CloseServerStatementCoreAsync(statement, CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            if (_state == ConnectionState.Open)
+            {
                 _gate.End();
-                _session?.Dispose();
-                if (_pool is not null && _ownsPoolSlot)
-                {
-                    _pool.ReleaseReservedSlot();
-                }
+            }
+        }
+    }
 
-                _pool = null;
-                _poolKey = null;
-                _ownsPoolSlot = false;
-                _preparedStatementsToClose.Clear();
+    internal void AbortTransport()
+    {
+        lock (_abortGate)
+        {
+            ActiveTransaction?.ConnectionClosed();
+            _gate.End();
+            _session?.Dispose();
+            if (_pool is not null && _ownsPoolSlot)
+            {
+                _pool.ReleaseReservedSlot();
             }
 
-            SetState(ConnectionState.Closed);
+            _pool = null;
+            _poolKey = null;
+            _ownsPoolSlot = false;
+            _preparedStatementsToClose.Clear();
         }
 
-        /// <summary>Requests server-side cancellation and aborts the session if the server does not finish the statement.</summary>
-        internal void RequestCancel()
+        SetState(ConnectionState.Closed);
+    }
+
+    /// <summary>Requests server-side cancellation and aborts the session if the server does not finish the statement.</summary>
+    internal void RequestCancel()
+    {
+        if (!_gate.IsActive)
         {
-            if (!_gate.IsActive)
-            {
-                return;
-            }
-
-            long serial = _gate.Serial;
-            // Cancel is called from another thread while the owner is mid-operation, so it must not touch
-            // the connection's own mode; only the separate cancel connection blocks here.
-            bool sent = SynchronousCall.Wait(CancelCurrentQueryAsync(synchronous: true));
-            if (!sent)
-            {
-                if (_gate.Serial == serial && _gate.IsActive)
-                {
-                    AbortTransport();
-                }
-
-                return;
-            }
-
-            _ = AbortIfStillRunningAsync(serial);
+            return;
         }
 
-        private async Task AbortIfStillRunningAsync(long serial)
+        var serial = _gate.Serial;
+        // Cancel is called from another thread while the owner is mid-operation, so it must not touch
+        // the connection's own mode; only the separate cancel connection blocks here.
+        var sent = SynchronousCall.Wait(CancelCurrentQueryAsync(true));
+        if (!sent)
         {
-            await Task.Delay(CancelWatchdogDelay).ConfigureAwait(false);
-            if (_gate.IsActive && _gate.Serial == serial)
+            if (_gate.Serial == serial && _gate.IsActive)
             {
                 AbortTransport();
             }
+
+            return;
         }
 
-        internal async Task<bool> CancelCurrentQueryAsync(bool synchronous = false)
-        {
-            PgSession? session = _session;
-            return _gate.IsActive && session is not null && session.CanCancel
-                && await QueryCanceler.SendAsync([with(_connectionString)], session.BackendProcessId, session.BackendSecretKey, synchronous).ConfigureAwait(false);
-        }
+        _ = AbortIfStillRunningAsync(serial);
+    }
 
-        /// <summary>
-        /// Writes one request, then reads until ReadyForQuery. Returns the server error if one arrived; any other
-        /// failure before ReadyForQuery leaves the stream out of sync, so the transport is aborted.
-        /// </summary>
-        private async Task<CassieException?> RunSyncedRequestAsync(PgSession session, Func<Task> writeRequest, CancellationToken readToken)
+    private async Task AbortIfStillRunningAsync(long serial)
+    {
+        await Task.Delay(CancelWatchdogDelay).ConfigureAwait(false);
+        if (_gate.IsActive && _gate.Serial == serial)
         {
-            bool ready = false;
-            CassieException? serverError = null;
-            try
+            AbortTransport();
+        }
+    }
+
+    internal async Task<bool> CancelCurrentQueryAsync(bool synchronous = false)
+    {
+        var session = _session;
+        return _gate.IsActive && session is not null && session.CanCancel
+               && await QueryCanceler.SendAsync([with(_connectionString)], session.BackendProcessId,
+                   session.BackendSecretKey, synchronous).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Writes one request, then reads until ReadyForQuery. Returns the server error if one arrived; any other
+    ///     failure before ReadyForQuery leaves the stream out of sync, so the transport is aborted.
+    /// </summary>
+    private async Task<CassieException?> RunSyncedRequestAsync(PgSession session, Func<Task> writeRequest,
+        CancellationToken readToken)
+    {
+        var ready = false;
+        CassieException? serverError = null;
+        try
+        {
+            await writeRequest().ConfigureAwait(false);
+            while (!ready)
             {
-                await writeRequest().ConfigureAwait(false);
-                while (!ready)
+                var (tag, payload) = await session.ReadFrameAsync(readToken).ConfigureAwait(false);
+                if (tag == BackendMessage.ErrorResponse)
                 {
-                    (byte tag, byte[] payload) = await session.ReadFrameAsync(readToken).ConfigureAwait(false);
-                    if (tag == BackendMessage.ErrorResponse)
-                    {
-                        serverError = ServerErrorParser.Parse(payload);
-                    }
-                    else if (tag == BackendMessage.ReadyForQuery)
-                    {
-                        HandleReadyForQuery(payload);
-                        ready = true;
-                    }
+                    serverError = ServerErrorParser.Parse(payload);
                 }
-
-                return serverError;
-            }
-            catch
-            {
-                if (!ready)
+                else if (tag == BackendMessage.ReadyForQuery)
                 {
-                    AbortTransport();
+                    HandleReadyForQuery(payload);
+                    ready = true;
                 }
-
-                throw;
             }
+
+            return serverError;
         }
-
-        internal async Task ExecutePortalPageAsync(CancellationToken cancellationToken)
+        catch
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                await _session!.WriteRawAsync(_portalPageFrames, CancellationToken.None).ConfigureAwait(false);
-            }
-            catch
+            if (!ready)
             {
                 AbortTransport();
-                throw;
             }
-        }
 
-        internal async Task SyncExtendedQueryAsync()
+            throw;
+        }
+    }
+
+    internal async Task ExecutePortalPageAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
         {
-            try
-            {
-                await _session!.WriteFrameAsync(FrontendMessage.Sync, [], CancellationToken.None).ConfigureAwait(false);
-            }
-            catch
-            {
-                AbortTransport();
-                throw;
-            }
+            await _session!.WriteRawAsync(_portalPageFrames, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            AbortTransport();
+            throw;
+        }
+    }
+
+    internal async Task SyncExtendedQueryAsync()
+    {
+        try
+        {
+            await _session!.WriteFrameAsync(FrontendMessage.Sync, [], CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            AbortTransport();
+            throw;
         }
     }
 }

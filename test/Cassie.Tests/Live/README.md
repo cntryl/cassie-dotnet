@@ -15,22 +15,22 @@ That test has the `Isolation=Server` trait. It drops its source table after taki
 the backup and leaves the restored database to be removed with the server. Run
 it separately; the client CI suite excludes it.
 
-| Variable | Effect |
-| --- | --- |
-| `CASSIE_DOTNET_TEST_CONNECTION_STRING` | Endpoint to test. Without it every live test is skipped. |
-| `CASSIE_DOTNET_TEST_REST_BASE_ADDRESS` | REST endpoint for the vector and administration contracts. |
-| `CASSIE_DOTNET_TEST_REST_USERNAME` | REST login username. |
-| `CASSIE_DOTNET_TEST_REST_PASSWORD` | REST login password. |
-| `CASSIE_DOTNET_REQUIRE_LIVE=true` | Fail instead of skip when the endpoint is missing. CI sets this. |
-| `CASSIE_DOTNET_TEST_ARRAYS=true` | One-dimensional array parameter and result tests. |
-| `CASSIE_DOTNET_TEST_ARRAY_SHAPES=true` | Multidimensional and lower-bound array tests. |
-| `CASSIE_DOTNET_TEST_NAME_TYPE=true` | `name` and `name[]` tests. |
-| `CASSIE_DOTNET_TEST_JSONB_TYPE=true` | Distinct JSONB OID 3802 test. |
-| `CASSIE_DOTNET_TEST_JSONPATH_TYPE=true` | JSONPath type test. |
-| `CASSIE_DOTNET_TEST_RECORD_TYPES=true` | `void`, `record` and `record[]` metadata tests. |
-| `CASSIE_DOTNET_TEST_PARAMETER_STATUS_UPDATES=true` | Hidden `DateStyle` change through a view. |
-| `CASSIE_DOTNET_TEST_STARTUP_APPLICATION_NAME` | Expected `application_name` when the connection string sets `Options`. |
-| `CASSIE_DOTNET_TEST_REJECTED_TLS_CONNECTION_STRING` | TLS endpoint addressed by a mismatched host name. |
+| Variable                                            | Effect                                                                 |
+|-----------------------------------------------------|------------------------------------------------------------------------|
+| `CASSIE_DOTNET_TEST_CONNECTION_STRING`              | Endpoint to test. Without it every live test is skipped.               |
+| `CASSIE_DOTNET_TEST_REST_BASE_ADDRESS`              | REST endpoint for the vector and administration contracts.             |
+| `CASSIE_DOTNET_TEST_REST_USERNAME`                  | REST login username.                                                   |
+| `CASSIE_DOTNET_TEST_REST_PASSWORD`                  | REST login password.                                                   |
+| `CASSIE_DOTNET_REQUIRE_LIVE=true`                   | Fail instead of skip when the endpoint is missing. CI sets this.       |
+| `CASSIE_DOTNET_TEST_ARRAYS=true`                    | One-dimensional array parameter and result tests.                      |
+| `CASSIE_DOTNET_TEST_ARRAY_SHAPES=true`              | Multidimensional and lower-bound array tests.                          |
+| `CASSIE_DOTNET_TEST_NAME_TYPE=true`                 | `name` and `name[]` tests.                                             |
+| `CASSIE_DOTNET_TEST_JSONB_TYPE=true`                | Distinct JSONB OID 3802 test.                                          |
+| `CASSIE_DOTNET_TEST_JSONPATH_TYPE=true`             | JSONPath type test.                                                    |
+| `CASSIE_DOTNET_TEST_RECORD_TYPES=true`              | `void`, `record` and `record[]` metadata tests.                        |
+| `CASSIE_DOTNET_TEST_PARAMETER_STATUS_UPDATES=true`  | Hidden `DateStyle` change through a view.                              |
+| `CASSIE_DOTNET_TEST_STARTUP_APPLICATION_NAME`       | Expected `application_name` when the connection string sets `Options`. |
+| `CASSIE_DOTNET_TEST_REJECTED_TLS_CONNECTION_STRING` | TLS endpoint addressed by a mismatched host name.                      |
 
 ```sh
 CASSIE_DOTNET_TEST_CONNECTION_STRING="Host=127.0.0.1;Port=5432;Database=postgres;Username=root;Password=...;SSL Mode=Disable" \

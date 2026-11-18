@@ -1,105 +1,104 @@
-namespace Cntryl.Cassie.Tests.Connection
+namespace Cntryl.Cassie.Tests.Connection;
+
+/// <summary>A manually advanced clock for the fixed COPY recovery deadline.</summary>
+internal sealed class CopyRecoveryClock : TimeProvider, IDisposable
 {
-    /// <summary>A manually advanced clock for the fixed COPY recovery deadline.</summary>
-    internal sealed class CopyRecoveryClock : TimeProvider, IDisposable
+    private readonly Lock _gate = new();
+    private readonly TaskCompletionSource _timerCreated = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly List<RecoveryTimer> _timers = [];
+    private long _elapsedTicks;
+
+    internal Task TimerCreated => _timerCreated.Task;
+    internal List<TimeSpan> InitialDueTimes { get; } = [];
+
+    public void Dispose()
     {
-        private readonly Lock _gate = new();
-        private readonly List<RecoveryTimer> _timers = [];
-        private readonly TaskCompletionSource _timerCreated = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private long _elapsedTicks;
-
-        internal Task TimerCreated => _timerCreated.Task;
-        internal List<TimeSpan> InitialDueTimes { get; } = [];
-
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        foreach (var timer in _timers)
         {
-            RecoveryTimer timer = new(this, callback, state);
-            lock (_gate)
-            {
-                InitialDueTimes.Add(dueTime);
-                _timers.Add(timer);
-                _ = timer.Change(dueTime, period);
-            }
+            timer.Dispose();
+        }
+    }
 
-            _ = _timerCreated.TrySetResult();
-            return timer;
+    public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+    {
+        RecoveryTimer timer = new(this, callback, state);
+        lock (_gate)
+        {
+            InitialDueTimes.Add(dueTime);
+            _timers.Add(timer);
+            _ = timer.Change(dueTime, period);
         }
 
-        internal void Advance(TimeSpan elapsed)
+        _ = _timerCreated.TrySetResult();
+        return timer;
+    }
+
+    internal void Advance(TimeSpan elapsed)
+    {
+        RecoveryTimer[] timers;
+        lock (_gate)
         {
-            RecoveryTimer[] timers;
-            lock (_gate)
+            _elapsedTicks += elapsed.Ticks;
+            timers = [.. _timers];
+        }
+
+        foreach (var timer in timers)
+        {
+            timer.FireWhenDue();
+        }
+    }
+
+    private sealed class RecoveryTimer(CopyRecoveryClock owner, TimerCallback callback, object? state) : ITimer
+    {
+        private bool _disposed;
+        private long _dueTicks = long.MaxValue;
+
+        public bool Change(TimeSpan dueTime, TimeSpan period)
+        {
+            if (period != Timeout.InfiniteTimeSpan)
             {
-                _elapsedTicks += elapsed.Ticks;
-                timers = [.. _timers];
+                throw new NotSupportedException("The recovery clock expects one-shot timers.");
             }
 
-            foreach (RecoveryTimer timer in timers)
+            lock (owner._gate)
             {
-                timer.FireWhenDue();
+                if (_disposed)
+                {
+                    return false;
+                }
+
+                _dueTicks = dueTime == Timeout.InfiniteTimeSpan ? long.MaxValue : owner._elapsedTicks + dueTime.Ticks;
+                return true;
             }
         }
 
         public void Dispose()
         {
-            foreach (RecoveryTimer timer in _timers)
+            lock (owner._gate)
             {
-                timer.Dispose();
+                _disposed = true;
             }
         }
 
-        private sealed class RecoveryTimer(CopyRecoveryClock owner, TimerCallback callback, object? state) : ITimer
+        public ValueTask DisposeAsync()
         {
-            private long _dueTicks = long.MaxValue;
-            private bool _disposed;
+            Dispose();
+            return ValueTask.CompletedTask;
+        }
 
-            public bool Change(TimeSpan dueTime, TimeSpan period)
+        internal void FireWhenDue()
+        {
+            lock (owner._gate)
             {
-                if (period != Timeout.InfiniteTimeSpan)
+                if (_disposed || _dueTicks > owner._elapsedTicks)
                 {
-                    throw new NotSupportedException("The recovery clock expects one-shot timers.");
+                    return;
                 }
 
-                lock (owner._gate)
-                {
-                    if (_disposed)
-                    {
-                        return false;
-                    }
-
-                    _dueTicks = dueTime == Timeout.InfiniteTimeSpan ? long.MaxValue : owner._elapsedTicks + dueTime.Ticks;
-                    return true;
-                }
+                _dueTicks = long.MaxValue;
             }
 
-            internal void FireWhenDue()
-            {
-                lock (owner._gate)
-                {
-                    if (_disposed || _dueTicks > owner._elapsedTicks)
-                    {
-                        return;
-                    }
-
-                    _dueTicks = long.MaxValue;
-                }
-
-                callback(state);
-            }
-
-            public void Dispose()
-            {
-                lock (owner._gate)
-                {
-                    _disposed = true;
-                }
-            }
-
-            public ValueTask DisposeAsync()
-            {
-                Dispose();
-                return ValueTask.CompletedTask;
-            }
+            callback(state);
         }
     }
 }
