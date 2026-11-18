@@ -52,3 +52,7 @@ REST vector tests require the server to use `CASSIE_EMBEDDINGS_PROVIDER=local` a
 settings and requires both pgwire and REST coverage. The REST tests use cookie
 login, explicit and generated document vectors, search pagination, administration
 queries, explicit server cancellation, and projection consistency manifests.
+
+The binary vector contract installs the vector extension and creates a temporary
+database to verify that each database resolves its own vector OID. The test user
+needs permission to create a database and install the extension.
