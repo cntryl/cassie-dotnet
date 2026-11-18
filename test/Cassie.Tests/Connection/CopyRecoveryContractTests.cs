@@ -13,6 +13,36 @@ namespace Cntryl.Cassie.Tests.Connection;
 public sealed class CopyRecoveryContractTests
 {
     [Fact]
+    public async Task ShouldRejectInvalidByteCountGivenInputStreamWhenCopyFrameIsBuilt()
+    {
+        // Arrange
+        var token = TestContext.Current.CancellationToken;
+        using ScriptedServer server = new(async session =>
+        {
+            _ = await session.ReadFrameAsync();
+            await session.WriteAsync((byte)'G', [0, 0, 0]);
+            Assert.Equal(FrontendMessage.CopyFail, (await session.ReadFrameAsync()).Tag);
+            await Commands.BatchPeer.ReplyWithErrorAsync(session, "57014", "COPY input failed");
+            await session.WriteReadyAsync();
+            await session.ServeQueriesAsync(session.WriteCommandCompleteAsync);
+        });
+        await using CassieConnection connection = new() { ConnectionString = server.ConnectionString("Pooling=false") };
+        await connection.OpenAsync(token);
+        using var command = connection.CreateCommand();
+        command.CommandText = "COPY ledger FROM STDIN";
+        using InvalidCountStream input = new();
+
+        // Act
+        var failure = await Assert.ThrowsAsync<IOException>(() => command.CopyFromAsync(input, token));
+
+        // Assert
+        Assert.Contains("invalid byte count", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(ConnectionState.Open, connection.State);
+        command.CommandText = "SELECT 1";
+        _ = await command.ExecuteNonQueryAsync(token);
+    }
+
+    [Fact]
     public async Task ShouldDiscardSessionGivenPartialCopyFrameWhenWriteDeadlineExpires()
     {
         // Arrange
@@ -504,6 +534,14 @@ public sealed class CopyRecoveryContractTests
     private static byte[] ServerError(string sqlState)
     {
         return Encoding.UTF8.GetBytes($"SERROR\0C{sqlState}\0Mcopy failed\0\0");
+    }
+
+    private sealed class InvalidCountStream : MemoryStream
+    {
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            return ValueTask.FromResult(buffer.Length + 1);
+        }
     }
 
     private sealed class PendingOutputStream(TaskCompletionSource writeStarted) : MemoryStream

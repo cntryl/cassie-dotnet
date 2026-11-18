@@ -106,7 +106,7 @@ public sealed partial class CassieConnection
 
     /// <summary>
     ///     Sends one request and returns a reader positioned on its first result. The gate is held from the first
-    ///     byte written, so any failure after that point leaves the stream out of sync and aborts the transport.
+    ///     byte written. An interrupted write discards the session; a dispatched request can recover at ReadyForQuery.
     /// </summary>
     private async Task<CassieDataReader> RunReaderAsync(Func<CancellationToken, Task> sendRequest,
         Func<CassieDataReader> createReader, CommandBudget budget, CancellationToken cancellationToken)

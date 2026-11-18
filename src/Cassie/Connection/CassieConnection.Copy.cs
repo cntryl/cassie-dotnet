@@ -83,6 +83,11 @@ public sealed partial class CassieConnection
                     break;
                 }
 
+                if ((uint)bytesRead > (uint)payload.Length)
+                {
+                    throw new IOException("The COPY input stream returned an invalid byte count.");
+                }
+
                 writingFrame = true;
                 PgFraming.WriteHeader(buffer, FrontendMessage.CopyData, bytesRead);
                 await session.WriteRawAsync(buffer.AsMemory(0, PgFraming.HeaderLength + bytesRead), deadline.Token)

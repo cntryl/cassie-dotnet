@@ -20,7 +20,7 @@ internal static class CassieParameterCodec
             Array array when oid == 1003 => EncodeNameArray(array),
             Array array when HasNonFiniteFloat(array) => EncodeTextArray(array, oid),
             Array array => EncodeArrayParameter(array, oid),
-            CassieVector vector => VectorHandler.EncodeText(vector),
+            CassieVector vector when oid == CassieTypeMap.VectorParameterOid => VectorHandler.EncodeText(vector),
             CassieTemporalValue temporal => FormatTemporalText(temporal, oid),
             string stringValue => stringValue,
             bool booleanValue => booleanValue ? "true" : "false",
@@ -165,7 +165,7 @@ internal static class CassieParameterCodec
 
     internal static byte[]? GetBinaryParameter(object? value, int oid)
     {
-        if (value is CassieVector vector)
+        if (oid == CassieTypeMap.VectorParameterOid && value is CassieVector vector)
         {
             return VectorHandler.EncodeBinary(vector);
         }

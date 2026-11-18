@@ -60,12 +60,13 @@ internal static class ParameterizedQueryBatch
         var values = (byte[]?[])new byte[prepared.Values.Count][];
         for (var index = 0; index < prepared.Values.Count; index++)
         {
-            var binary = EncodeBinary(prepared, index);
-            formats[index] = binary is null ? (short)0 : (short)1;
             var value = prepared.Values[index];
+            var oid = value is CassieVector ? CassieTypeMap.VectorParameterOid : prepared.ParameterTypeOids[index];
+            var binary = EncodeBinary(prepared, index, oid);
+            formats[index] = binary is null ? (short)0 : (short)1;
             values[index] = value is null or DBNull
                 ? null
-                : binary ?? CassieParameterCodec.EncodeTextParameter(value, prepared.ParameterTypeOids[index]);
+                : binary ?? CassieParameterCodec.EncodeTextParameter(value, oid);
         }
 
         return new EncodedParameters(formats, values);
@@ -110,7 +111,7 @@ internal static class ParameterizedQueryBatch
         }
     }
 
-    private static byte[]? EncodeBinary(CassiePreparedCommand prepared, int index)
+    private static byte[]? EncodeBinary(CassiePreparedCommand prepared, int index, int oid)
     {
         var requestedFormat = prepared.ParameterFormats is { } formats ? formats[index] : CassieParameterFormat.Auto;
         if (!Enum.IsDefined(requestedFormat))
@@ -123,7 +124,7 @@ internal static class ParameterizedQueryBatch
             return null;
         }
 
-        var binary = CassieParameterCodec.GetBinaryParameter(prepared.Values[index], prepared.ParameterTypeOids[index]);
+        var binary = CassieParameterCodec.GetBinaryParameter(prepared.Values[index], oid);
         return requestedFormat == CassieParameterFormat.Binary && binary is null
             ? throw new NotSupportedException(
                 $"Binary parameters for PostgreSQL OID {prepared.ParameterTypeOids[index]} are not supported by this provider.")
