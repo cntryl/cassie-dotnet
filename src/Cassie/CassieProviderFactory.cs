@@ -1,73 +1,72 @@
+using System.Data.Common;
 using Cntryl.Cassie.Commands;
 using Cntryl.Cassie.Connection;
 using Cntryl.Cassie.Data;
-using System.Data.Common;
 
-namespace Cntryl.Cassie
+namespace Cntryl.Cassie;
+
+/// <summary>Creates Cassie ADO.NET provider objects.</summary>
+public sealed class CassieProviderFactory : DbProviderFactory
 {
-    /// <summary>Creates Cassie ADO.NET provider objects.</summary>
-    public sealed class CassieProviderFactory : DbProviderFactory
+    private CassieProviderFactory()
     {
-        /// <summary>The singleton Cassie provider factory.</summary>
-        public static CassieProviderFactory Instance { get; } = new();
+    }
 
-        private CassieProviderFactory()
-        {
-        }
+    /// <summary>The singleton Cassie provider factory.</summary>
+    public static CassieProviderFactory Instance { get; } = new();
 
-        /// <inheritdoc />
-        public override DbConnection CreateConnection()
-        {
-            return new CassieConnection();
-        }
+    /// <inheritdoc />
+    public override bool CanCreateBatch => true;
 
-        /// <inheritdoc />
-        public override CassieDataSource CreateDataSource(string connectionString)
-        {
-            return new CassieDataSource(connectionString);
-        }
+    /// <summary>Gets a value indicating that <see cref="CreateDataAdapter" /> is supported.</summary>
+    /// <remarks>Declared explicitly so the answer does not depend on the base class inspecting this type at run time.</remarks>
+    public override bool CanCreateDataAdapter => true;
 
-        /// <inheritdoc />
-        public override DbCommand CreateCommand()
-        {
-            return new CassieCommand();
-        }
+    /// <inheritdoc />
+    public override DbConnection CreateConnection()
+    {
+        return new CassieConnection();
+    }
 
-        /// <inheritdoc />
-        public override bool CanCreateBatch => true;
+    /// <inheritdoc />
+    public override CassieDataSource CreateDataSource(string connectionString)
+    {
+        return new CassieDataSource(connectionString);
+    }
 
-        /// <inheritdoc />
-        public override DbBatch CreateBatch()
-        {
-            return new CassieBatch();
-        }
+    /// <inheritdoc />
+    public override DbCommand CreateCommand()
+    {
+        return new CassieCommand();
+    }
 
-        /// <inheritdoc />
-        public override DbBatchCommand CreateBatchCommand()
-        {
-            return new CassieBatchCommand();
-        }
+    /// <inheritdoc />
+    public override DbBatch CreateBatch()
+    {
+        return new CassieBatch();
+    }
 
-        /// <inheritdoc />
-        public override DbParameter CreateParameter()
-        {
-            return new CassieParameter();
-        }
+    /// <inheritdoc />
+    public override DbBatchCommand CreateBatchCommand()
+    {
+        return new CassieBatchCommand();
+    }
 
-        /// <summary>Gets a value indicating that <see cref="CreateDataAdapter"/> is supported.</summary>
-        /// <remarks>Declared explicitly so the answer does not depend on the base class inspecting this type at run time.</remarks>
-        public override bool CanCreateDataAdapter => true;
+    /// <inheritdoc />
+    public override DbParameter CreateParameter()
+    {
+        return new CassieParameter();
+    }
 
-        /// <inheritdoc />
-        public override DbDataAdapter CreateDataAdapter()
-        {
-            return new CassieDataAdapter();
-        }
+    /// <inheritdoc />
+    public override DbDataAdapter CreateDataAdapter()
+    {
+        return new CassieDataAdapter();
+    }
 
-        /// <inheritdoc />
-        public override DbConnectionStringBuilder CreateConnectionStringBuilder()
-        {
-            return new CassieConnectionStringBuilder();
-        }
+    /// <inheritdoc />
+    public override DbConnectionStringBuilder CreateConnectionStringBuilder()
+    {
+        return new CassieConnectionStringBuilder();
     }
 }

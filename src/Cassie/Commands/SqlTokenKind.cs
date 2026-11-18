@@ -1,11 +1,10 @@
-namespace Cntryl.Cassie.Commands
+namespace Cntryl.Cassie.Commands;
+
+internal enum SqlTokenKind
 {
-    internal enum SqlTokenKind
-    {
-        Parameter,
-        Identifier,
-        QuotedIdentifier,
-        Literal,
-        Symbol
-    }
+    Parameter,
+    Identifier,
+    QuotedIdentifier,
+    Literal,
+    Symbol
 }

@@ -1,291 +1,369 @@
-using Cntryl.Cassie.Commands;
-using Cntryl.Cassie.Connection;
+using System.Buffers.Binary;
 using System.Data;
 using System.Data.Common;
-using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using Cntryl.Cassie.Connection;
 using Xunit;
 
-namespace Cntryl.Cassie.Tests.Commands
+namespace Cntryl.Cassie.Tests.Commands;
+
+public sealed class CancellationContractTests
 {
-    public sealed class CancellationContractTests
+    [Fact]
+    public async Task ShouldBlockSessionReuseGivenPendingCancelSocketWhenReadyForQueryArrives()
     {
-        [Fact]
-        public async Task ShouldCancelActiveQueryGivenReaderWaitsForRowWhenCommandIsCancelled()
+        // Arrange
+        var token = TestContext.Current.CancellationToken;
+        TaskCompletionSource releaseCancel = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource sentReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        ScriptedServer? peer = null;
+        using ScriptedServer server = new(async session =>
         {
-            // Arrange
-            using TcpListener listener = new(IPAddress.Loopback, 0);
-            listener.Start();
-            int port = ((IPEndPoint)listener.LocalEndpoint).Port;
-            Task peer = Task.Run(async () => await ServeCancelableQueryAsync(listener), TestContext.Current.CancellationToken);
-            await using CassieConnection connection = new()
+            _ = await session.ReadFrameAsync();
+            await session.WriteIntRowDescriptionAsync();
+            while (peer!.CancelRequests == 0)
             {
-                ConnectionString = $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;Password=secret;SSL Mode=Disable;Timeout=3;Pooling=false"
-            };
-            await connection.OpenAsync(TestContext.Current.CancellationToken);
-            using DbCommand command = connection.CreateCommand();
-            command.CommandText = "SELECT pg_sleep(60)";
-            await using DbDataReader reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+                await Task.Delay(10, token);
+            }
 
+            await BatchPeer.ReplyWithErrorAsync(session, "57014", "query canceled");
+            await session.WriteReadyAsync();
+            sentReady.SetResult();
+            await session.ServeQueriesAsync(session.WriteCommandCompleteAsync);
+        }, acknowledgeCancel: () => releaseCancel.Task);
+        peer = server;
+        await using CassieConnection connection = new() { ConnectionString = server.ConnectionString("Pooling=false") };
+        await connection.OpenAsync(token);
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT 1";
+        await using var reader = await command.ExecuteReaderAsync(token);
+        using CancellationTokenSource caller = new();
+        var reading = reader.ReadAsync(caller.Token);
+        await caller.CancelAsync();
+
+        try
+        {
             // Act
-            Task<bool> pendingRead = reader.ReadAsync(TestContext.Current.CancellationToken);
-            command.Cancel();
-            CassieException exception = await Assert.ThrowsAsync<CassieException>(() => pendingRead.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
-
-            // Assert
-            Assert.Equal("57014", exception.SqlState);
-            await connection.CloseAsync();
-            await peer;
+            await sentReady.Task.WaitAsync(TimeSpan.FromSeconds(2), token);
+            _ = await Assert.ThrowsAsync<TimeoutException>(() => reading.WaitAsync(TimeSpan.FromMilliseconds(150), token));
+        }
+        finally
+        {
+            releaseCancel.SetResult();
         }
 
-        [Fact]
-        public async Task ShouldTimeoutActiveQueryGivenCommandTimeoutWhenReaderWaitsForRow()
+        // Assert
+        var canceled = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reading);
+        Assert.Equal(caller.Token, canceled.CancellationToken);
+        await reader.CloseAsync();
+        _ = await command.ExecuteNonQueryAsync(token);
+        Assert.Equal(ConnectionState.Open, connection.State);
+    }
+
+    [Fact]
+    public async Task ShouldCancelActiveQueryGivenReaderWaitsForRowWhenCommandIsCancelled()
+    {
+        // Arrange
+        using TcpListener listener = new(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var peer = Task.Run(async () => await ServeCancelableQueryAsync(listener),
+            TestContext.Current.CancellationToken);
+        await using CassieConnection connection = new()
         {
-            // Arrange
-            using TcpListener listener = new(IPAddress.Loopback, 0);
-            listener.Start();
-            int port = ((IPEndPoint)listener.LocalEndpoint).Port;
-            Task peer = Task.Run(async () => await ServeCancelableQueryAsync(listener), TestContext.Current.CancellationToken);
-            await using CassieConnection connection = new()
-            {
-                ConnectionString = $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;Password=secret;SSL Mode=Disable;Timeout=3;Pooling=false"
-            };
-            await connection.OpenAsync(TestContext.Current.CancellationToken);
-            using DbCommand command = connection.CreateCommand();
-            command.CommandText = "SELECT pg_sleep(60)";
-            command.CommandTimeout = 1;
-            await using DbDataReader reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+            ConnectionString =
+                $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;Password=secret;SSL Mode=Disable;Timeout=3;Pooling=false"
+        };
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        using DbCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT pg_sleep(60)";
+        await using var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
 
-            // Act
-            TimeoutException exception = await Assert.ThrowsAsync<TimeoutException>(() => reader.ReadAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
+        // Act
+        var pendingRead = reader.ReadAsync(TestContext.Current.CancellationToken);
+        command.Cancel();
+        var exception = await Assert.ThrowsAsync<CassieException>(() =>
+            pendingRead.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
 
-            // Assert
-            Assert.Contains("CommandTimeout", exception.Message, StringComparison.Ordinal);
-            await connection.CloseAsync();
-            await peer;
-        }
+        // Assert
+        Assert.Equal("57014", exception.SqlState);
+        await connection.CloseAsync();
+        await peer;
+    }
 
-        [Theory]
-        [InlineData(true)]
-        [InlineData(false)]
-        public async Task ShouldCancelExecutionGivenServerWaitsForResultWhenAsyncScalarOrNonQueryRuns(bool executeScalar)
+    [Fact]
+    public async Task ShouldTimeoutActiveQueryGivenCommandTimeoutWhenReaderWaitsForRow()
+    {
+        // Arrange
+        using TcpListener listener = new(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var peer = Task.Run(async () => await ServeCancelableQueryAsync(listener),
+            TestContext.Current.CancellationToken);
+        await using CassieConnection connection = new()
         {
-            // Arrange
-            using TcpListener listener = new(IPAddress.Loopback, 0);
-            listener.Start();
-            int port = ((IPEndPoint)listener.LocalEndpoint).Port;
-            TaskCompletionSource<bool> rowDescriptionSent = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            Task peer = Task.Run(async () => await ServeCancelableCommandAsync(listener, rowDescriptionSent), TestContext.Current.CancellationToken);
-            await using CassieConnection connection = new()
-            {
-                ConnectionString = $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;Password=secret;SSL Mode=Disable;Timeout=3;Pooling=false"
-            };
-            await connection.OpenAsync(TestContext.Current.CancellationToken);
-            using CassieCommand command = connection.CreateCommand();
-            command.CommandText = "SELECT 1";
-            using CancellationTokenSource cancellation = new();
-            Func<Task> execute = executeScalar
-                ? () => command.ExecuteScalarAsync(cancellation.Token)
-                : () => command.ExecuteNonQueryAsync(cancellation.Token);
-            Task execution = Task.Run(execute, TestContext.Current.CancellationToken);
-            _ = await rowDescriptionSent.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+            ConnectionString =
+                $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;Password=secret;SSL Mode=Disable;Timeout=3;Pooling=false"
+        };
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        using DbCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT pg_sleep(60)";
+        command.CommandTimeout = 1;
+        await using var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
 
-            // Act
-            await cancellation.CancelAsync();
-            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => execution.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
-            ConnectionState state = connection.State;
+        // Act
+        var exception = await Assert.ThrowsAsync<TimeoutException>(() =>
+            reader.ReadAsync(TestContext.Current.CancellationToken)
+                .WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
 
-            // Assert
-            Assert.Equal(ConnectionState.Open, state);
-            using DbCommand followup = connection.CreateCommand();
-            followup.CommandText = "SELECT 2";
-            Assert.Equal(2, await followup.ExecuteScalarAsync(TestContext.Current.CancellationToken));
-            await connection.CloseAsync();
-            await peer;
-        }
+        // Assert
+        Assert.Contains("CommandTimeout", exception.Message, StringComparison.Ordinal);
+        await connection.CloseAsync();
+        await peer;
+    }
 
-        [Fact]
-        public async Task ShouldCancelSingleResultDrainGivenServerWaitsForNextResultWhenNextResultRuns()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ShouldCancelExecutionGivenServerWaitsForResultWhenAsyncScalarOrNonQueryRuns(bool executeScalar)
+    {
+        // Arrange
+        using TcpListener listener = new(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        TaskCompletionSource<bool> rowDescriptionSent = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var peer = Task.Run(async () => await ServeCancelableCommandAsync(listener, rowDescriptionSent),
+            TestContext.Current.CancellationToken);
+        await using CassieConnection connection = new()
         {
-            // Arrange
-            using TcpListener listener = new(IPAddress.Loopback, 0);
-            listener.Start();
-            int port = ((IPEndPoint)listener.LocalEndpoint).Port;
-            TaskCompletionSource<bool> rowDescriptionSent = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            Task peer = Task.Run(async () => await ServeCancelableCommandAsync(listener, rowDescriptionSent), TestContext.Current.CancellationToken);
-            await using CassieConnection connection = new()
-            {
-                ConnectionString = $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;Password=secret;SSL Mode=Disable;Timeout=3;Pooling=false"
-            };
-            await connection.OpenAsync(TestContext.Current.CancellationToken);
-            using DbCommand command = connection.CreateCommand();
-            command.CommandText = "SELECT 1";
-            await using DbDataReader reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, TestContext.Current.CancellationToken);
-            using CancellationTokenSource cancellation = new();
-            Task<bool> nextResult = reader.NextResultAsync(cancellation.Token);
-            _ = await rowDescriptionSent.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+            ConnectionString =
+                $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;Password=secret;SSL Mode=Disable;Timeout=3;Pooling=false"
+        };
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT 1";
+        using CancellationTokenSource cancellation = new();
+        Func<Task> execute = executeScalar
+            ? () => command.ExecuteScalarAsync(cancellation.Token)
+            : () => command.ExecuteNonQueryAsync(cancellation.Token);
+        var execution = Task.Run(execute, TestContext.Current.CancellationToken);
+        _ = await rowDescriptionSent.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
 
-            // Act
-            await cancellation.CancelAsync();
-            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => nextResult.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
+        // Act
+        await cancellation.CancelAsync();
+        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            execution.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
+        var state = connection.State;
 
-            // Assert
-            Assert.Equal(ConnectionState.Open, connection.State);
-            using DbCommand followup = connection.CreateCommand();
-            followup.CommandText = "SELECT 2";
-            Assert.Equal(2, await followup.ExecuteScalarAsync(TestContext.Current.CancellationToken));
-            await connection.CloseAsync();
-            await peer;
-        }
+        // Assert
+        Assert.Equal(ConnectionState.Open, state);
+        using DbCommand followup = connection.CreateCommand();
+        followup.CommandText = "SELECT 2";
+        Assert.Equal(2, await followup.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+        await connection.CloseAsync();
+        await peer;
+    }
 
-        private static async Task ServeCancelableQueryAsync(TcpListener listener)
+    [Fact]
+    public async Task ShouldCancelSingleResultDrainGivenServerWaitsForNextResultWhenNextResultRuns()
+    {
+        // Arrange
+        using TcpListener listener = new(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        TaskCompletionSource<bool> rowDescriptionSent = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var peer = Task.Run(async () => await ServeCancelableCommandAsync(listener, rowDescriptionSent),
+            TestContext.Current.CancellationToken);
+        await using CassieConnection connection = new()
         {
-            using TcpClient client = await listener.AcceptTcpClientAsync();
-            NetworkStream stream = client.GetStream();
-            byte[] startup = new byte[8];
-            await stream.ReadExactlyAsync(startup);
-            int startupLength = IPAddress.NetworkToHostOrder(BitConverter.ToInt32(startup, 0));
-            await stream.ReadExactlyAsync(new byte[startupLength - startup.Length]);
-            await WriteFrameAsync(stream, (byte)'R', BitConverter.GetBytes(IPAddress.HostToNetworkOrder(0)));
-            byte[] backendKey = new byte[8];
-            BinaryPrimitives.WriteInt32BigEndian(backendKey, 1234);
-            BinaryPrimitives.WriteInt32BigEndian(backendKey.AsSpan(4), 5678);
-            await WriteFrameAsync(stream, (byte)'K', backendKey);
-            await WriteFrameAsync(stream, (byte)'Z', [(byte)'I']);
-            _ = await ReadFrontendFrameAsync(stream);
-            using MemoryStream description = new();
-            WriteInt16(description, 1);
-            WriteCString(description, "pg_sleep");
-            description.Write(new byte[4]);
-            WriteInt16(description, 0);
-            WriteInt32(description, 25);
-            WriteInt16(description, -1);
-            WriteInt32(description, -1);
-            WriteInt16(description, 0);
-            await WriteFrameAsync(stream, (byte)'T', description.ToArray());
+            ConnectionString =
+                $"Host=127.0.0.1;Port={port};Database=ledger;Username=app;Password=secret;SSL Mode=Disable;Timeout=3;Pooling=false"
+        };
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        using DbCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT 1";
+        await using var reader =
+            await command.ExecuteReaderAsync(CommandBehavior.SingleResult, TestContext.Current.CancellationToken);
+        using CancellationTokenSource cancellation = new();
+        var nextResult = reader.NextResultAsync(cancellation.Token);
+        _ = await rowDescriptionSent.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
 
-            using TcpClient cancelClient = await listener.AcceptTcpClientAsync().WaitAsync(TimeSpan.FromSeconds(3));
-            byte[] cancel = new byte[16];
+        // Act
+        await cancellation.CancelAsync();
+        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            nextResult.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
+
+        // Assert
+        Assert.Equal(ConnectionState.Open, connection.State);
+        using DbCommand followup = connection.CreateCommand();
+        followup.CommandText = "SELECT 2";
+        Assert.Equal(2, await followup.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+        await connection.CloseAsync();
+        await peer;
+    }
+
+    private static async Task ServeCancelableQueryAsync(TcpListener listener)
+    {
+        using var client = await listener.AcceptTcpClientAsync();
+        var stream = client.GetStream();
+        var startup = new byte[8];
+        await stream.ReadExactlyAsync(startup);
+        var startupLength = IPAddress.NetworkToHostOrder(BitConverter.ToInt32(startup, 0));
+        await stream.ReadExactlyAsync(new byte[startupLength - startup.Length]);
+        await WriteFrameAsync(stream, (byte)'R', BitConverter.GetBytes(IPAddress.HostToNetworkOrder(0)));
+        var backendKey = new byte[8];
+        BinaryPrimitives.WriteInt32BigEndian(backendKey, 1234);
+        BinaryPrimitives.WriteInt32BigEndian(backendKey.AsSpan(4), 5678);
+        await WriteFrameAsync(stream, (byte)'K', backendKey);
+        await WriteFrameAsync(stream, (byte)'Z', [(byte)'I']);
+        _ = await ReadFrontendFrameAsync(stream);
+        using MemoryStream description = new();
+        WriteInt16(description, 1);
+        WriteCString(description, "pg_sleep");
+        description.Write(new byte[4]);
+        WriteInt16(description, 0);
+        WriteInt32(description, 25);
+        WriteInt16(description, -1);
+        WriteInt32(description, -1);
+        WriteInt16(description, 0);
+        await WriteFrameAsync(stream, (byte)'T', description.ToArray());
+
+        using var cancelClient = await listener.AcceptTcpClientAsync().WaitAsync(TimeSpan.FromSeconds(3));
+        var cancel = new byte[16];
+        await cancelClient.GetStream().ReadExactlyAsync(cancel);
+        Assert.Equal(16, IPAddress.NetworkToHostOrder(BitConverter.ToInt32(cancel, 0)));
+        Assert.Equal(80877102, IPAddress.NetworkToHostOrder(BitConverter.ToInt32(cancel, 4)));
+        Assert.Equal(1234, IPAddress.NetworkToHostOrder(BitConverter.ToInt32(cancel, 8)));
+        Assert.Equal(5678, IPAddress.NetworkToHostOrder(BitConverter.ToInt32(cancel, 12)));
+        cancelClient.Dispose();
+        byte[] error =
+        [
+            (byte)'S', .. Encoding.UTF8.GetBytes("ERROR"), 0, (byte)'C', .. Encoding.UTF8.GetBytes("57014"), 0,
+            (byte)'M', .. Encoding.UTF8.GetBytes("canceling statement due to user request"), 0, 0
+        ];
+        await WriteFrameAsync(stream, (byte)'E', error);
+        await WriteFrameAsync(stream, (byte)'Z', [(byte)'I']);
+    }
+
+    private static async Task ServeCancelableCommandAsync(TcpListener listener,
+        TaskCompletionSource<bool> rowDescriptionSent)
+    {
+        using var client = await listener.AcceptTcpClientAsync();
+        var stream = client.GetStream();
+        var startup = new byte[8];
+        await stream.ReadExactlyAsync(startup);
+        var startupLength = IPAddress.NetworkToHostOrder(BitConverter.ToInt32(startup, 0));
+        await stream.ReadExactlyAsync(new byte[startupLength - startup.Length]);
+        await WriteFrameAsync(stream, (byte)'R', BitConverter.GetBytes(IPAddress.HostToNetworkOrder(0)));
+        var backendKey = new byte[8];
+        BinaryPrimitives.WriteInt32BigEndian(backendKey, 1234);
+        BinaryPrimitives.WriteInt32BigEndian(backendKey.AsSpan(4), 5678);
+        await WriteFrameAsync(stream, (byte)'K', backendKey);
+        await WriteFrameAsync(stream, (byte)'Z', [(byte)'I']);
+
+        var query = await ReadFrontendFrameAsync(stream);
+        Assert.Equal((byte)'Q', query[0]);
+        Assert.Equal("SELECT 1\0", Encoding.UTF8.GetString(query, 1, query.Length - 1));
+        using MemoryStream description = new();
+        WriteInt16(description, 1);
+        WriteCString(description, "value");
+        description.Write(new byte[4]);
+        WriteInt16(description, 0);
+        WriteInt32(description, 23);
+        WriteInt16(description, 4);
+        WriteInt32(description, -1);
+        WriteInt16(description, 0);
+        await WriteFrameAsync(stream, (byte)'T', description.ToArray());
+        _ = rowDescriptionSent.TrySetResult(true);
+
+        try
+        {
+            using var cancelClient = await listener.AcceptTcpClientAsync().WaitAsync(TimeSpan.FromMilliseconds(250));
+            var cancel = new byte[16];
             await cancelClient.GetStream().ReadExactlyAsync(cancel);
             Assert.Equal(16, IPAddress.NetworkToHostOrder(BitConverter.ToInt32(cancel, 0)));
             Assert.Equal(80877102, IPAddress.NetworkToHostOrder(BitConverter.ToInt32(cancel, 4)));
             Assert.Equal(1234, IPAddress.NetworkToHostOrder(BitConverter.ToInt32(cancel, 8)));
             Assert.Equal(5678, IPAddress.NetworkToHostOrder(BitConverter.ToInt32(cancel, 12)));
-            byte[] error = [(byte)'S', .. Encoding.UTF8.GetBytes("ERROR"), 0, (byte)'C', .. Encoding.UTF8.GetBytes("57014"), 0, (byte)'M', .. Encoding.UTF8.GetBytes("canceling statement due to user request"), 0, 0];
+            cancelClient.Dispose();
+            byte[] error =
+            [
+                (byte)'S', .. Encoding.UTF8.GetBytes("ERROR"), 0, (byte)'C', .. Encoding.UTF8.GetBytes("57014"), 0,
+                (byte)'M', .. Encoding.UTF8.GetBytes("canceling statement due to user request"), 0, 0
+            ];
             await WriteFrameAsync(stream, (byte)'E', error);
             await WriteFrameAsync(stream, (byte)'Z', [(byte)'I']);
-        }
-
-        private static async Task ServeCancelableCommandAsync(TcpListener listener, TaskCompletionSource<bool> rowDescriptionSent)
-        {
-            using TcpClient client = await listener.AcceptTcpClientAsync();
-            NetworkStream stream = client.GetStream();
-            byte[] startup = new byte[8];
-            await stream.ReadExactlyAsync(startup);
-            int startupLength = IPAddress.NetworkToHostOrder(BitConverter.ToInt32(startup, 0));
-            await stream.ReadExactlyAsync(new byte[startupLength - startup.Length]);
-            await WriteFrameAsync(stream, (byte)'R', BitConverter.GetBytes(IPAddress.HostToNetworkOrder(0)));
-            byte[] backendKey = new byte[8];
-            BinaryPrimitives.WriteInt32BigEndian(backendKey, 1234);
-            BinaryPrimitives.WriteInt32BigEndian(backendKey.AsSpan(4), 5678);
-            await WriteFrameAsync(stream, (byte)'K', backendKey);
+            var followup = await ReadFrontendFrameAsync(stream).WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.Equal((byte)'Q', followup[0]);
+            Assert.Equal("SELECT 2\0", Encoding.UTF8.GetString(followup, 1, followup.Length - 1));
+            using MemoryStream followupDescription = new();
+            WriteInt16(followupDescription, 1);
+            WriteCString(followupDescription, "value");
+            followupDescription.Write(new byte[4]);
+            WriteInt16(followupDescription, 0);
+            WriteInt32(followupDescription, 23);
+            WriteInt16(followupDescription, 4);
+            WriteInt32(followupDescription, -1);
+            WriteInt16(followupDescription, 0);
+            await WriteFrameAsync(stream, (byte)'T', followupDescription.ToArray());
+            using MemoryStream row = new();
+            WriteInt16(row, 1);
+            WriteInt32(row, 1);
+            row.WriteByte((byte)'2');
+            await WriteFrameAsync(stream, (byte)'D', row.ToArray());
+            await WriteFrameAsync(stream, (byte)'C', [.. Encoding.UTF8.GetBytes("SELECT 1"), 0]);
             await WriteFrameAsync(stream, (byte)'Z', [(byte)'I']);
-
-            byte[] query = await ReadFrontendFrameAsync(stream);
-            Assert.Equal((byte)'Q', query[0]);
-            Assert.Equal("SELECT 1\0", Encoding.UTF8.GetString(query, 1, query.Length - 1));
-            using MemoryStream description = new();
-            WriteInt16(description, 1);
-            WriteCString(description, "value");
-            description.Write(new byte[4]);
-            WriteInt16(description, 0);
-            WriteInt32(description, 23);
-            WriteInt16(description, 4);
-            WriteInt32(description, -1);
-            WriteInt16(description, 0);
-            await WriteFrameAsync(stream, (byte)'T', description.ToArray());
-            _ = rowDescriptionSent.TrySetResult(true);
-
-            try
-            {
-                using TcpClient cancelClient = await listener.AcceptTcpClientAsync().WaitAsync(TimeSpan.FromMilliseconds(250));
-                byte[] cancel = new byte[16];
-                await cancelClient.GetStream().ReadExactlyAsync(cancel);
-                Assert.Equal(16, IPAddress.NetworkToHostOrder(BitConverter.ToInt32(cancel, 0)));
-                Assert.Equal(80877102, IPAddress.NetworkToHostOrder(BitConverter.ToInt32(cancel, 4)));
-                Assert.Equal(1234, IPAddress.NetworkToHostOrder(BitConverter.ToInt32(cancel, 8)));
-                Assert.Equal(5678, IPAddress.NetworkToHostOrder(BitConverter.ToInt32(cancel, 12)));
-                byte[] error = [(byte)'S', .. Encoding.UTF8.GetBytes("ERROR"), 0, (byte)'C', .. Encoding.UTF8.GetBytes("57014"), 0, (byte)'M', .. Encoding.UTF8.GetBytes("canceling statement due to user request"), 0, 0];
-                await WriteFrameAsync(stream, (byte)'E', error);
-                await WriteFrameAsync(stream, (byte)'Z', [(byte)'I']);
-                byte[] followup = await ReadFrontendFrameAsync(stream).WaitAsync(TimeSpan.FromSeconds(3));
-                Assert.Equal((byte)'Q', followup[0]);
-                Assert.Equal("SELECT 2\0", Encoding.UTF8.GetString(followup, 1, followup.Length - 1));
-                using MemoryStream followupDescription = new();
-                WriteInt16(followupDescription, 1);
-                WriteCString(followupDescription, "value");
-                followupDescription.Write(new byte[4]);
-                WriteInt16(followupDescription, 0);
-                WriteInt32(followupDescription, 23);
-                WriteInt16(followupDescription, 4);
-                WriteInt32(followupDescription, -1);
-                WriteInt16(followupDescription, 0);
-                await WriteFrameAsync(stream, (byte)'T', followupDescription.ToArray());
-                using MemoryStream row = new();
-                WriteInt16(row, 1);
-                WriteInt32(row, 1);
-                row.WriteByte((byte)'2');
-                await WriteFrameAsync(stream, (byte)'D', row.ToArray());
-                await WriteFrameAsync(stream, (byte)'C', [.. Encoding.UTF8.GetBytes("SELECT 1"), 0]);
-                await WriteFrameAsync(stream, (byte)'Z', [(byte)'I']);
-                byte[] terminate = await ReadFrontendFrameAsync(stream).WaitAsync(TimeSpan.FromSeconds(3));
-                Assert.Equal((byte)'X', terminate[0]);
-            }
-            catch (TimeoutException)
-            {
-                using MemoryStream row = new();
-                WriteInt16(row, 1);
-                WriteInt32(row, 1);
-                row.WriteByte((byte)'1');
-                await WriteFrameAsync(stream, (byte)'D', row.ToArray());
-                await WriteFrameAsync(stream, (byte)'C', [.. Encoding.UTF8.GetBytes("SELECT 1"), 0]);
-                await WriteFrameAsync(stream, (byte)'Z', [(byte)'I']);
-                byte[] terminate = await ReadFrontendFrameAsync(stream).WaitAsync(TimeSpan.FromSeconds(3));
-                Assert.Equal((byte)'X', terminate[0]);
-            }
+            var terminate = await ReadFrontendFrameAsync(stream).WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.Equal((byte)'X', terminate[0]);
         }
-
-        private static async Task<byte[]> ReadFrontendFrameAsync(NetworkStream stream)
+        catch (TimeoutException)
         {
-            byte[] header = new byte[5];
-            await stream.ReadExactlyAsync(header);
-            int length = IPAddress.NetworkToHostOrder(BitConverter.ToInt32(header, 1));
-            byte[] payload = new byte[length - 4];
-            await stream.ReadExactlyAsync(payload);
-            return [header[0], .. payload];
+            using MemoryStream row = new();
+            WriteInt16(row, 1);
+            WriteInt32(row, 1);
+            row.WriteByte((byte)'1');
+            await WriteFrameAsync(stream, (byte)'D', row.ToArray());
+            await WriteFrameAsync(stream, (byte)'C', [.. Encoding.UTF8.GetBytes("SELECT 1"), 0]);
+            await WriteFrameAsync(stream, (byte)'Z', [(byte)'I']);
+            var terminate = await ReadFrontendFrameAsync(stream).WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.Equal((byte)'X', terminate[0]);
         }
+    }
 
-        private static async Task WriteFrameAsync(NetworkStream stream, byte tag, byte[] payload)
-        {
-            byte[] frame = new byte[payload.Length + 5];
-            frame[0] = tag;
-            BitConverter.GetBytes(IPAddress.HostToNetworkOrder(payload.Length + 4)).CopyTo(frame, 1);
-            payload.CopyTo(frame, 5);
-            await stream.WriteAsync(frame);
-        }
+    private static async Task<byte[]> ReadFrontendFrameAsync(NetworkStream stream)
+    {
+        var header = new byte[5];
+        await stream.ReadExactlyAsync(header);
+        var length = IPAddress.NetworkToHostOrder(BitConverter.ToInt32(header, 1));
+        var payload = new byte[length - 4];
+        await stream.ReadExactlyAsync(payload);
+        return [header[0], .. payload];
+    }
 
-        private static void WriteInt16(Stream stream, short value)
-        {
-            stream.Write(BitConverter.GetBytes(IPAddress.HostToNetworkOrder(value)));
-        }
+    private static async Task WriteFrameAsync(NetworkStream stream, byte tag, byte[] payload)
+    {
+        var frame = new byte[payload.Length + 5];
+        frame[0] = tag;
+        BitConverter.GetBytes(IPAddress.HostToNetworkOrder(payload.Length + 4)).CopyTo(frame, 1);
+        payload.CopyTo(frame, 5);
+        await stream.WriteAsync(frame);
+    }
 
-        private static void WriteInt32(Stream stream, int value)
-        {
-            stream.Write(BitConverter.GetBytes(IPAddress.HostToNetworkOrder(value)));
-        }
+    private static void WriteInt16(Stream stream, short value)
+    {
+        stream.Write(BitConverter.GetBytes(IPAddress.HostToNetworkOrder(value)));
+    }
 
-        private static void WriteCString(Stream stream, string value) { stream.Write(Encoding.UTF8.GetBytes(value)); stream.WriteByte(0); }
+    private static void WriteInt32(Stream stream, int value)
+    {
+        stream.Write(BitConverter.GetBytes(IPAddress.HostToNetworkOrder(value)));
+    }
+
+    private static void WriteCString(Stream stream, string value)
+    {
+        stream.Write(Encoding.UTF8.GetBytes(value));
+        stream.WriteByte(0);
     }
 }

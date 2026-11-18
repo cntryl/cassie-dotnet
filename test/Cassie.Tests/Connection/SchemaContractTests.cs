@@ -1,51 +1,55 @@
-using Cntryl.Cassie.Connection;
 using System.Data;
+using Cntryl.Cassie.Connection;
 using Xunit;
 
-namespace Cntryl.Cassie.Tests.Connection
+namespace Cntryl.Cassie.Tests.Connection;
+
+public sealed class SchemaContractTests
 {
-    public sealed class SchemaContractTests
+    [Fact]
+    public void ShouldAdvertiseOnlyImplementedMetadataCollectionsGivenGetSchemaWhenCalled()
     {
-        [Fact]
-        public void ShouldAdvertiseOnlyImplementedMetadataCollectionsGivenGetSchemaWhenCalled()
-        {
-            // Arrange
-            using CassieConnection connection = new();
+        // Arrange
+        using CassieConnection connection = new();
 
-            // Act
-            DataTable schema = connection.GetSchema();
-            string[] collections = [.. schema.Rows.Cast<DataRow>().Select(row => row.Field<string>("CollectionName")!)];
+        // Act
+        var schema = connection.GetSchema();
+        string[] collections = [.. schema.Rows.Cast<DataRow>().Select(row => row.Field<string>("CollectionName")!)];
 
-            // Assert
-            Assert.Equal(["MetaDataCollections", "Restrictions", "Tables", "Columns"], collections);
-            Assert.Equal(4, schema.Rows.Cast<DataRow>().Single(row => row.Field<string>("CollectionName") == "Tables").Field<int>("NumberOfRestrictions"));
-            Assert.Equal(3, schema.Rows.Cast<DataRow>().Single(row => row.Field<string>("CollectionName") == "Tables").Field<int>("NumberOfIdentifierParts"));
-        }
+        // Assert
+        Assert.Equal(["MetaDataCollections", "Restrictions", "Tables", "Columns"], collections);
+        Assert.Equal(4,
+            schema.Rows.Cast<DataRow>().Single(row => row.Field<string>("CollectionName") == "Tables")
+                .Field<int>("NumberOfRestrictions"));
+        Assert.Equal(3,
+            schema.Rows.Cast<DataRow>().Single(row => row.Field<string>("CollectionName") == "Tables")
+                .Field<int>("NumberOfIdentifierParts"));
+    }
 
-        [Fact]
-        public void ShouldRejectUnsupportedSchemaCollectionGivenGetSchemaWhenCalled()
-        {
-            // Arrange
-            using CassieConnection connection = new();
+    [Fact]
+    public void ShouldRejectUnsupportedSchemaCollectionGivenGetSchemaWhenCalled()
+    {
+        // Arrange
+        using CassieConnection connection = new();
 
-            // Act
-            ArgumentException exception = Assert.Throws<ArgumentException>(() => connection.GetSchema("Indexes"));
+        // Act
+        var exception = Assert.Throws<ArgumentException>(() => connection.GetSchema("Indexes"));
 
-            // Assert
-            Assert.Contains("not supported", exception.Message, StringComparison.Ordinal);
-        }
+        // Assert
+        Assert.Contains("not supported", exception.Message, StringComparison.Ordinal);
+    }
 
-        [Fact]
-        public void ShouldRejectExcessSchemaRestrictionsGivenKnownCollectionWhenCalled()
-        {
-            // Arrange
-            using CassieConnection connection = new();
+    [Fact]
+    public void ShouldRejectExcessSchemaRestrictionsGivenKnownCollectionWhenCalled()
+    {
+        // Arrange
+        using CassieConnection connection = new();
 
-            // Act
-            ArgumentException exception = Assert.Throws<ArgumentException>(() => connection.GetSchema("Tables", [null, null, null, null, "extra"]));
+        // Act
+        var exception =
+            Assert.Throws<ArgumentException>(() => connection.GetSchema("Tables", [null, null, null, null, "extra"]));
 
-            // Assert
-            Assert.Contains("at most 4 restrictions", exception.Message, StringComparison.Ordinal);
-        }
+        // Assert
+        Assert.Contains("at most 4 restrictions", exception.Message, StringComparison.Ordinal);
     }
 }

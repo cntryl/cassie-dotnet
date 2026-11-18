@@ -1,10 +1,9 @@
-namespace Cntryl.Cassie.Connection
+namespace Cntryl.Cassie.Connection;
+
+internal enum CassieDateOutput
 {
-    internal enum CassieDateOutput
-    {
-        Iso,
-        Sql,
-        Postgres,
-        German
-    }
+    Iso,
+    Sql,
+    Postgres,
+    German
 }

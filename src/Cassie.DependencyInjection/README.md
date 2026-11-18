@@ -14,14 +14,14 @@ services.AddCassieRestClient(new Uri("https://cassie.example/"));
 
 The application supplies `services` and `connectionString`.
 
-| Service | Lifetime | Behavior |
-| --- | --- | --- |
+| Service                                     | Lifetime  | Behavior                                                                                                     |
+|---------------------------------------------|-----------|--------------------------------------------------------------------------------------------------------------|
 | `Cntryl.Cassie.Connection.CassieDataSource` | Singleton | Creates independently owned connections with the registered connection string and optional `ILoggerFactory`. |
-| `Cntryl.Cassie.Connection.CassieConnection` | Scoped | Starts closed; call `OpenAsync` before use. The scope disposes it. |
-| `System.Data.Common.DbDataSource` | Singleton | Resolves the Cassie data source if another provider has not registered this abstraction. |
-| `System.Data.Common.DbConnection` | Scoped | Resolves the scoped Cassie connection if another provider has not registered this abstraction. |
-| `Cntryl.Cassie.Rest.CassieRestClient` | Scoped | Owns an HTTP client and cookie container for that scope. The scope disposes it. |
-| `Cntryl.Cassie.Rest.CassieAdminClient` | Scoped | Resolves the scoped REST client's `Admin` property, sharing its authenticated session. |
+| `Cntryl.Cassie.Connection.CassieConnection` | Scoped    | Starts closed; call `OpenAsync` before use. The scope disposes it.                                           |
+| `System.Data.Common.DbDataSource`           | Singleton | Resolves the Cassie data source if another provider has not registered this abstraction.                     |
+| `System.Data.Common.DbConnection`           | Scoped    | Resolves the scoped Cassie connection if another provider has not registered this abstraction.               |
+| `Cntryl.Cassie.Rest.CassieRestClient`       | Scoped    | Owns an HTTP client and cookie container for that scope. The scope disposes it.                              |
+| `Cntryl.Cassie.Rest.CassieAdminClient`      | Scoped    | Resolves the scoped REST client's `Admin` property, sharing its authenticated session.                       |
 
 These are the default lifetimes. Existing registrations keep their lifetime and
 ownership; aliases follow their typed service. Use the typed Cassie services when

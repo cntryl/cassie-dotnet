@@ -1,33 +1,53 @@
-namespace Cntryl.Cassie.Connection
-{
-    /// <summary>Combines a caller's cancellation token with an optional command timeout.</summary>
-    internal sealed class CommandDeadline : IDisposable
-    {
-        private readonly CancellationToken _caller;
-        private readonly CancellationTokenSource _timeout = new();
-        private readonly CancellationTokenSource _linked;
+namespace Cntryl.Cassie.Connection;
 
-        public CommandDeadline(int seconds, CancellationToken caller)
+/// <summary>Combines a caller's cancellation token with the remaining command budget for interruptible I/O.</summary>
+internal readonly struct CommandDeadline : IDisposable
+{
+    private readonly CancellationToken _caller;
+    private readonly CommandBudget _budget;
+    private readonly CancellationTokenSource? _timeout;
+
+    public CommandDeadline(int seconds, CancellationToken caller) : this(new CommandBudget(seconds), caller)
+    {
+    }
+
+    public CommandDeadline(CommandBudget budget, CancellationToken caller)
+    {
+        _caller = caller;
+        _budget = budget;
+        if (budget.HasTimeout)
         {
-            _caller = caller;
-            _linked = CancellationTokenSource.CreateLinkedTokenSource(caller, _timeout.Token);
-            if (seconds > 0)
+            _timeout = caller.CanBeCanceled ? CancellationTokenSource.CreateLinkedTokenSource(caller) : new();
+            var remaining = budget.Remaining;
+            if (remaining == TimeSpan.Zero)
             {
-                _timeout.CancelAfter(TimeSpan.FromSeconds(seconds));
+                _timeout.Cancel();
+            }
+            else
+            {
+                _timeout.CancelAfter(remaining);
             }
         }
+    }
 
-        public CancellationToken Token => _linked.Token;
+    public CancellationToken Token => _timeout?.Token ?? _caller;
 
-        public bool IsCancellationRequested => _linked.IsCancellationRequested;
+    public bool IsCancellationRequested => Token.IsCancellationRequested;
 
-        /// <summary>Gets whether the timeout, rather than the caller, ended the operation.</summary>
-        public bool TimedOut => _timeout.IsCancellationRequested && !_caller.IsCancellationRequested;
+    public bool TimedOut => !_caller.IsCancellationRequested &&
+        (_timeout?.IsCancellationRequested == true || _budget.Remaining == TimeSpan.Zero);
 
-        public void Dispose()
+    public void ThrowIfExpired()
+    {
+        _caller.ThrowIfCancellationRequested();
+        if (TimedOut)
         {
-            _linked.Dispose();
-            _timeout.Dispose();
+            throw new TimeoutException("The command exceeded CommandTimeout.");
         }
+    }
+
+    public void Dispose()
+    {
+        _timeout?.Dispose();
     }
 }

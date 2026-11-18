@@ -6,7 +6,7 @@
     <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/Cassie/Cassie.csproj" />
-    <PackageReference Include="xunit.v3" Version="4.0.0" />
+    <ProjectReference Include="../../src/Cassie/Cassie.csproj"/>
+    <PackageReference Include="xunit.v3" Version="4.0.3"/>
   </ItemGroup>
 </Project>
