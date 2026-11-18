@@ -63,7 +63,7 @@ Request and response serialization uses the internal source-generated `CassieRes
 
 The scripted contract suite covers authentication cookies and session isolation, borrowed-client ownership, base paths and identifiers, exact request payloads, HTTP errors, and cancellation before dispatch and during headers/body reads.
 
-An earlier revision of this client targeted a planned `/v1/...` prefix that no published server implemented, so the six live REST workflows failed at login with HTTP 401 (the server answers 401 to any route it does not know). The client now uses `/api/v1/...`, and all six pass against `ghcr.io/cntryl/cassie:main`. If the server later moves its REST prefix, the route constants in `CassieRestClient` and `CassieAdminClient` are the only places to change. See [live-test setup](../test/Cassie.Tests/Live/README.md) for required endpoints and embedding configuration.
+An earlier revision of this client targeted a planned `/v1/...` prefix that no published server implemented, so the six live REST workflows failed at login with HTTP 401 (the server answers 401 to any route it does not know). The client now uses `/api/v1/...`, and all six pass against `ghcr.io/cntryl/cassie:latest`. If the server later moves its REST prefix, the route constants in `CassieRestClient` and `CassieAdminClient` are the only places to change. See [live-test setup](../test/Cassie.Tests/Live/README.md) for required endpoints and embedding configuration.
 
-CI runs the published `ghcr.io/cntryl/cassie:main` image, so the live REST and pgwire
+CI runs the published `ghcr.io/cntryl/cassie:latest` image, so the live REST and pgwire
 contracts run against the current server on every push.
