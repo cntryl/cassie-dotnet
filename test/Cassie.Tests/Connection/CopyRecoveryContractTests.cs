@@ -202,7 +202,7 @@ public sealed class CopyRecoveryContractTests
 
             await session.StayVerySilentAsync();
         });
-        using CopyRecoveryClock clock = new();
+        using DeadlineClock clock = new();
         using CancellationTokenSource caller = new();
         var connectionString = server.ConnectionString("Pooling=true;Maximum Pool Size=1");
         await using CassieConnection connection = new()
@@ -343,7 +343,7 @@ public sealed class CopyRecoveryContractTests
             await session.WriteReadyAsync();
             await session.ServeQueriesAsync(_ => session.WriteCommandCompleteAsync("UPDATE 1"));
         });
-        using CopyRecoveryClock clock = new();
+        using DeadlineClock clock = new();
         using CancellationTokenSource caller = new();
         await using CassieConnection connection = new()
         {
@@ -441,7 +441,7 @@ public sealed class CopyRecoveryContractTests
         }
 
         var peer = ServeAsync();
-        using CopyRecoveryClock clock = new();
+        using DeadlineClock clock = new();
         using CancellationTokenSource caller = new();
         await using CassieConnection connection = new()
         {

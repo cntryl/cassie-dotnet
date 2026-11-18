@@ -66,10 +66,10 @@ public sealed partial class CassieConnection
             serial = _cleanupOperation = _gate.Serial;
         }
 
-        return FlushStatementClosesAsync(session, serial, cancellationToken);
+        return FinishQueryAsync(session, serial, null, null, cancellationToken);
     }
 
-    internal Task ReaderClosedAsync()
+    internal Task ReaderClosedAsync(CleanupDeadline? drainDeadline = null)
     {
         PgSession session;
         long serial;
@@ -79,7 +79,7 @@ public sealed partial class CassieConnection
             pendingCancel = _pendingQueryCancel;
             _pendingQueryCancel = null;
             if (_session is not { } current ||
-                (pendingCancel is null && current.StatementsToClose is not { Count: > 0 }))
+                (drainDeadline is null && pendingCancel is null && current.StatementsToClose is not { Count: > 0 }))
             {
                 _gate.End();
                 return Task.CompletedTask;
@@ -91,25 +91,23 @@ public sealed partial class CassieConnection
             serial = _cleanupOperation = _gate.Serial;
         }
 
-        return FinishQueryAsync(session, serial, pendingCancel);
+        return FinishQueryAsync(session, serial, pendingCancel, drainDeadline, CancellationToken.None);
     }
 
-    private async Task FinishQueryAsync(PgSession session, long serial, Task<bool>? pendingCancel)
+    private async Task FinishQueryAsync(PgSession session, long serial, Task<bool>? pendingCancel,
+        CleanupDeadline? drainDeadline, CancellationToken cancellationToken)
     {
-        if (pendingCancel is not null && !await pendingCancel.ConfigureAwait(false))
-        {
-            AbortTransport(expectedOperation: serial);
-            return;
-        }
-
-        await FlushStatementClosesAsync(session, serial, CancellationToken.None).ConfigureAwait(false);
-    }
-
-    private async Task FlushStatementClosesAsync(PgSession session, long serial, CancellationToken cancellationToken)
-    {
+        using var ownedDeadline = drainDeadline is null ? new CleanupDeadline(session, CleanupTimeProvider) : null;
+        var deadline = drainDeadline ?? ownedDeadline!;
         CassieException? firstError = null;
         try
         {
+            if (pendingCancel is not null && !await pendingCancel.WaitAsync(deadline.Token).ConfigureAwait(false))
+            {
+                AbortTransport(expectedOperation: serial);
+                return;
+            }
+
             while (true)
             {
                 string[] group;
@@ -122,6 +120,7 @@ public sealed partial class CassieConnection
 
                     if (session.StatementsToClose is not { Count: > 0 } pending)
                     {
+                        deadline.Complete();
                         _gate.End();
                         break;
                     }
@@ -148,6 +147,11 @@ public sealed partial class CassieConnection
                     }
                 }
             }
+        }
+        catch (Exception exception) when (deadline.Expired && CleanupDeadline.IsTransportFailure(exception))
+        {
+            AbortTransport(expectedOperation: serial);
+            throw new TimeoutException("Cassie query cleanup exceeded its deadline.", exception);
         }
         catch
         {

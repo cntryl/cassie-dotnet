@@ -190,6 +190,60 @@ public sealed class LiveDataContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ShouldReportRollbackGivenFailedTransactionWhenCommitRuns()
+    {
+        // Arrange
+        var token = TestContext.Current.CancellationToken;
+        await _live.CreateProbeTableAsync();
+        using var command = _live.CreateCommand();
+        command.CommandText = $"CREATE UNIQUE INDEX cassie_live_probe_unique_id ON {LiveSession.ProbeTable} (id)";
+        _ = await command.ExecuteNonQueryAsync(token);
+        command.CommandText = $"INSERT INTO {LiveSession.ProbeTable} VALUES (1, 'committed')";
+        _ = await command.ExecuteNonQueryAsync(token);
+        await using var transaction = await _live.Connection.BeginTransactionAsync(token);
+        command.CommandText = $"INSERT INTO {LiveSession.ProbeTable} VALUES (2, 'uncommitted')";
+        _ = await command.ExecuteNonQueryAsync(token);
+        command.CommandText = $"INSERT INTO {LiveSession.ProbeTable} VALUES (1, 'duplicate')";
+        var duplicate = await Assert.ThrowsAsync<CassieException>(() => command.ExecuteNonQueryAsync(token));
+        Assert.Equal("23505", duplicate.SqlState);
+
+        // Act
+        var failure = await Assert.ThrowsAsync<CassieException>(() => transaction.CommitAsync(token));
+
+        // Assert
+        Assert.Contains("rolled back", failure.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(transaction.Connection);
+        command.CommandText = $"SELECT count(*) FROM {LiveSession.ProbeTable}";
+        Assert.Equal(1L, await command.ExecuteScalarAsync(token));
+    }
+
+    [Fact]
+    public async Task ShouldDiscardUncommittedWriteGivenActiveReaderWhenTransactionIsDisposed()
+    {
+        // Arrange
+        var token = TestContext.Current.CancellationToken;
+        await _live.CreateProbeTableAsync();
+        var transaction = await _live.Connection.BeginTransactionAsync(token);
+        using var command = _live.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"INSERT INTO {LiveSession.ProbeTable} VALUES (1, 'uncommitted')";
+        _ = await command.ExecuteNonQueryAsync(token);
+        command.CommandText = $"SELECT id FROM {LiveSession.ProbeTable}";
+        await using var reader = await command.ExecuteReaderAsync(token);
+
+        // Act
+        await transaction.DisposeAsync();
+
+        // Assert
+        Assert.Null(transaction.Connection);
+        Assert.Equal(ConnectionState.Closed, _live.Connection.State);
+        await _live.Connection.OpenAsync(token);
+        using var countRows = _live.CreateCommand();
+        countRows.CommandText = $"SELECT count(*) FROM {LiveSession.ProbeTable}";
+        Assert.Equal(0L, await countRows.ExecuteScalarAsync(token));
+    }
+
+    [Fact]
     [Trait("Isolation", "Server")]
     public async Task ShouldRestoreTableRowsGivenBackupImageWhenRestoredIntoNewDatabase()
     {

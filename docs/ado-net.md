@@ -98,10 +98,13 @@ throw `NotSupportedException`. A connection has at most one active transaction,
 and a command that names a transaction must name the connection's active one.
 
 Savepoints are supported (`SupportsSavepoints` is `true`) through `Save`,
-`Rollback(name)`, and `Release`, with async counterparts. Disposing a transaction
-that was neither committed nor rolled back rolls it back, and closing or
-returning a pooled connection does the same. `Connection` returns `null` once
-the transaction has ended.
+`Rollback(name)`, and `Release`, with async counterparts. `Commit` and
+`CommitAsync` throw `CassieException` if the server reports a rollback.
+Disposal gives an active transaction five seconds to roll back. If a reader
+owns the connection or the server cannot confirm rollback, disposal closes the
+physical connection. Returning a pooled connection also rolls back any active
+transaction before reuse. `Connection` returns `null` once the transaction ends
+or the connection closes.
 
 ## Contract details
 

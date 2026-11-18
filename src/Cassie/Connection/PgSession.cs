@@ -53,8 +53,14 @@ internal sealed class PgSession(DateStyleTracker dateStyle, long createdTimestam
 
     public void Dispose()
     {
-        Stream.Dispose();
-        Client.Dispose();
+        try
+        {
+            Stream.Dispose();
+        }
+        finally
+        {
+            Client.Dispose();
+        }
     }
 
     /// <summary>Opens the TCP connection and exposes its stream.</summary>

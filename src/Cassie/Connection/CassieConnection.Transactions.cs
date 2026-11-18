@@ -1,7 +1,9 @@
 using System.Data;
 using System.Data.Common;
 using System.Net.Sockets;
+using System.Text;
 using Cntryl.Cassie.Data;
+using Cntryl.Cassie.Protocol;
 
 namespace Cntryl.Cassie.Connection;
 
@@ -29,6 +31,126 @@ public sealed partial class CassieConnection
         if (ReferenceEquals(ActiveTransaction, transaction))
         {
             ActiveTransaction = null;
+        }
+    }
+
+    internal async Task EndTransactionAsync(CassieTransaction transaction, string sql, CancellationToken cancellationToken)
+    {
+        var session = RequireSession("The connection is not open.");
+        ThrowIfReaderActive();
+        var query = Encoding.UTF8.GetBytes(sql + "\0");
+        long serial = 0;
+        CommandTag? completion = null;
+        var completionCount = 0;
+        var serverFailed = false;
+        var rolledBack = false;
+
+        CassieDataReader CreateReader()
+        {
+            serial = _gate.Serial;
+            var readerSession = new ConnectionReaderSession(this, session, ValidateReady);
+            return new CassieDataReader(readerSession, default, CommandBehavior.Default,
+                statementCompleted: tag =>
+                {
+                    completion = tag;
+                    completionCount++;
+                }, statementFailed: _ => serverFailed = true);
+        }
+
+        void ValidateReady(byte status)
+        {
+            if (status == TransactionStatus.Idle)
+            {
+                transaction.MarkCompleted();
+            }
+
+            // Error and cancellation handling still use the reader's recovery path.
+            if (serverFailed || cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            if (status == TransactionStatus.Idle && completionCount == 1 && completion is { } tag)
+            {
+                rolledBack = sql == "COMMIT" && tag.Matches("ROLLBACK");
+                if (rolledBack || tag.Matches(sql))
+                {
+                    return;
+                }
+            }
+
+            throw RejectResponse();
+        }
+
+        IOException RejectResponse()
+        {
+            AbortTransport(expectedOperation: serial);
+            return new IOException($"Cassie did not confirm {sql} in an idle transaction state.");
+        }
+
+        var reader = await RunReaderAsync(token => session.WriteFrameAsync(FrontendMessage.Query, query, token),
+            CreateReader, default, cancellationToken).ConfigureAwait(false);
+        await using (reader.ConfigureAwait(false))
+        {
+            // A transaction terminator returns no rows. The reader consumes its reply through ReadyForQuery.
+            if (reader.FieldCount != 0)
+            {
+                throw RejectResponse();
+            }
+
+            if (rolledBack)
+            {
+                throw new CassieException("Cassie rolled back the transaction instead of committing it.");
+            }
+        }
+    }
+
+    internal async Task DisposeTransactionAsync(CassieTransaction transaction)
+    {
+        PgSession session;
+        long serial;
+        lock (_abortGate)
+        {
+            if (!ReferenceEquals(ActiveTransaction, transaction) || _session is not { } current)
+            {
+                return;
+            }
+
+            if (_gate.IsActive)
+            {
+                AbortTransport();
+                return;
+            }
+
+            session = current;
+            _gate.Begin();
+            serial = _cleanupOperation = _gate.Serial;
+        }
+
+        try
+        {
+            using CleanupDeadline deadline = new(session, CleanupTimeProvider);
+            await ExecuteSessionCleanupQueryAsync(session, "ROLLBACK").ConfigureAwait(false);
+            lock (_abortGate)
+            {
+                if (_gate.Serial != serial || !_gate.IsActive)
+                {
+                    return;
+                }
+
+                transaction.MarkCompleted();
+            }
+
+            await FinishQueryAsync(session, serial, null, deadline, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (CleanupDeadline.IsTransportFailure(exception) ||
+                                          exception is CassieException or TimeoutException)
+        {
+            // Keep a synchronized session after a rejected statement close. Any unfinished exchange is aborted below.
+        }
+        finally
+        {
+            AbortTransport(expectedOperation: serial);
         }
     }
 

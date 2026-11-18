@@ -58,7 +58,7 @@ public sealed class PoolLifecycleContractTests
     {
         // Arrange
         CassieConnection.ClearAllPools();
-        using ScriptedServer server = new(session => session.ServeQueriesAsync(_ => Task.CompletedTask));
+        using ScriptedServer server = new(session => session.ServeQueriesAsync(session.WriteCommandCompleteAsync));
         var connectionString = server.ConnectionString("Pooling=true;Maximum Pool Size=2;Connection Idle Lifetime=1");
         await using (CassieConnection first = new() { ConnectionString = connectionString })
         {
@@ -81,7 +81,7 @@ public sealed class PoolLifecycleContractTests
     {
         // Arrange
         CassieConnection.ClearAllPools();
-        using ScriptedServer server = new(session => session.ServeQueriesAsync(_ => Task.CompletedTask));
+        using ScriptedServer server = new(session => session.ServeQueriesAsync(session.WriteCommandCompleteAsync));
         var connectionString = server.ConnectionString("Pooling=true;Maximum Pool Size=2;Connection Idle Lifetime=60");
         await using (CassieConnection first = new() { ConnectionString = connectionString })
         {
@@ -101,7 +101,7 @@ public sealed class PoolLifecycleContractTests
     public async Task ShouldOpenFreshSessionGivenAllPoolsClearedWhenIdleLifetimeNotElapsed()
     {
         // Arrange
-        using ScriptedServer server = new(session => session.ServeQueriesAsync(_ => Task.CompletedTask));
+        using ScriptedServer server = new(session => session.ServeQueriesAsync(session.WriteCommandCompleteAsync));
         var connectionString = server.ConnectionString("Pooling=true;Maximum Pool Size=2;Connection Idle Lifetime=60");
         await using (CassieConnection first = new() { ConnectionString = connectionString })
         {
@@ -123,7 +123,7 @@ public sealed class PoolLifecycleContractTests
     {
         // Arrange
         CassieConnection.ClearAllPools();
-        using ScriptedServer server = new(session => session.ServeQueriesAsync(_ => Task.CompletedTask));
+        using ScriptedServer server = new(session => session.ServeQueriesAsync(session.WriteCommandCompleteAsync));
         var connectionString = server.ConnectionString("Pooling=true;Maximum Pool Size=1");
         await using CassieConnection holder = new() { ConnectionString = connectionString };
         await holder.OpenAsync(TestContext.Current.CancellationToken);

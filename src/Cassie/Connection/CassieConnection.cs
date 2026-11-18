@@ -2,6 +2,7 @@ using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Sockets;
+using System.Text;
 using Cntryl.Cassie.Commands;
 using Cntryl.Cassie.Diagnostics;
 using Cntryl.Cassie.Protocol;
@@ -403,80 +404,105 @@ public sealed partial class CassieConnection : DbConnection
 
     private async Task CloseCoreAsync()
     {
-        if (_gate.IsActive)
+        PgSession session;
+        CassieConnectionPool? pool;
+        long serial;
+        lock (_abortGate)
         {
-            AbortTransport();
-            return;
-        }
-
-        if (_pool is not null && _session is not null && _state == ConnectionState.Open &&
-            await TryReturnToPoolAsync().ConfigureAwait(false))
-        {
-            return;
-        }
-
-        var wasOpen = _state == ConnectionState.Open;
-        ActiveTransaction?.ConnectionClosed();
-        if (_session is not null && wasOpen)
-        {
-            try
+            if (_gate.IsActive)
             {
-                await _session.WriteFrameAsync(FrontendMessage.Terminate, [], CancellationToken.None)
+                AbortTransport();
+                return;
+            }
+
+            if (_session is not { } current || _state != ConnectionState.Open)
+            {
+                AbortTransport();
+                return;
+            }
+
+            session = current;
+            pool = _pool;
+            _gate.Begin();
+            serial = _cleanupOperation = _gate.Serial;
+        }
+
+        try
+        {
+            using CleanupDeadline deadline = new(session, CleanupTimeProvider);
+            if (pool is null)
+            {
+                await session.WriteFrameAsync(FrontendMessage.Terminate, [], CancellationToken.None)
                     .ConfigureAwait(false);
+                return;
             }
-            catch (IOException)
+
+            if (ActiveTransaction is not null || session.DateStyle.TransactionStatus != TransactionStatus.Idle)
             {
-                // The peer is already gone; the transport is disposed below.
+                await ExecuteSessionCleanupQueryAsync(session, "ROLLBACK").ConfigureAwait(false);
             }
-        }
 
-        var poolToRelease = _pool;
-        var releasePoolSlot = _ownsPoolSlot;
-        await DisposeTransportAsync().ConfigureAwait(false);
-        _pool = null;
-        _poolKey = null;
-        _ownsPoolSlot = false;
-        SetState(ConnectionState.Closed);
-        if (poolToRelease is not null && releasePoolSlot)
-        {
-            poolToRelease.ReleaseReservedSlot();
-        }
+            await ExecuteSessionCleanupQueryAsync(session, "DISCARD ALL").ConfigureAwait(false);
+            deadline.Complete();
 
-        if (wasOpen)
+            lock (_abortGate)
+            {
+                if (!_gate.IsActive || _gate.Serial != serial)
+                {
+                    return;
+                }
+
+                ActiveTransaction?.MarkCompleted();
+                _gate.End();
+                _session = null;
+                _pool = null;
+                _poolKey = null;
+                _ownsPoolSlot = false;
+                session.SynchronousIO = false;
+                SetState(ConnectionState.Closed);
+            }
+
+            await pool.ReturnAsync(session).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (CleanupDeadline.IsTransportFailure(exception) || exception is TimeoutException)
         {
+            // A failed reset ends the physical session and frees the reserved slot below.
+        }
+        finally
+        {
+            AbortTransport(expectedOperation: serial);
             CassieLogging.ConnectionClosed(Logger);
         }
     }
 
-    /// <summary>Resets the session and hands it back to its pool; returns false when the session must be discarded instead.</summary>
-    private async Task<bool> TryReturnToPoolAsync()
+    private static async Task ExecuteSessionCleanupQueryAsync(PgSession session, string sql)
     {
-        try
+        await session.WriteFrameAsync(FrontendMessage.Query, Encoding.UTF8.GetBytes(sql + "\0"), CancellationToken.None)
+            .ConfigureAwait(false);
+        var acknowledged = false;
+        while (true)
         {
-            if (ActiveTransaction is not null)
+            var (tag, payload) = await session.ReadFrameAsync(CancellationToken.None).ConfigureAwait(false);
+            switch (tag)
             {
-                await ExecuteControlQueryAsync("ROLLBACK", CancellationToken.None).ConfigureAwait(false);
-                ActiveTransaction.ConnectionClosed();
+                case BackendMessage.CommandComplete when !acknowledged && CommandTag.FromPayload(payload).Matches(sql):
+                    ObserveCommandComplete(session, new CommandTag(sql));
+                    acknowledged = true;
+                    break;
+                case BackendMessage.ReadyForQuery when acknowledged &&
+                                                       session.DateStyle.TryObserveReadyForQuery(payload) &&
+                                                       session.DateStyle.TransactionStatus == TransactionStatus.Idle:
+                    return;
+                case BackendMessage.ParameterStatus:
+                    var (name, value) = ParameterStatusMessage.Parse(payload);
+                    session.DateStyle.ApplyParameterStatus(name, value);
+                    break;
+                case BackendMessage.NoticeResponse:
+                case BackendMessage.NotificationResponse:
+                    break;
+                default:
+                    throw new IOException($"Cassie did not confirm {sql} in an idle transaction state.");
             }
-
-            await ExecuteControlQueryAsync("DISCARD ALL", CancellationToken.None).ConfigureAwait(false);
-            var session = _session!;
-            var pool = _pool!;
-            _session = null;
-            _pool = null;
-            _poolKey = null;
-            _ownsPoolSlot = false;
-            SetState(ConnectionState.Closed);
-            session.SynchronousIO = false;
-            await pool.ReturnAsync(session).ConfigureAwait(false);
-            CassieLogging.ConnectionClosed(Logger);
-            return true;
-        }
-        catch (Exception exception) when (exception is IOException or SocketException or CassieException
-                                              or OperationCanceledException or ObjectDisposedException)
-        {
-            ActiveTransaction?.ConnectionClosed();
-            return false;
         }
     }
 
