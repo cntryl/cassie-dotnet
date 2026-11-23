@@ -12,8 +12,13 @@ namespace Cntryl.Cassie.Types;
 /// </remarks>
 public readonly record struct CassieTemporalValue
 {
-    private CassieTemporalValue(CassieTemporalKind kind, long value, int offsetSeconds, string? textValue,
-        bool hasRawValue)
+    private CassieTemporalValue(
+        CassieTemporalKind kind,
+        long value,
+        int offsetSeconds,
+        string? textValue,
+        bool hasRawValue
+    )
     {
         Kind = kind;
         Value = value;
@@ -70,8 +75,10 @@ public readonly record struct CassieTemporalValue
     }
 
     /// <summary>Creates a time-with-time-zone from microseconds since midnight and an offset east of UTC.</summary>
-    public static CassieTemporalValue FromTimeWithTimeZoneMicroseconds(long microsecondsSinceMidnight,
-        int offsetSeconds)
+    public static CassieTemporalValue FromTimeWithTimeZoneMicroseconds(
+        long microsecondsSinceMidnight,
+        int offsetSeconds
+    )
     {
         return new CassieTemporalValue(CassieTemporalKind.TimeWithTimeZone, microsecondsSinceMidnight, offsetSeconds,
             null, true);

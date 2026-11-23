@@ -18,6 +18,7 @@ public sealed class CassieRestAuthenticationTests
         {
             var current = Interlocked.Increment(ref step);
             Assert.DoesNotContain("Authorization", request.Headers.Keys, StringComparer.OrdinalIgnoreCase);
+
             if (current == 1)
             {
                 Assert.Equal("POST", request.Method);
@@ -34,6 +35,7 @@ public sealed class CassieRestAuthenticationTests
                         ["Set-Cookie"] = "cassie_session=test-session; Path=/; HttpOnly; SameSite=Strict"
                     }));
             }
+
 
             if (current == 2)
             {

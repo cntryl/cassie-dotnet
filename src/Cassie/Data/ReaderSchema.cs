@@ -40,6 +40,7 @@ internal static class ReaderSchema
         _ = table.Columns.Add("IsReadOnly", typeof(bool));
         _ = table.Columns.Add("ProviderSpecificDataType", typeof(Type));
         _ = table.Columns.Add("DataTypeName", typeof(string));
+
         for (var i = 0; i < columns.Count; i++)
         {
             var column = columns[i];
@@ -71,6 +72,7 @@ internal static class ReaderSchema
                 column.DataTypeName);
         }
 
+
         return table;
     }
 
@@ -78,10 +80,12 @@ internal static class ReaderSchema
     public static ReadOnlyCollection<DbColumn> CreateColumns(IReadOnlyList<ReaderColumn> fields)
     {
         List<DbColumn> columns = [with(fields.Count)];
+
         for (var ordinal = 0; ordinal < fields.Count; ordinal++)
         {
             columns.Add(new ReaderDbColumn(fields[ordinal], ordinal));
         }
+
 
         return columns.AsReadOnly();
     }

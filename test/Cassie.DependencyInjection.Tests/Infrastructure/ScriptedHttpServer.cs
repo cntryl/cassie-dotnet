@@ -30,6 +30,7 @@ internal sealed class ScriptedHttpServer : IAsyncDisposable
     {
         await _shutdown.CancelAsync();
         _listener.Stop();
+
         try
         {
             await _serving;
@@ -52,6 +53,7 @@ internal sealed class ScriptedHttpServer : IAsyncDisposable
         while (true)
         {
             TcpClient accepted;
+
             try
             {
                 accepted = await _listener.AcceptTcpClientAsync(_shutdown.Token);
@@ -62,6 +64,7 @@ internal sealed class ScriptedHttpServer : IAsyncDisposable
                 return;
             }
 
+
             using var client = accepted;
             var stream = client.GetStream();
             var request = await ReadRequestAsync(stream, _shutdown.Token);
@@ -71,6 +74,7 @@ internal sealed class ScriptedHttpServer : IAsyncDisposable
             StringBuilder headers =
                 new(
                     $"HTTP/1.1 {reply.StatusCode} Test\r\nConnection: close\r\nContent-Length: {body.Length}\r\nContent-Type: application/json\r\n");
+
             if (reply.Headers is not null)
             {
                 foreach (var (name, value) in reply.Headers)
@@ -79,41 +83,53 @@ internal sealed class ScriptedHttpServer : IAsyncDisposable
                 }
             }
 
+
             _ = headers.Append("\r\n");
             await stream.WriteAsync(Encoding.ASCII.GetBytes(headers.ToString()), _shutdown.Token);
             await stream.WriteAsync(body, _shutdown.Token);
         }
     }
 
-    private static async Task<ScriptedHttpRequest> ReadRequestAsync(NetworkStream stream,
-        CancellationToken cancellationToken)
+    private static async Task<ScriptedHttpRequest> ReadRequestAsync(
+        NetworkStream stream,
+        CancellationToken cancellationToken
+    )
     {
         var requestLine = await ReadLineAsync(stream, cancellationToken);
         var parts = requestLine.Split(' ', 3);
+
         if (parts.Length != 3)
         {
             throw new IOException("Invalid HTTP request line.");
         }
 
+
         Dictionary<string, string> headers = [with(StringComparer.OrdinalIgnoreCase)];
+
         while (true)
         {
             var line = await ReadLineAsync(stream, cancellationToken);
+
             if (line.Length == 0)
             {
                 break;
             }
 
+
             var colon = line.IndexOf(':', StringComparison.Ordinal);
+
             if (colon < 1)
             {
                 throw new IOException("Invalid HTTP request header.");
             }
 
+
             headers.Add(line[..colon], line[(colon + 1)..].Trim());
         }
 
+
         using MemoryStream body = new();
+
         if (headers.TryGetValue("Transfer-Encoding", out var transfer) &&
             transfer.Equals("chunked", StringComparison.OrdinalIgnoreCase))
         {
@@ -121,6 +137,7 @@ internal sealed class ScriptedHttpServer : IAsyncDisposable
             {
                 var line = await ReadLineAsync(stream, cancellationToken);
                 var size = int.Parse(line.Split(';', 2)[0], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+
                 if (size == 0)
                 {
                     while ((await ReadLineAsync(stream, cancellationToken)).Length != 0)
@@ -130,9 +147,11 @@ internal sealed class ScriptedHttpServer : IAsyncDisposable
                     break;
                 }
 
+
                 var chunk = new byte[size];
                 await stream.ReadExactlyAsync(chunk, cancellationToken);
                 await body.WriteAsync(chunk, cancellationToken);
+
                 if ((await ReadLineAsync(stream, cancellationToken)).Length != 0)
                 {
                     throw new IOException("Invalid HTTP chunk terminator.");
@@ -146,6 +165,7 @@ internal sealed class ScriptedHttpServer : IAsyncDisposable
             await body.WriteAsync(bytes, cancellationToken);
         }
 
+
         return new ScriptedHttpRequest(parts[0], parts[1], headers, Encoding.UTF8.GetString(body.ToArray()));
     }
 
@@ -153,9 +173,11 @@ internal sealed class ScriptedHttpServer : IAsyncDisposable
     {
         using MemoryStream line = new();
         var next = new byte[1];
+
         while (true)
         {
             await stream.ReadExactlyAsync(next, cancellationToken);
+
             if (next[0] == '\n')
             {
                 var bytes = line.ToArray();
@@ -164,7 +186,9 @@ internal sealed class ScriptedHttpServer : IAsyncDisposable
                     : throw new IOException("Invalid HTTP line terminator.");
             }
 
+
             line.WriteByte(next[0]);
+
             if (line.Length > 64 * 1024)
             {
                 throw new IOException("Scripted HTTP request header exceeds the fixture limit.");

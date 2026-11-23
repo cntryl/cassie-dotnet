@@ -94,10 +94,12 @@ internal sealed class Int2Handler : CassieTypeHandler
             sbyte number => number,
             _ => null
         };
+
         if (int2 is not { } found)
         {
             return null;
         }
+
 
         var bytes = new byte[sizeof(short)];
         BinaryPrimitives.WriteInt16BigEndian(bytes, found);
@@ -125,10 +127,12 @@ internal sealed class Int4Handler : CassieTypeHandler
             ushort number => number,
             _ => null
         };
+
         if (int4 is not { } found)
         {
             return null;
         }
+
 
         var bytes = new byte[sizeof(int)];
         BinaryPrimitives.WriteInt32BigEndian(bytes, found);

@@ -97,8 +97,10 @@ public sealed class NumericContractTests
         await peer;
     }
 
-    private static async Task ServeNumericQueryAsync(TcpListener listener,
-        string number = "123456789012345678901234567890.12345678901234567890")
+    private static async Task ServeNumericQueryAsync(
+        TcpListener listener,
+        string number = "123456789012345678901234567890.12345678901234567890"
+    )
     {
         using var client = await listener.AcceptTcpClientAsync();
         var stream = client.GetStream();

@@ -66,6 +66,7 @@ internal static class CassieParameterCodec
         }
 
         Span<byte> bytes = stackalloc byte[sizeof(long)];
+
         switch (temporal.Kind)
         {
             case CassieTemporalKind.Date:
@@ -176,6 +177,7 @@ internal static class CassieParameterCodec
         }
 
         Span<byte> bytes = stackalloc byte[16];
+
         switch (oid, value)
         {
             case (1003, Array names):
@@ -210,13 +212,16 @@ internal static class CassieParameterCodec
         PgWriter.WriteInt32(stream, count == 0 ? 0 : 1);
         PgWriter.WriteInt32(stream, hasNull ? 1 : 0);
         PgWriter.WriteInt32(stream, 19);
+
         if (count == 0)
         {
             return stream.ToArray();
         }
 
+
         PgWriter.WriteInt32(stream, count);
         PgWriter.WriteInt32(stream, 1);
+
         foreach (var item in values)
         {
             if (item is null or DBNull)
@@ -232,15 +237,18 @@ internal static class CassieParameterCodec
             }
 
             var bytes = Encoding.UTF8.GetBytes(name);
+
             if (bytes.Length > 63)
             {
                 throw new ArgumentOutOfRangeException(nameof(values),
                     "Binary NAME[] elements cannot exceed 63 UTF-8 bytes.");
             }
 
+
             PgWriter.WriteInt32(stream, bytes.Length);
             stream.Write(bytes);
         }
+
 
         return stream.ToArray();
     }
@@ -251,6 +259,7 @@ internal static class CassieParameterCodec
         int[] lowerBounds;
         IEnumerable<object?> elements;
         int count;
+
         if (values is CassieArray cassieArray)
         {
             if (cassieArray.ElementTypeOid != elementOid)
@@ -280,6 +289,7 @@ internal static class CassieParameterCodec
             throw new ArgumentException("The value must be a CLR array or CassieArray.", nameof(values));
         }
 
+
         if (dimensions.Length != lowerBounds.Length || (count > 0 && dimensions.Length == 0))
         {
             throw new ArgumentException("The array shape is invalid.", nameof(values));
@@ -295,10 +305,12 @@ internal static class CassieParameterCodec
         PgWriter.WriteInt32(stream, count == 0 ? 0 : dimensions.Length);
         PgWriter.WriteInt32(stream, hasNull ? 1 : 0);
         PgWriter.WriteInt32(stream, elementOid);
+
         if (count == 0)
         {
             return stream.ToArray();
         }
+
 
         for (var dimension = 0; dimension < dimensions.Length; dimension++)
         {
@@ -315,10 +327,12 @@ internal static class CassieParameterCodec
             }
 
             var elementBytes = GetBinaryParameter(value, elementOid);
+
             if (elementBytes is null)
             {
                 return null;
             }
+
 
             PgWriter.WriteInt32(stream, elementBytes.Length);
             stream.Write(elementBytes);
@@ -330,14 +344,17 @@ internal static class CassieParameterCodec
     private static string EncodeTextArray(object values, int arrayOid)
     {
         var expectedElementOid = CassieTypeMap.GetArrayElementOid(arrayOid);
+
         if (expectedElementOid is not int elementOid)
         {
             throw new NotSupportedException($"Text encoding for PostgreSQL array OID {arrayOid} is not supported.");
         }
 
+
         int[] dimensions;
         int[] lowerBounds;
         List<object?> elements;
+
         if (values is CassieArray cassieArray)
         {
             if (cassieArray.ElementTypeOid != elementOid)
@@ -365,6 +382,7 @@ internal static class CassieParameterCodec
             throw new ArgumentException("The value must be a CLR array or CassieArray.", nameof(values));
         }
 
+
         if (dimensions.Length > 6)
         {
             throw new NotSupportedException("Cassie supports arrays with at most six dimensions.");
@@ -383,6 +401,7 @@ internal static class CassieParameterCodec
         }
 
         StringBuilder result = new();
+
         if (lowerBounds.Where((lowerBound, index) => lowerBound != 1).Any())
         {
             for (var index = 0; index < dimensions.Length; index++)
@@ -395,15 +414,23 @@ internal static class CassieParameterCodec
             _ = result.Append('=');
         }
 
+
         var flatIndex = 0;
         AppendArrayLevel(result, elements, dimensions, 0, ref flatIndex, elementOid);
         return result.ToString();
     }
 
-    private static void AppendArrayLevel(StringBuilder output, IReadOnlyList<object?> elements,
-        IReadOnlyList<int> dimensions, int depth, ref int flatIndex, int elementOid)
+    private static void AppendArrayLevel(
+        StringBuilder output,
+        IReadOnlyList<object?> elements,
+        IReadOnlyList<int> dimensions,
+        int depth,
+        ref int flatIndex,
+        int elementOid
+    )
     {
         _ = output.Append('{');
+
         for (var index = 0; index < dimensions[depth]; index++)
         {
             if (index > 0)
@@ -418,20 +445,24 @@ internal static class CassieParameterCodec
             }
 
             var value = elements[flatIndex++];
+
             if (value is null or DBNull)
             {
                 _ = output.Append("NULL");
                 continue;
             }
 
+
             var text = Encoding.UTF8.GetString(EncodeTextParameter(value, elementOid));
             var quote = text.Length == 0 || text.Equals("NULL", StringComparison.OrdinalIgnoreCase)
                                          || text.Any(static character =>
                                              char.IsWhiteSpace(character) ||
                                              character is '{' or '}' or ',' or '"' or '\\');
+
             if (quote)
             {
                 _ = output.Append('"');
+
                 foreach (var character in text)
                 {
                     if (character is '"' or '\\')
@@ -442,6 +473,7 @@ internal static class CassieParameterCodec
                     _ = output.Append(character);
                 }
 
+
                 _ = output.Append('"');
             }
             else
@@ -449,6 +481,7 @@ internal static class CassieParameterCodec
                 _ = output.Append(text);
             }
         }
+
 
         _ = output.Append('}');
     }
@@ -473,6 +506,7 @@ internal static class CassieParameterCodec
         }
 
         StringBuilder result = new("{");
+
         for (var index = 0; index < values.Length; index++)
         {
             if (index > 0)
@@ -481,11 +515,13 @@ internal static class CassieParameterCodec
             }
 
             var item = values.GetValue(index);
+
             if (item is null or DBNull)
             {
                 _ = result.Append("NULL");
                 continue;
             }
+
 
             if (item is not string name)
             {
@@ -494,6 +530,7 @@ internal static class CassieParameterCodec
             }
 
             _ = result.Append('"');
+
             foreach (var character in name)
             {
                 if (character is '"' or '\\')
@@ -504,8 +541,10 @@ internal static class CassieParameterCodec
                 _ = result.Append(character);
             }
 
+
             _ = result.Append('"');
         }
+
 
         return result.Append('}').ToString();
     }
@@ -519,6 +558,7 @@ internal static class CassieParameterCodec
         using (Utf8JsonWriter writer = new(buffer))
         {
             writer.WriteStartArray();
+
             foreach (var item in array)
             {
                 if (item is null)
@@ -599,6 +639,7 @@ internal static class CassieParameterCodec
                         $"Array element type '{item.GetType().FullName}' has no text codec.");
                 }
             }
+
 
             writer.WriteEndArray();
         }

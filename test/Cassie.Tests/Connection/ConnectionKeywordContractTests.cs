@@ -90,6 +90,7 @@ public sealed class ConnectionKeywordContractTests
             while (true)
             {
                 var (tag, payload) = await session.ReadFrameAsync();
+
                 if (tag == (byte)'E')
                 {
                     maxRows = BinaryPrimitives.ReadInt32BigEndian(payload.AsSpan(1));

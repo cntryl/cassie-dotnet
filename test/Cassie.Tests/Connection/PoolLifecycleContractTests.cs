@@ -20,11 +20,13 @@ public sealed class PoolLifecycleContractTests
         using ScriptedServer server = new(async session =>
         {
             var first = Interlocked.Increment(ref sessions) == 1;
+
             if (!first)
             {
                 await session.ServeQueriesAsync(sql => session.WriteCommandCompleteAsync("SELECT"));
                 return;
             }
+
 
             _ = await session.ReadFrameAsync();
             await session.WriteCommandCompleteAsync("DISCARD ALL");

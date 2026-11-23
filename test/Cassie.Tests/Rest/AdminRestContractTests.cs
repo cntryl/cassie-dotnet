@@ -206,11 +206,13 @@ public sealed class AdminRestContractTests
         using ScriptedHttpHandler handler = new(async (request, cancellationToken) =>
         {
             Assert.Equal(new Uri(ServiceAddress, "api/v1/admin/databases"), request.RequestUri);
+
             if (request.Method == HttpMethod.Get)
             {
                 return ScriptedHttpHandler.Json( /*lang=json,strict*/
                     """[{"name":"ledger","description":"Read model"},{"name":"postgres"}]""");
             }
+
 
             Assert.Equal(HttpMethod.Post, request.Method);
             using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
@@ -310,6 +312,7 @@ public sealed class AdminRestContractTests
         {
             Assert.Equal(HttpMethod.Post, request.Method);
             using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+
             if (request.RequestUri == new Uri(ServiceAddress,
                     "api/v1/admin/projections/postgres.public.events/verification-manifests"))
             {
@@ -319,6 +322,7 @@ public sealed class AdminRestContractTests
                 Assert.True(body.RootElement.GetProperty("include_row_hashes").GetBoolean());
                 return ScriptedHttpHandler.Json(ManifestJson);
             }
+
 
             Assert.Equal(new Uri(ServiceAddress, "api/v1/admin/projection-consistency-checks"), request.RequestUri);
             var manifest = body.RootElement.GetProperty("manifests")[0];

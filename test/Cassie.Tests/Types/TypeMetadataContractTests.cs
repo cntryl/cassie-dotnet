@@ -93,8 +93,11 @@ public sealed class TypeMetadataContractTests
     [InlineData(4089, typeof(string), typeof(uint))]
     [InlineData(4096, typeof(string), typeof(uint))]
     [InlineData(4191, typeof(string), typeof(uint))]
-    public void ShouldPreserveFormatSpecificFieldTypesGivenBuiltInOidWhenMetadataIsRead(int oid, Type textType,
-        Type binaryType)
+    public void ShouldPreserveFormatSpecificFieldTypesGivenBuiltInOidWhenMetadataIsRead(
+        int oid,
+        Type textType,
+        Type binaryType
+    )
     {
         // Arrange
         const short textFormat = 0;
@@ -165,8 +168,10 @@ public sealed class TypeMetadataContractTests
     [InlineData(DbType.UInt64, 1700)]
     [InlineData(DbType.AnsiStringFixedLength, 1042)]
     [InlineData(DbType.DateTime2, 1114)]
-    public void ShouldPreferExplicitDbTypeGivenConflictingClrValueWhenParameterIsPrepared(DbType dbType,
-        int expectedOid)
+    public void ShouldPreferExplicitDbTypeGivenConflictingClrValueWhenParameterIsPrepared(
+        DbType dbType,
+        int expectedOid
+    )
     {
         // Arrange
         using CassieCommand command = new() { CommandText = "SELECT @p" };

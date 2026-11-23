@@ -40,6 +40,7 @@ internal static class CommandParameterBinder
         }
 
         Dictionary<string, DbParameter> bindings = [with(StringComparer.OrdinalIgnoreCase)];
+
         foreach (DbParameter parameter in parameters)
         {
             if (parameter.Direction != ParameterDirection.Input)
@@ -49,16 +50,19 @@ internal static class CommandParameterBinder
             }
 
             var name = NormalizeParameterName(parameter.ParameterName);
+
             if (name.Length == 0)
             {
                 throw new InvalidOperationException("A parameter name cannot be empty.");
             }
+
 
             if (!bindings.TryAdd(name, parameter))
             {
                 throw new InvalidOperationException($"Parameter '{name}' is bound more than once.");
             }
         }
+
 
         List<string> names = [];
         List<object?> values = [];
@@ -69,10 +73,12 @@ internal static class CommandParameterBinder
         var rewritten = Rewrite(sql, name =>
         {
             _ = used.Add(name);
+
             if (!bindings.TryGetValue(name, out var parameter))
             {
                 throw new InvalidOperationException($"SQL parameter '{name}' has no matching binding.");
             }
+
 
             if (!slots.TryGetValue(name, out var slot))
             {
@@ -106,10 +112,12 @@ internal static class CommandParameterBinder
         }
 
         var name = NormalizeParameterName(parameter.ParameterName);
+
         if (name.Length == 0)
         {
             throw new InvalidOperationException("A parameter name cannot be empty.");
         }
+
 
         var used = false;
         var rewritten = Rewrite(sql, marker =>
@@ -122,10 +130,12 @@ internal static class CommandParameterBinder
             used = true;
             return "$1";
         });
+
         if (!used)
         {
             throw new InvalidOperationException($"Parameter binding(s) are not used by SQL: {name}.");
         }
+
 
         var value = parameter.Value is DBNull ? null : parameter.Value;
         var typeOid = CassieTypeMap.GetParameterOid(parameter);
@@ -184,6 +194,7 @@ internal static class CommandParameterBinder
     {
         StringBuilder result = new(sql.Length);
         var copiedThrough = 0;
+
         foreach (var token in SqlLexicalTraversal.Read(sql))
         {
             if (token.Kind != SqlTokenKind.Parameter)
@@ -195,6 +206,7 @@ internal static class CommandParameterBinder
             _ = result.Append(replace(sql.Substring(token.Start + 1, token.Length - 1)));
             copiedThrough = token.Start + token.Length;
         }
+
 
         _ = result.Append(sql.AsSpan(copiedThrough));
         return result.ToString();

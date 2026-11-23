@@ -45,6 +45,7 @@ public sealed partial class CassieConnection
     private static void ObserveCommandComplete(PgSession session, CommandTag tag)
     {
         session.DateStyle.ObserveCommandComplete(tag);
+
         if (tag.HasVerb("ROLLBACK") || tag.HasVerb("ABORT") ||
             tag.Matches("CREATE EXTENSION") || tag.Matches("DROP EXTENSION") || tag.Matches("ALTER EXTENSION"))
         {
@@ -55,15 +56,19 @@ public sealed partial class CassieConnection
     private async Task RefreshDateStyleIfNeededAsync(CommandBudget budget, CancellationToken cancellationToken)
     {
         var tracker = _session?.DateStyle;
+
         if (tracker is null || !tracker.CanRefresh || _state != ConnectionState.Open || _gate.IsActive)
         {
             return;
         }
 
+
         tracker.BeginRefresh();
+
         try
         {
             var reader = await ExecuteQueryCoreAsync("SHOW DateStyle", budget, CommandBehavior.Default, null, false, cancellationToken).ConfigureAwait(false);
+
             try
             {
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -96,6 +101,7 @@ public sealed partial class CassieConnection
             ActiveTransaction?.MarkCompleted();
             _gate.End();
             _pendingQueryCancel = null;
+
             try
             {
                 _session?.Dispose();
@@ -107,10 +113,12 @@ public sealed partial class CassieConnection
             finally
             {
                 _session = null;
+
                 if (_pool is not null && _ownsPoolSlot)
                 {
                     _pool.ReleaseReservedSlot();
                 }
+
 
                 _pool = null;
                 _poolKey = null;
@@ -137,6 +145,7 @@ public sealed partial class CassieConnection
         }
 
         var sent = SynchronousCall.Wait(cancel);
+
         if (!sent)
         {
             if (_gate.Serial == serial && _gate.IsActive)
@@ -147,12 +156,14 @@ public sealed partial class CassieConnection
             return;
         }
 
+
         _ = AbortIfStillRunningAsync(serial);
     }
 
     private async Task AbortIfStillRunningAsync(long serial)
     {
         await Task.Delay(CancelWatchdogDelay).ConfigureAwait(false);
+
         if (_gate.IsActive && _gate.Serial == serial)
         {
             AbortTransport(expectedOperation: serial);

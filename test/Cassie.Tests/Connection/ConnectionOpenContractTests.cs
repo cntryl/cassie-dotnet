@@ -126,6 +126,7 @@ public sealed class ConnectionOpenContractTests
 
         Dictionary<string, string> parameters = [with(StringComparer.Ordinal)];
         var offset = header.Length;
+
         while (packet[offset] != 0)
         {
             var key = ReadCString(packet, ref offset);
@@ -133,16 +134,19 @@ public sealed class ConnectionOpenContractTests
             parameters.Add(key, value);
         }
 
+
         return parameters;
     }
 
     private static string ReadCString(byte[] source, ref int offset)
     {
         var terminator = Array.IndexOf(source, (byte)0, offset);
+
         if (terminator < 0)
         {
             throw new IOException("The startup packet contains an unterminated parameter.");
         }
+
 
         var value = Encoding.UTF8.GetString(source, offset, terminator - offset);
         offset = terminator + 1;

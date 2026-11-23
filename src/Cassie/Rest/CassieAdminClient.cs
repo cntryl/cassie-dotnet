@@ -42,24 +42,30 @@ public sealed class CassieAdminClient
     }
 
     /// <summary>Executes SQL in the requested database; an operation ID permits explicit server cancellation.</summary>
-    public Task<CassieRestQueryResult> ExecuteQueryAsync(CassieAdminQueryRequest request,
-        CancellationToken cancellationToken = default)
+    public Task<CassieRestQueryResult> ExecuteQueryAsync(
+        CassieAdminQueryRequest request,
+        CancellationToken cancellationToken = default
+    )
     {
         return SendQueryAsync("execute", request, CassieRestJsonContext.Default.CassieRestQueryResult,
             cancellationToken);
     }
 
     /// <summary>Validates SQL without executing it; invalid SQL is reported as a REST error.</summary>
-    public Task<CassieQueryValidationResult> ValidateQueryAsync(CassieAdminQueryRequest request,
-        CancellationToken cancellationToken = default)
+    public Task<CassieQueryValidationResult> ValidateQueryAsync(
+        CassieAdminQueryRequest request,
+        CancellationToken cancellationToken = default
+    )
     {
         return SendQueryAsync("validate", request, CassieRestJsonContext.Default.CassieQueryValidationResult,
             cancellationToken);
     }
 
     /// <summary>Explains SQL, preserving the server's versioned plan object.</summary>
-    public Task<CassieQueryExplanation> ExplainQueryAsync(CassieAdminQueryRequest request,
-        CancellationToken cancellationToken = default)
+    public Task<CassieQueryExplanation> ExplainQueryAsync(
+        CassieAdminQueryRequest request,
+        CancellationToken cancellationToken = default
+    )
     {
         return SendQueryAsync("explain", request, CassieRestJsonContext.Default.CassieQueryExplanation,
             cancellationToken);
@@ -67,8 +73,10 @@ public sealed class CassieAdminClient
 
     /// <summary>Requests and waits for server cancellation of an operation owned by this REST session.</summary>
     /// <remarks>This is separate from canceling a local HTTP request through its cancellation token.</remarks>
-    public async Task<CassieQueryCancellation> CancelQueryAsync(Guid operationId,
-        CancellationToken cancellationToken = default)
+    public async Task<CassieQueryCancellation> CancelQueryAsync(
+        Guid operationId,
+        CancellationToken cancellationToken = default
+    )
     {
         var response = await _client.SendAsync(HttpMethod.Delete,
             "api/v1/admin/query-operations/" + operationId.ToString("D"), null,
@@ -80,8 +88,11 @@ public sealed class CassieAdminClient
     }
 
     /// <summary>Exports a projection verification manifest from the current server.</summary>
-    public Task<CassieProjectionVerificationManifest> ExportVerificationManifestAsync(string projection,
-        CassieManifestExportOptions? options = null, CancellationToken cancellationToken = default)
+    public Task<CassieProjectionVerificationManifest> ExportVerificationManifestAsync(
+        string projection,
+        CassieManifestExportOptions? options = null,
+        CancellationToken cancellationToken = default
+    )
     {
         var path = "api/v1/admin/projections/" + CassieRestClient.EscapePathSegment(projection, nameof(projection)) +
                    "/verification-manifests";
@@ -93,7 +104,9 @@ public sealed class CassieAdminClient
 
     /// <summary>Compares exported verification manifests and records the consistency report.</summary>
     public Task<CassieProjectionConsistencyReport> CompareVerificationManifestsAsync(
-        IReadOnlyList<CassieProjectionVerificationManifest> manifests, CancellationToken cancellationToken = default)
+        IReadOnlyList<CassieProjectionVerificationManifest> manifests,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(manifests);
         return _client.SendAsync(HttpMethod.Post, "api/v1/admin/projection-consistency-checks",
@@ -147,8 +160,12 @@ public sealed class CassieAdminClient
             cancellationToken);
     }
 
-    private Task<T> SendQueryAsync<T>(string operation, CassieAdminQueryRequest request, JsonTypeInfo<T> responseType,
-        CancellationToken cancellationToken)
+    private Task<T> SendQueryAsync<T>(
+        string operation,
+        CassieAdminQueryRequest request,
+        JsonTypeInfo<T> responseType,
+        CancellationToken cancellationToken
+    )
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Database);

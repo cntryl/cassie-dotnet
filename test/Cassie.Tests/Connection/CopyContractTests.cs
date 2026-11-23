@@ -31,17 +31,21 @@ public sealed class CopyContractTests
             await WriteFrameAsync(stream, (byte)'G', [0, 0, 1, 0, 0]);
 
             using MemoryStream received = new();
+
             while (true)
             {
                 var (tag, payload) = await ReadFrameAsync(stream);
+
                 if (tag == (byte)'c')
                 {
                     break;
                 }
 
+
                 Assert.Equal((byte)'d', tag);
                 received.Write(payload);
             }
+
 
             Assert.Equal(input, received.ToArray());
             await WriteFrameAsync(stream, (byte)'C', CStringBytes("COPY 2"));

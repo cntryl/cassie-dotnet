@@ -8,8 +8,11 @@ namespace Cntryl.Cassie.Connection;
 internal static class QueryCanceler
 {
     /// <summary>Returns true after the server closes the cancel connection.</summary>
-    public static async Task<bool> SendAsync(CassieConnectionStringBuilder settings, int backendProcessId,
-        int backendSecretKey)
+    public static async Task<bool> SendAsync(
+        CassieConnectionStringBuilder settings,
+        int backendProcessId,
+        int backendSecretKey
+    )
     {
         ArgumentNullException.ThrowIfNull(settings);
         using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(Math.Clamp(settings.Timeout, 1, 5)));
@@ -18,27 +21,36 @@ internal static class QueryCanceler
     }
 
     /// <summary>Sends a cancel request within the caller's existing recovery deadline.</summary>
-    public static Task<bool> SendAsync(CassieConnectionStringBuilder settings, int backendProcessId,
-        int backendSecretKey, CancellationToken cancellationToken)
+    public static Task<bool> SendAsync(
+        CassieConnectionStringBuilder settings,
+        int backendProcessId,
+        int backendSecretKey,
+        CancellationToken cancellationToken
+    )
     {
         ArgumentNullException.ThrowIfNull(settings);
         var packet = SessionMessages.CancelRequest(backendProcessId, backendSecretKey);
         return SendCoreAsync(settings, packet, cancellationToken);
     }
 
-    private static async Task<bool> SendCoreAsync(CassieConnectionStringBuilder settings, byte[] packet,
-        CancellationToken cancellationToken)
+    private static async Task<bool> SendCoreAsync(
+        CassieConnectionStringBuilder settings,
+        byte[] packet,
+        CancellationToken cancellationToken
+    )
     {
         try
         {
             using TcpClient cancelClient = new() { NoDelay = true };
             await cancelClient.ConnectAsync(settings.Host, settings.Port, cancellationToken).ConfigureAwait(false);
             Stream cancelStream = cancelClient.GetStream();
+
             if (settings.SslMode != CassieSslMode.Disable)
             {
                 cancelStream = await TlsNegotiator.NegotiateAsync(cancelStream, settings, cancellationToken)
                     .ConfigureAwait(false);
             }
+
 
             await using (cancelStream.ConfigureAwait(false))
             {

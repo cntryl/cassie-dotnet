@@ -12,16 +12,20 @@ public sealed class ReadBufferedStreamTests
     [InlineData(16, 7)]
     [InlineData(8192, 5)]
     [InlineData(8192, 8192)]
-    public async Task ShouldReturnEveryFrameGivenFramesSplitAcrossBufferRefillsWhenFramesAreRead(int bufferSize,
-        int transportChunk)
+    public async Task ShouldReturnEveryFrameGivenFramesSplitAcrossBufferRefillsWhenFramesAreRead(
+        int bufferSize,
+        int transportChunk
+    )
     {
         // Arrange
         int[] payloadLengths = [0, 1, 2, 3, 4, 7, 11, 16, 40, 0, 300];
         using MemoryStream wire = new();
+
         foreach (var length in payloadLengths)
         {
             wire.Write(Frame((byte)('A' + (length % 26)), Payload(length)));
         }
+
 
         wire.Position = 0;
         using ChunkedStream transport = new(wire, transportChunk);
@@ -29,12 +33,14 @@ public sealed class ReadBufferedStreamTests
 
         // Act
         List<(byte Tag, byte[] Payload)> frames = [];
+
         foreach (var _ in payloadLengths)
         {
             frames.Add(await PgFraming.ReadBackendFrameAsync(stream, CancellationToken.None));
         }
 
         // Assert
+
         Assert.Equal(payloadLengths.Select(static length => (byte)('A' + (length % 26))),
             frames.Select(static frame => frame.Tag));
         Assert.Equal(payloadLengths.Select(Payload), frames.Select(static frame => frame.Payload));
@@ -122,10 +128,12 @@ public sealed class ReadBufferedStreamTests
     private static byte[] Payload(int length)
     {
         var payload = new byte[length];
+
         for (var index = 0; index < length; index++)
         {
             payload[index] = (byte)(index + length);
         }
+
 
         return payload;
     }

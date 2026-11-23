@@ -73,6 +73,7 @@ public sealed partial class CassieConnection
             if (status == TransactionStatus.Idle && completionCount == 1 && completion is { } tag)
             {
                 rolledBack = sql == "COMMIT" && tag.Matches("ROLLBACK");
+
                 if (rolledBack || tag.Matches(sql))
                 {
                     return;
@@ -193,8 +194,10 @@ public sealed partial class CassieConnection
 
     /// <summary>Starts a transaction with the given isolation level.</summary>
     /// <exception cref="NotSupportedException">The isolation level is not supported by Cassie.</exception>
-    public new async ValueTask<CassieTransaction> BeginTransactionAsync(IsolationLevel isolationLevel,
-        CancellationToken cancellationToken)
+    public new async ValueTask<CassieTransaction> BeginTransactionAsync(
+        IsolationLevel isolationLevel,
+        CancellationToken cancellationToken
+    )
     {
         return await BeginTransactionCoreAsync(isolationLevel, cancellationToken).ConfigureAwait(false);
     }
@@ -206,14 +209,18 @@ public sealed partial class CassieConnection
     }
 
     /// <inheritdoc />
-    protected override async ValueTask<DbTransaction> BeginDbTransactionAsync(IsolationLevel isolationLevel,
-        CancellationToken cancellationToken = default)
+    protected override async ValueTask<DbTransaction> BeginDbTransactionAsync(
+        IsolationLevel isolationLevel,
+        CancellationToken cancellationToken = default
+    )
     {
         return await BeginTransactionCoreAsync(isolationLevel, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<CassieTransaction> BeginTransactionCoreAsync(IsolationLevel isolationLevel,
-        CancellationToken cancellationToken)
+    private async Task<CassieTransaction> BeginTransactionCoreAsync(
+        IsolationLevel isolationLevel,
+        CancellationToken cancellationToken
+    )
     {
         var effective = isolationLevel == IsolationLevel.Unspecified ? IsolationLevel.ReadCommitted : isolationLevel;
         var level = effective switch
@@ -233,6 +240,7 @@ public sealed partial class CassieConnection
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+
         try
         {
             await ExecuteControlQueryAsync($"BEGIN ISOLATION LEVEL {level}", cancellationToken).ConfigureAwait(false);
@@ -242,6 +250,7 @@ public sealed partial class CassieConnection
             await RollbackCanceledTransactionStartAsync().ConfigureAwait(false);
             throw;
         }
+
 
         ActiveTransaction = new CassieTransaction(this, effective);
         return ActiveTransaction;

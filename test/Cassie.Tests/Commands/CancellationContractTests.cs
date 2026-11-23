@@ -23,10 +23,12 @@ public sealed class CancellationContractTests
         {
             _ = await session.ReadFrameAsync();
             await session.WriteIntRowDescriptionAsync();
+
             while (peer!.CancelRequests == 0)
             {
                 await Task.Delay(10, token);
             }
+
 
             await BatchPeer.ReplyWithErrorAsync(session, "57014", "query canceled");
             await session.WriteReadyAsync();
@@ -247,8 +249,10 @@ public sealed class CancellationContractTests
         await WriteFrameAsync(stream, (byte)'Z', [(byte)'I']);
     }
 
-    private static async Task ServeCancelableCommandAsync(TcpListener listener,
-        TaskCompletionSource<bool> rowDescriptionSent)
+    private static async Task ServeCancelableCommandAsync(
+        TcpListener listener,
+        TaskCompletionSource<bool> rowDescriptionSent
+    )
     {
         using var client = await listener.AcceptTcpClientAsync();
         var stream = client.GetStream();

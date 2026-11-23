@@ -42,17 +42,21 @@ public sealed class DiagnosticsContractTests
             Assert.Equal("COPY ledger FROM STDIN WITH (FORMAT csv)", CString(copySql));
             await WriteFrameAsync(stream, (byte)'G', [0, 0, 0]);
             using MemoryStream copiedData = new();
+
             while (true)
             {
                 var (dataTag, payload) = await ReadFrontendFrameAsync(stream);
+
                 if (dataTag == (byte)'c')
                 {
                     break;
                 }
 
+
                 Assert.Equal((byte)'d', dataTag);
                 copiedData.Write(payload);
             }
+
 
             Assert.Equal("1,alpha\n", Encoding.UTF8.GetString(copiedData.ToArray()));
             await WriteFrameAsync(stream, (byte)'C', CStringBytes("COPY 1"));
@@ -119,6 +123,7 @@ public sealed class DiagnosticsContractTests
             "cassie.copy.from",
             "cassie.connection.close"
         ];
+
         foreach (var expectedActivity in expectedActivities)
         {
             var expectedOperation = expectedActivity["cassie.".Length..];
@@ -130,14 +135,17 @@ public sealed class DiagnosticsContractTests
                                 tag.Key == "db.operation" && Equals(tag.Value, expectedOperation)));
         }
 
+
         Assert.Contains(measurements, measurement => measurement.Name == "cassie.client.operations");
         Assert.Contains(measurements, measurement => measurement.Name == "cassie.client.operation.duration");
+
         foreach (var expectedOperation in expectedActivities.Select(static name => name["cassie.".Length..]))
         {
             Assert.Contains(measurements,
                 measurement =>
                     measurement.Tags.Any(tag => tag.Key == "db.operation" && Equals(tag.Value, expectedOperation)));
         }
+
 
         var diagnostics = string.Join(
             Environment.NewLine,
@@ -357,8 +365,13 @@ public sealed class DiagnosticsContractTests
             return true;
         }
 
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-            Func<TState, Exception?, string> formatter)
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter
+        )
         {
             messages.Enqueue(formatter(state, exception));
         }

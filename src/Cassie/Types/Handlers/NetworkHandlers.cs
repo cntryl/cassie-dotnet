@@ -46,13 +46,16 @@ internal sealed class NetworkAddressHandler : CassieTypeHandler
             1 => true,
             _ => throw new FormatException("Cassie returned an invalid binary network address type flag.")
         };
+
         if (prefixLength > width || isCidr != expectedCidr || value[3] != addressLength ||
             value.Length != 4 + addressLength)
         {
             throw new FormatException("Cassie returned an invalid binary network address frame.");
         }
 
+
         ReadOnlySpan<byte> addressBytes = value.AsSpan(4);
+
         if (isCidr)
         {
             for (var bit = prefixLength; bit < width; bit++)
@@ -63,6 +66,7 @@ internal sealed class NetworkAddressHandler : CassieTypeHandler
                 }
             }
         }
+
 
         return new CassieNetworkAddress(new IPAddress(addressBytes), prefixLength, isCidr);
     }
@@ -95,11 +99,13 @@ internal sealed class NetworkAddressHandler : CassieTypeHandler
             _ => throw new ArgumentException("Only IPv4 and IPv6 network addresses are supported.", nameof(address))
         };
         var width = addressBytes.Length * 8;
+
         if ((uint)address.PrefixLength > (uint)width)
         {
             throw new ArgumentException("The network prefix length is outside the address family range.",
                 nameof(address));
         }
+
 
         if (address.IsCidr)
         {
@@ -191,22 +197,28 @@ internal sealed class BitStringHandler : CassieTypeHandler
     {
         var offset = 0;
         var bitLength = BinaryWire.ReadInt32(bytes, ref offset);
+
         if (bitLength < 0 || bitLength > (bytes.Length - 4) * 8)
         {
             throw new FormatException("Cassie returned an invalid binary bit-string length.");
         }
 
+
         var byteLength = (bitLength + 7) / 8;
+
         if (bytes.Length != 4 + byteLength)
         {
             throw new FormatException("Cassie returned an invalid binary bit-string frame.");
         }
 
+
         var bits = new char[bitLength];
+
         for (var bit = 0; bit < bitLength; bit++)
         {
             bits[bit] = (bytes[4 + (bit / 8)] & (1 << (7 - (bit % 8)))) == 0 ? '0' : '1';
         }
+
 
         return new CassieBitString(new string(bits), isVarying);
     }
@@ -229,6 +241,7 @@ internal sealed class BitStringHandler : CassieTypeHandler
         var payloadLength = (bitString.Value.Length + 7) / 8;
         var bytes = new byte[4 + payloadLength];
         BinaryPrimitives.WriteInt32BigEndian(bytes, bitString.Value.Length);
+
         for (var bit = 0; bit < bitString.Value.Length; bit++)
         {
             if (bitString.Value[bit] == '1')
@@ -236,6 +249,7 @@ internal sealed class BitStringHandler : CassieTypeHandler
                 bytes[4 + (bit / 8)] |= (byte)(1 << (7 - (bit % 8)));
             }
         }
+
 
         return bytes;
     }
@@ -278,23 +292,28 @@ internal static class VectorHandler
 
         int dimension = BinaryPrimitives.ReadInt16BigEndian(bytes);
         var reserved = BinaryPrimitives.ReadInt16BigEndian(bytes[2..]);
+
         if (dimension < 1 || (typeModifier >= 0 && dimension != typeModifier) || reserved != 0 ||
             bytes.Length != 4 + (dimension * sizeof(float)))
         {
             throw new FormatException("Cassie returned an invalid binary vector frame.");
         }
 
+
         var components = new float[dimension];
+
         for (var index = 0; index < dimension; index++)
         {
             components[index] =
                 BitConverter.Int32BitsToSingle(
                     BinaryPrimitives.ReadInt32BigEndian(bytes[(4 + (index * sizeof(float)))..]));
+
             if (!float.IsFinite(components[index]))
             {
                 throw new FormatException("Cassie returned a non-finite binary vector component.");
             }
         }
+
 
         return new CassieVector(components);
     }
@@ -310,11 +329,13 @@ internal static class VectorHandler
         var bytes = new byte[4 + (vector.Count * sizeof(float))];
         BinaryPrimitives.WriteInt16BigEndian(bytes, checked((short)vector.Dimension));
         BinaryPrimitives.WriteInt16BigEndian(bytes.AsSpan(2), 0);
+
         for (var index = 0; index < vector.Count; index++)
         {
             BinaryPrimitives.WriteInt32BigEndian(bytes.AsSpan(4 + (index * sizeof(float))),
                 BitConverter.SingleToInt32Bits(vector[index]));
         }
+
 
         return bytes;
     }

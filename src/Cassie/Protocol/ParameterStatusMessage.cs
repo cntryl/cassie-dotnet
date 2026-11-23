@@ -9,10 +9,12 @@ internal static class ParameterStatusMessage
     {
         ArgumentNullException.ThrowIfNull(payload);
         var nameEnd = Array.IndexOf(payload, (byte)0);
+
         if (nameEnd < 0)
         {
             throw new IOException("Cassie returned an invalid ParameterStatus frame.");
         }
+
 
         var valueStart = nameEnd + 1;
         var valueEnd = Array.IndexOf(payload, (byte)0, valueStart);

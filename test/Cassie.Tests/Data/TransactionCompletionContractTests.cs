@@ -69,6 +69,7 @@ public sealed class TransactionCompletionContractTests
 
         // Act
         var closing = synchronous ? Task.Run(transaction.Dispose, token) : transaction.DisposeAsync().AsTask();
+
         try
         {
             _ = await rollback.Task.WaitAsync(TestTimeout, token);
@@ -112,10 +113,12 @@ public sealed class TransactionCompletionContractTests
             await session.WriteCommandCompleteAsync("ROLLBACK");
             await session.WriteReadyAsync();
             var (tag, _) = await session.ReadFrameAsync();
+
             if (tag == (byte)'X')
             {
                 return;
             }
+
 
             Assert.Equal((byte)'C', tag);
             Assert.Equal((byte)'S', (await session.ReadFrameAsync()).Tag);
@@ -131,6 +134,7 @@ public sealed class TransactionCompletionContractTests
 
         // Act
         var disposing = transaction.DisposeAsync().AsTask();
+
         try
         {
             await rollbackReceived.Task.WaitAsync(TestTimeout, token);
@@ -198,10 +202,12 @@ public sealed class TransactionCompletionContractTests
         {
             await BeginAsync(session);
             await ExpectQueryAsync(session, "COMMIT");
+
             if (completionTag is not null)
             {
                 await session.WriteCommandCompleteAsync(completionTag);
             }
+
 
             await session.WriteReadyAsync(status);
             await session.StayVerySilentAsync();

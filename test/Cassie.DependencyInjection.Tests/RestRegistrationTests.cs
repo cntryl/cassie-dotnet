@@ -130,6 +130,7 @@ public sealed class RestRegistrationTests
         // Assert
         Assert.Same(client.Admin, admin);
         Assert.Equal("singleton", afterScope.User);
+
         if (callerOwned)
         {
             Assert.Same(external, client);
@@ -147,6 +148,7 @@ public sealed class RestRegistrationTests
     private static Task<ScriptedHttpReply> RespondToSession(ScriptedHttpRequest request)
     {
         Assert.DoesNotContain("Authorization", request.Headers.Keys, StringComparer.OrdinalIgnoreCase);
+
         if (request.Target == "/api/v1/auth/login")
         {
             Assert.Equal("POST", request.Method);
@@ -157,6 +159,7 @@ public sealed class RestRegistrationTests
                 ["Set-Cookie"] = $"cassie_session={user}-session; Path=/; HttpOnly; SameSite=Strict"
             }));
         }
+
 
         Assert.Equal("GET", request.Method);
         Assert.True(request.Target is "/api/v1/auth/session" or "/metrics");

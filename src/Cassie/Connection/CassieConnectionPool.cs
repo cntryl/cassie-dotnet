@@ -14,8 +14,10 @@ internal sealed class CassieConnectionPool(int maximumPoolSize, TimeSpan idleLif
     private int _physicalCount;
     private int _waiters;
 
-    internal Task<(PgSession? Session, bool ReservedSlot)> RentAsync(bool synchronous,
-        CancellationToken cancellationToken)
+    internal Task<(PgSession? Session, bool ReservedSlot)> RentAsync(
+        bool synchronous,
+        CancellationToken cancellationToken
+    )
     {
         return synchronous ? Task.FromResult(Rent(cancellationToken)) : RentCoreAsync(cancellationToken);
     }
@@ -26,6 +28,7 @@ internal sealed class CassieConnectionPool(int maximumPoolSize, TimeSpan idleLif
         {
             cancellationToken.ThrowIfCancellationRequested();
             var (outcome, session) = TryRent();
+
             switch (outcome)
             {
                 case RentOutcome.Rented:
@@ -55,6 +58,7 @@ internal sealed class CassieConnectionPool(int maximumPoolSize, TimeSpan idleLif
         {
             cancellationToken.ThrowIfCancellationRequested();
             var (outcome, session) = TryRent();
+
             switch (outcome)
             {
                 case RentOutcome.Rented:
@@ -83,6 +87,7 @@ internal sealed class CassieConnectionPool(int maximumPoolSize, TimeSpan idleLif
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_cleared, this);
+
             if (_idle.TryDequeue(out var available))
             {
                 if (!IsUnusable(available))
@@ -93,6 +98,7 @@ internal sealed class CassieConnectionPool(int maximumPoolSize, TimeSpan idleLif
                 _physicalCount--;
                 return (RentOutcome.Stale, available);
             }
+
 
             if (_physicalCount < maximumPoolSize)
             {
@@ -130,10 +136,12 @@ internal sealed class CassieConnectionPool(int maximumPoolSize, TimeSpan idleLif
             if (!_cleared)
             {
                 _idle.Enqueue(session);
+
                 if (_waiters > 0)
                 {
                     _ = _changed.Release();
                 }
+
 
                 return;
             }
@@ -170,6 +178,7 @@ internal sealed class CassieConnectionPool(int maximumPoolSize, TimeSpan idleLif
             sessions = [.. _idle];
             _idle.Clear();
             _physicalCount -= sessions.Count;
+
             if (_waiters > 0)
             {
                 _ = _changed.Release(_waiters);

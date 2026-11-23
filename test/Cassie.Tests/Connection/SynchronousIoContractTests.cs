@@ -38,8 +38,10 @@ public sealed class SynchronousIoContractTests
     [InlineData("Pooling=false", false)]
     [InlineData("Pooling=false;Command Timeout=0", false)]
     [InlineData("Pooling=true;Maximum Pool Size=2", true)]
-    public void ShouldStayOnCallingThreadGivenSynchronousCommandsWhenRowsSpanManyTransportReads(string settings,
-        bool pooled)
+    public void ShouldStayOnCallingThreadGivenSynchronousCommandsWhenRowsSpanManyTransportReads(
+        string settings,
+        bool pooled
+    )
     {
         // Arrange
         using ScriptedServer server = new(ServeRowsAsync);
@@ -73,6 +75,7 @@ public sealed class SynchronousIoContractTests
         }
 
         var pendingWaits = SynchronousCall.PendingWaitsOnThisThread - before;
+
         if (pooled)
         {
             using CassieConnection poolIdentity = new() { ConnectionString = server.ConnectionString(settings) };
@@ -80,6 +83,7 @@ public sealed class SynchronousIoContractTests
         }
 
         // Assert
+
         Assert.Equal(2 * RowCount, rows);
         Assert.Equal(2L * RowCount * (RowCount - 1) / 2, sum);
         Assert.Equal(0, pendingWaits);
@@ -128,6 +132,7 @@ public sealed class SynchronousIoContractTests
             while (true)
             {
                 var (tag, payload) = await session.ReadFrameAsync();
+
                 switch ((char)tag)
                 {
                     case 'X':
@@ -174,6 +179,7 @@ public sealed class SynchronousIoContractTests
             value.Value = 1;
             _ = command.Parameters.Add(value);
             command.Prepare();
+
             for (var execution = 0; execution < 3; execution++)
             {
                 value.Value = execution;
@@ -283,10 +289,12 @@ public sealed class SynchronousIoContractTests
             }
 
             await session.WriteIntRowDescriptionAsync();
+
             for (var row = 0; row < RowCount; row++)
             {
                 await session.WriteTextRowAsync(row.ToString(CultureInfo.InvariantCulture));
             }
+
 
             await session.WriteCommandCompleteAsync($"SELECT {RowCount}");
         });

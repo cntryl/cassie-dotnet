@@ -114,6 +114,7 @@ public sealed class ValueConversionContractTests
             while (true)
             {
                 var (tag, payload) = await session.ReadFrameAsync();
+
                 if (tag == (byte)'B')
                 {
                     sentText = ReadFirstTextParameter(payload);

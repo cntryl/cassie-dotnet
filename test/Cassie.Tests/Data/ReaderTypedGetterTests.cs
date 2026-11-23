@@ -135,8 +135,13 @@ public sealed class ReaderTypedGetterTests
     [InlineData("datetime", Text, 0, "2024-01-02T03:04:05Z", "ok:638397614450000000/Utc")]
     [InlineData("datetime", Text, 0, "nope", "ex:FormatException")]
     [InlineData("datetime", Timestamp, 0, NullField, "ex:InvalidCastException")]
-    public async Task ShouldReturnSameOutcomeGivenWireFieldWhenTypedGetterIsCalled(string getter, int typeOid,
-        short format, string payload, string expected)
+    public async Task ShouldReturnSameOutcomeGivenWireFieldWhenTypedGetterIsCalled(
+        string getter,
+        int typeOid,
+        short format,
+        string payload,
+        string expected
+    )
     {
         // Arrange
         var field = payload == NullField ? null :
@@ -155,8 +160,11 @@ public sealed class ReaderTypedGetterTests
     [InlineData("float", Float4, "0123456789.,eE+- aNIfy")]
     [InlineData("decimal", Numeric, "0123456789.-+eE ")]
     [InlineData("guid", Uuid, "0123456789abcdefABCDEF-{}() ,x")]
-    public async Task ShouldMatchReferenceParserGivenGeneratedTextWhenTypedGetterIsCalled(string getter, int typeOid,
-        string alphabet)
+    public async Task ShouldMatchReferenceParserGivenGeneratedTextWhenTypedGetterIsCalled(
+        string getter,
+        int typeOid,
+        string alphabet
+    )
     {
         // Arrange
         ArgumentNullException.ThrowIfNull(alphabet);
@@ -170,11 +178,13 @@ public sealed class ReaderTypedGetterTests
             state = unchecked((state * 1664525) + 1013904223);
             var length = (int)((state >> 16) % (getter == "guid" ? 40u : 14u));
             StringBuilder builder = new();
+
             for (var index = 0; index < length; index++)
             {
                 state = unchecked((state * 1664525) + 1013904223);
                 _ = builder.Append(alphabet[(int)((state >> 16) % (uint)alphabet.Length)]);
             }
+
 
             var text = round % 3 == 0 && getter == "guid"
                 ? "6f9619ff-8b86-d011-b42d-00c04fc964ff"[..Math.Min(36, length)]
@@ -182,6 +192,7 @@ public sealed class ReaderTypedGetterTests
             await using var reader = await OpenAsync([(typeOid, 0)], [Encoding.UTF8.GetBytes(text)]);
             var actual = Run(reader, getter);
             var expected = Reference(getter, text);
+
             if (actual != expected)
             {
                 mismatches++;
@@ -308,8 +319,11 @@ public sealed class ReaderTypedGetterTests
         return value.Ticks.ToString(CultureInfo.InvariantCulture) + "/" + value.Kind;
     }
 
-    private static async Task<CassieDataReader> OpenAsync((int TypeOid, short Format)[] columns, byte[]?[] fields,
-        CommandBehavior behavior = CommandBehavior.Default)
+    private static async Task<CassieDataReader> OpenAsync(
+        (int TypeOid, short Format)[] columns,
+        byte[]?[] fields,
+        CommandBehavior behavior = CommandBehavior.Default
+    )
     {
         FakeReaderSession session = new();
         session.Enqueue((byte)'T', RowDescription(columns));
@@ -326,6 +340,7 @@ public sealed class ReaderTypedGetterTests
     {
         using MemoryStream payload = new();
         WriteInt16(payload, (short)columns.Length);
+
         for (var index = 0; index < columns.Length; index++)
         {
             payload.Write(Encoding.UTF8.GetBytes($"c{index}\0"));
@@ -337,6 +352,7 @@ public sealed class ReaderTypedGetterTests
             WriteInt16(payload, columns[index].Format);
         }
 
+
         return payload.ToArray();
     }
 
@@ -344,14 +360,17 @@ public sealed class ReaderTypedGetterTests
     {
         using MemoryStream payload = new();
         WriteInt16(payload, (short)fields.Length);
+
         foreach (var field in fields)
         {
             WriteInt32(payload, field?.Length ?? -1);
+
             if (field is not null)
             {
                 payload.Write(field);
             }
         }
+
 
         return payload.ToArray();
     }

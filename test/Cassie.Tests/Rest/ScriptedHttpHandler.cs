@@ -19,8 +19,10 @@ internal sealed class ScriptedHttpHandler(
         };
     }
 
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
-        CancellationToken cancellationToken)
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken
+    )
     {
         _ = Interlocked.Increment(ref _requests);
         return respond(request, cancellationToken);

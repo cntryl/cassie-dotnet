@@ -17,27 +17,34 @@ internal static class ProcedureName
 
         List<string> components = [];
         var index = 0;
+
         while (true)
         {
             SkipProcedureNameWhitespace(commandText, ref index);
+
             if (index >= commandText.Length || components.Count == 2)
             {
                 throw InvalidProcedureName();
             }
 
+
             string component;
+
             if (commandText[index] == '"')
             {
                 index++;
                 StringBuilder quoted = new();
                 var closed = false;
+
                 while (index < commandText.Length)
                 {
                     var current = commandText[index++];
+
                     if (current == '\0')
                     {
                         throw InvalidProcedureName();
                     }
+
 
                     if (current != '"')
                     {
@@ -56,6 +63,7 @@ internal static class ProcedureName
                     break;
                 }
 
+
                 if (!closed || quoted.Length == 0)
                 {
                     throw InvalidProcedureName();
@@ -66,32 +74,40 @@ internal static class ProcedureName
             else
             {
                 var start = index;
+
                 if (!IsProcedureIdentifierStart(commandText[index]))
                 {
                     throw InvalidProcedureName();
                 }
 
+
                 index++;
+
                 while (index < commandText.Length && IsProcedureIdentifierPart(commandText[index]))
                 {
                     index++;
                 }
 
+
                 component = commandText[start..index].ToLowerInvariant();
             }
 
+
             components.Add(component);
             SkipProcedureNameWhitespace(commandText, ref index);
+
             if (index == commandText.Length)
             {
                 break;
             }
+
 
             if (commandText[index++] != '.')
             {
                 throw InvalidProcedureName();
             }
         }
+
 
         return string.Join('.',
             components.Select(component => $"\"{component.Replace("\"", "\"\"", StringComparison.Ordinal)}\""));

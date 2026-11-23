@@ -40,6 +40,7 @@ public sealed partial class CassieConnection : DbConnection
             }
 
             var connectionString = value ?? string.Empty;
+
             if (_connectionString != connectionString)
             {
                 _connectionString = connectionString;
@@ -92,10 +93,12 @@ public sealed partial class CassieConnection : DbConnection
     private void SetState(ConnectionState state)
     {
         var originalState = _state;
+
         if (originalState == state)
         {
             return;
         }
+
 
         _state = state;
         OnStateChange(new StateChangeEventArgs(originalState, state));
@@ -127,6 +130,7 @@ public sealed partial class CassieConnection : DbConnection
     internal void RunSynchronously(Func<Task> operation)
     {
         var entered = EnterSynchronous();
+
         try
         {
             SynchronousCall.Wait(operation());
@@ -144,6 +148,7 @@ public sealed partial class CassieConnection : DbConnection
     internal T RunSynchronously<T>(Func<Task<T>> operation)
     {
         var entered = EnterSynchronous();
+
         try
         {
             return SynchronousCall.Wait(operation());
@@ -180,10 +185,12 @@ public sealed partial class CassieConnection : DbConnection
     private async Task ChangeDatabaseCoreAsync(string databaseName, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(databaseName);
+
         if (databaseName.Contains('\0', StringComparison.Ordinal))
         {
             throw new ArgumentException("Database name cannot contain a NUL character.", nameof(databaseName));
         }
+
 
         if (_state != ConnectionState.Open)
         {
@@ -203,15 +210,18 @@ public sealed partial class CassieConnection : DbConnection
         cancellationToken.ThrowIfCancellationRequested();
         CassieConnectionStringBuilder settings = [with(_connectionString)];
         var currentDatabase = string.IsNullOrWhiteSpace(settings.Database) ? settings.Username : settings.Database;
+
         if (string.Equals(currentDatabase, databaseName, StringComparison.Ordinal))
         {
             return;
         }
 
+
         var previousConnectionString = _connectionString;
         settings.Database = databaseName;
         await CloseAsync().ConfigureAwait(false);
         ConnectionString = settings.ConnectionString;
+
         try
         {
             await OpenAsync(cancellationToken).ConfigureAwait(false);
@@ -238,38 +248,47 @@ public sealed partial class CassieConnection : DbConnection
     private async Task OpenCoreAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         if (_state != ConnectionState.Closed)
         {
             throw new InvalidOperationException("The connection is already open or opening.");
         }
 
+
         var settings = ValidateSettings();
         _portalPageFrames = ExtendedQueryMessages.ExecutePageFrames(settings.FetchSize);
         CassieConnectionPool? pool = null;
         string? poolKey = null;
+
         if (settings.Pooling)
         {
             (poolKey, pool) = CassieConnectionPools.Get(settings);
         }
 
+
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
         if (settings.Timeout > 0)
         {
             linked.CancelAfter(TimeSpan.FromSeconds(settings.Timeout));
         }
 
+
         var holdsPoolSlot = false;
+
         try
         {
             linked.Token.ThrowIfCancellationRequested();
             SetState(ConnectionState.Connecting);
             PgSession? session = null;
+
             if (pool is not null)
             {
                 (session, poolKey, pool) = await RentFromPoolAsync(settings, poolKey!, pool, _synchronous, linked.Token)
                     .ConfigureAwait(false);
                 holdsPoolSlot = true;
             }
+
 
             session ??= await PgSessionConnector.ConnectAsync(settings, _synchronous, linked.Token)
                 .ConfigureAwait(false);
@@ -310,10 +329,12 @@ public sealed partial class CassieConnection : DbConnection
         ValidateProtocolString(settings.ApplicationName, nameof(CassieConnectionStringBuilder.ApplicationName));
         _ = settings.Options;
         ValidateProtocolString(settings.SslRootCertificate, nameof(CassieConnectionStringBuilder.SslRootCertificate));
+
         if (string.IsNullOrWhiteSpace(settings.Username))
         {
             throw new InvalidOperationException("Username is required.");
         }
+
 
         if (string.IsNullOrWhiteSpace(settings.Database))
         {
@@ -324,8 +345,12 @@ public sealed partial class CassieConnection : DbConnection
     }
 
     private static async Task<(PgSession? Session, string PoolKey, CassieConnectionPool Pool)> RentFromPoolAsync(
-        CassieConnectionStringBuilder settings, string poolKey, CassieConnectionPool pool, bool synchronous,
-        CancellationToken cancellationToken)
+        CassieConnectionStringBuilder settings,
+        string poolKey,
+        CassieConnectionPool pool,
+        bool synchronous,
+        CancellationToken cancellationToken
+    )
     {
         while (true)
         {
@@ -346,10 +371,12 @@ public sealed partial class CassieConnection : DbConnection
     private async Task AbandonOpenAsync(CassieConnectionPool? pool, bool holdsPoolSlot)
     {
         await DisposeTransportAsync().ConfigureAwait(false);
+
         if (holdsPoolSlot)
         {
             pool?.ReleaseReservedSlot();
         }
+
 
         _pool = null;
         _poolKey = null;
@@ -430,12 +457,14 @@ public sealed partial class CassieConnection : DbConnection
         try
         {
             using CleanupDeadline deadline = new(session, CleanupTimeProvider);
+
             if (pool is null)
             {
                 await session.WriteFrameAsync(FrontendMessage.Terminate, [], CancellationToken.None)
                     .ConfigureAwait(false);
                 return;
             }
+
 
             if (ActiveTransaction is not null || session.DateStyle.TransactionStatus != TransactionStatus.Idle)
             {
@@ -480,9 +509,11 @@ public sealed partial class CassieConnection : DbConnection
         await session.WriteFrameAsync(FrontendMessage.Query, Encoding.UTF8.GetBytes(sql + "\0"), CancellationToken.None)
             .ConfigureAwait(false);
         var acknowledged = false;
+
         while (true)
         {
             var (tag, payload) = await session.ReadFrameAsync(CancellationToken.None).ConfigureAwait(false);
+
             switch (tag)
             {
                 case BackendMessage.CommandComplete when !acknowledged && CommandTag.FromPayload(payload).Matches(sql):
@@ -526,6 +557,7 @@ public sealed partial class CassieConnection : DbConnection
     internal static void ValidateSqlText(string sql)
     {
         ArgumentNullException.ThrowIfNull(sql);
+
         if (sql.Contains('\0', StringComparison.Ordinal))
         {
             throw new ArgumentException("SQL text cannot contain a NUL character.", nameof(sql));

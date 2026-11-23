@@ -56,10 +56,12 @@ public sealed class LiveScalarCodecContractTests : IAsyncLifetime
     {
         // Arrange
         var (value, expected) = TextParameterCase(caseName);
+
         if (value is CassieVector)
         {
             await InstallVectorAsync(_live.Connection);
         }
+
 
         using var command = _live.CreateCommand();
         command.CommandText = "SELECT @value";
@@ -166,6 +168,7 @@ public sealed class LiveScalarCodecContractTests : IAsyncLifetime
         command.CommandText =
             "SELECT @value0::date AS value0, @value1::time AS value1, @value2::timetz AS value2, @value3::timestamp AS value3, @value4::timestamptz AS value4";
         command.BinaryResults = binaryResults;
+
         for (var index = 0; index < expectedValues.Length; index++)
         {
             _ = command.Parameters.Add(new CassieParameter
@@ -178,6 +181,7 @@ public sealed class LiveScalarCodecContractTests : IAsyncLifetime
         }
 
         // Act
+
         await using var reader = await LiveSession.ReadFirstRowAsync(command);
 
         // Assert
@@ -186,14 +190,17 @@ public sealed class LiveScalarCodecContractTests : IAsyncLifetime
             var actual =
                 await reader.GetFieldValueAsync<CassieTemporalValue>(index, TestContext.Current.CancellationToken);
             var expected = expectedValues[index];
+
             if (binaryResults)
             {
                 Assert.Equal(expected, actual);
                 continue;
             }
 
+
             Assert.Equal(expected.Kind, actual.Kind);
             Assert.Equal(expected.OffsetSeconds, actual.OffsetSeconds);
+
             if (expected.IsInfinity)
             {
                 Assert.True(actual.IsInfinity, $"OID {typeOids[index]} lost its infinity marker.");
@@ -328,6 +335,7 @@ public sealed class LiveScalarCodecContractTests : IAsyncLifetime
         using var create = _live.CreateCommand();
         create.CommandText = $"CREATE DATABASE {database}";
         _ = await create.ExecuteNonQueryAsync(token);
+
         try
         {
             var settings = new CassieConnectionStringBuilder(_live.ConnectionString)

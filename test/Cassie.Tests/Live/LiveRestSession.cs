@@ -46,6 +46,7 @@ internal sealed class LiveRestSession : IAsyncDisposable
         var username = Require("CASSIE_DOTNET_TEST_REST_USERNAME");
         var password = Require("CASSIE_DOTNET_TEST_REST_PASSWORD");
         CassieRestClient client = new(new Uri(address));
+
         try
         {
             _ = await client.LoginAsync(username, password, TestContext.Current.CancellationToken);
@@ -79,10 +80,12 @@ internal sealed class LiveRestSession : IAsyncDisposable
     private static string Require(string variable)
     {
         var value = Environment.GetEnvironmentVariable(variable);
+
         if (!string.IsNullOrWhiteSpace(value))
         {
             return value;
         }
+
 
         if (LiveFeature.IsEnabled(LiveEndpoint.RequireLiveVariable))
         {

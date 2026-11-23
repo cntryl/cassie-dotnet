@@ -143,6 +143,7 @@ public sealed class ReaderCancellationTests
             }
         };
         ReaderCancellation retired = new(session, 1);
+
         try
         {
             await cancelStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);

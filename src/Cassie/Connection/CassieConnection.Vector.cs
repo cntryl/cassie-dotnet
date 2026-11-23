@@ -15,11 +15,16 @@ public sealed partial class CassieConnection
           AND d.classid = 1247::oid AND d.refclassid = 3079::oid AND d.deptype = 'e'
         """;
 
-    internal async Task<CassiePreparedCommand> ResolveVectorTypesAsync(CassiePreparedCommand prepared,
-        bool describeResults, CommandBudget budget, CancellationToken cancellationToken)
+    internal async Task<CassiePreparedCommand> ResolveVectorTypesAsync(
+        CassiePreparedCommand prepared,
+        bool describeResults,
+        CommandBudget budget,
+        CancellationToken cancellationToken
+    )
     {
         int[]? resolvedOids = null;
         var oid = 0;
+
         for (var index = 0; index < prepared.ParameterTypeOids.Count; index++)
         {
             if (prepared.ParameterTypeOids[index] != CassieTypeMap.VectorParameterOid &&
@@ -31,17 +36,20 @@ public sealed partial class CassieConnection
             if (resolvedOids is null)
             {
                 oid = await DiscoverVectorOidAsync(budget, cancellationToken).ConfigureAwait(false);
+
                 if (oid == 0)
                 {
                     throw new InvalidOperationException(
                         "Install the vector extension in the current database before binding a CassieVector.");
                 }
 
+
                 resolvedOids = [.. prepared.ParameterTypeOids];
             }
 
             resolvedOids[index] = oid;
         }
+
 
         if (describeResults && resolvedOids is null)
         {
@@ -54,10 +62,12 @@ public sealed partial class CassieConnection
     private async ValueTask<int> DiscoverVectorOidAsync(CommandBudget budget, CancellationToken cancellationToken)
     {
         var session = RequireSession("The connection is not open.");
+
         if (session.VectorOid is int cached)
         {
             return cached;
         }
+
 
         var reader = await ExecuteQueryCoreAsync(VectorCatalogQuery, budget, CommandBehavior.Default, null, false,
             cancellationToken).ConfigureAwait(false);
@@ -67,6 +77,7 @@ public sealed partial class CassieConnection
             if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
                 oid = unchecked((int)await reader.GetFieldValueAsync<uint>(0, cancellationToken).ConfigureAwait(false));
+
                 if (oid == 0 || await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
                     throw new IOException("Cassie returned an invalid vector extension type OID.");

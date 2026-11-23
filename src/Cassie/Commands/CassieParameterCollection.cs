@@ -19,10 +19,12 @@ public sealed class CassieParameterCollection : DbParameterCollection
     public override int Add(object value)
     {
         ArgumentNullException.ThrowIfNull(value);
+
         if (value is not DbParameter parameter)
         {
             throw new ArgumentException("Only DbParameter instances can be added.", nameof(value));
         }
+
 
         _items.Add(parameter);
         return _items.Count - 1;
@@ -32,6 +34,7 @@ public sealed class CassieParameterCollection : DbParameterCollection
     public override void AddRange(Array values)
     {
         ArgumentNullException.ThrowIfNull(values);
+
         foreach (var value in values)
         {
             _ = Add(value);

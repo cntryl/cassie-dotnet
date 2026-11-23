@@ -10,18 +10,23 @@ internal static class TlsNegotiator
     private const byte ServerAcceptsTls = (byte)'S';
     private const byte ServerDeclinesTls = (byte)'N';
 
-    public static async Task<Stream> NegotiateAsync(Stream stream, CassieConnectionStringBuilder settings,
-        CancellationToken cancellationToken)
+    public static async Task<Stream> NegotiateAsync(
+        Stream stream,
+        CassieConnectionStringBuilder settings,
+        CancellationToken cancellationToken
+    )
     {
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(settings);
         await stream.WriteAsync(SessionMessages.SslRequest(), cancellationToken).ConfigureAwait(false);
         var response = new byte[1];
         await stream.ReadExactlyAsync(response, cancellationToken).ConfigureAwait(false);
+
         if (!ServerAcceptedTls(response[0], settings))
         {
             return stream;
         }
+
 
         var trustedRootsPem = settings.SslRootCertificate.Length > 0
             ? await File.ReadAllTextAsync(settings.SslRootCertificate, cancellationToken).ConfigureAwait(false)
@@ -33,8 +38,11 @@ internal static class TlsNegotiator
     }
 
     /// <summary>The blocking form of the same exchange, used by synchronous ADO.NET calls.</summary>
-    public static Stream NegotiateBlocking(Stream stream, CassieConnectionStringBuilder settings,
-        CancellationToken cancellationToken)
+    public static Stream NegotiateBlocking(
+        Stream stream,
+        CassieConnectionStringBuilder settings,
+        CancellationToken cancellationToken
+    )
     {
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(settings);
@@ -44,10 +52,12 @@ internal static class TlsNegotiator
             exchange.stream.Write(SessionMessages.SslRequest());
             exchange.stream.ReadExactly(exchange.response);
         }, cancellationToken);
+
         if (!ServerAcceptedTls(response[0], settings))
         {
             return stream;
         }
+
 
         cancellationToken.ThrowIfCancellationRequested();
         var trustedRootsPem = settings.SslRootCertificate.Length > 0
@@ -72,21 +82,27 @@ internal static class TlsNegotiator
         };
     }
 
-    private static SslClientAuthenticationOptions CreateAuthenticationOptions(CassieConnectionStringBuilder settings,
-        string? trustedRootsPem)
+    private static SslClientAuthenticationOptions CreateAuthenticationOptions(
+        CassieConnectionStringBuilder settings,
+        string? trustedRootsPem
+    )
     {
         SslClientAuthenticationOptions authenticationOptions = new() { TargetHost = settings.Host };
+
         if (trustedRootsPem is null)
         {
             return authenticationOptions;
         }
 
+
         X509Certificate2Collection trustedRoots = [];
         trustedRoots.ImportFromPem(trustedRootsPem);
+
         if (trustedRoots.Count == 0)
         {
             throw new InvalidOperationException("SSL Root Certificate must contain at least one PEM certificate.");
         }
+
 
         X509ChainPolicy chainPolicy = new()
         {

@@ -112,6 +112,7 @@ internal sealed class ReadBufferedStream(Stream inner, int bufferSize = ReadBuff
         cancellationToken.ThrowIfCancellationRequested();
         using var abort = RegisterAbort(cancellationToken);
         int read;
+
         try
         {
             read = Read(destination);
@@ -122,6 +123,7 @@ internal sealed class ReadBufferedStream(Stream inner, int bufferSize = ReadBuff
         }
 
         // Closing a socket under a blocked read can surface as end-of-stream instead of an exception.
+
         return read == 0 && destination.Length > 0 && cancellationToken.IsCancellationRequested
             ? throw new OperationCanceledException("The read was canceled.", cancellationToken)
             : read;
@@ -131,6 +133,7 @@ internal sealed class ReadBufferedStream(Stream inner, int bufferSize = ReadBuff
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var abort = RegisterAbort(cancellationToken);
+
         try
         {
             inner.Write(source);

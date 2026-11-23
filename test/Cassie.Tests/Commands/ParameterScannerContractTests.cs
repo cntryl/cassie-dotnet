@@ -18,8 +18,10 @@ public sealed class ParameterScannerContractTests
     [InlineData("SELECT values<@other_values, @value", "SELECT values<@other_values, $1")]
     [InlineData("SELECT /* nest /* @hidden */ @still */ @value", "SELECT /* nest /* @hidden */ @still */ $1")]
     [InlineData("SELECT $1, @value", "SELECT $1, $1")]
-    public void ShouldUseIdenticalLexicalBoundariesGivenAdversarialSqlWhenMarkersAreDiscoveredAndRewritten(string sql,
-        string rewritten)
+    public void ShouldUseIdenticalLexicalBoundariesGivenAdversarialSqlWhenMarkersAreDiscoveredAndRewritten(
+        string sql,
+        string rewritten
+    )
     {
         // Arrange
         CassieParameterCollection parameters = [new CassieParameter { ParameterName = "value", Value = 7 }];

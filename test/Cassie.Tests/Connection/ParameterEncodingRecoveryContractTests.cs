@@ -24,11 +24,13 @@ public sealed class ParameterEncodingRecoveryContractTests
         using CassieCommand command = new()
         { Connection = connection, CommandText = "too_many", CommandType = CommandType.StoredProcedure };
         await command.PrepareAsync(TestContext.Current.CancellationToken);
+
         for (var index = 0; index <= short.MaxValue; index++)
         {
             _ = command.Parameters.Add(new CassieParameter
             { ParameterName = index.ToString(CultureInfo.InvariantCulture), Value = index });
         }
+
 
         await connection.OpenAsync(TestContext.Current.CancellationToken);
 
@@ -56,29 +58,37 @@ public sealed class ParameterEncodingRecoveryContractTests
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public async Task ShouldKeepSessionReusableGivenLocalEncodingFailureWhenCommandRuns(bool transactionActive,
-        bool unsupportedFormat)
+    public async Task ShouldKeepSessionReusableGivenLocalEncodingFailureWhenCommandRuns(
+        bool transactionActive,
+        bool unsupportedFormat
+    )
     {
         // Arrange
         ConcurrentQueue<byte> receivedTags = new();
         using ScriptedServer server = new(async session =>
         {
             var inTransaction = false;
+
             while (true)
             {
                 var (tag, payload) = await session.ReadFrameAsync();
+
                 if (tag == (byte)'X')
                 {
                     return;
                 }
 
+
                 receivedTags.Enqueue(tag);
+
                 if (tag != (byte)'Q')
                 {
                     continue;
                 }
 
+
                 var sql = Encoding.UTF8.GetString(payload, 0, payload.Length - 1);
+
                 if (sql.StartsWith("BEGIN", StringComparison.Ordinal))
                 {
                     inTransaction = true;
@@ -95,6 +105,7 @@ public sealed class ParameterEncodingRecoveryContractTests
                     await session.WriteTextRowAsync("7");
                     await session.WriteCommandCompleteAsync("SELECT 1");
                 }
+
 
                 await session.WriteReadyAsync(inTransaction ? 'T' : 'I');
             }
@@ -141,6 +152,7 @@ public sealed class ParameterEncodingRecoveryContractTests
         Assert.Equal(7, await valid.ExecuteScalarAsync(TestContext.Current.CancellationToken));
         Assert.Equal(transactionActive ? "QQ"u8.ToArray() : "Q"u8.ToArray(), receivedTags.ToArray());
         Assert.Equal(1, server.Accepted);
+
         if (transaction is not null)
         {
             Assert.Same(connection, transaction.Connection);

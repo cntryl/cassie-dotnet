@@ -39,6 +39,7 @@ public sealed class LivePoolContractTests : IAsyncLifetime
         var token = TestContext.Current.CancellationToken;
         const string backendPidQuery = "SELECT pg_backend_pid()::BIGINT";
         await using CassieConnection second = new() { ConnectionString = pooled };
+
         try
         {
             long backendPid;
@@ -117,6 +118,7 @@ public sealed class LivePoolContractTests : IAsyncLifetime
         {
             ConnectionString = PoolSettings(applicationName, "-c application_name=options_pool_second").ConnectionString
         };
+
         try
         {
             await first.OpenAsync(TestContext.Current.CancellationToken);

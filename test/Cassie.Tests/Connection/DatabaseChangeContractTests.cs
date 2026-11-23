@@ -214,6 +214,7 @@ public sealed class DatabaseChangeContractTests
 
         Dictionary<string, string> parameters = [with(StringComparer.Ordinal)];
         var offset = sizeof(int);
+
         while (offset < payload.Length && payload[offset] != 0)
         {
             var key = ReadCString(payload, ref offset);
@@ -221,16 +222,19 @@ public sealed class DatabaseChangeContractTests
             parameters.Add(key, value);
         }
 
+
         return parameters["database"];
     }
 
     private static string ReadCString(byte[] payload, ref int offset)
     {
         var end = Array.IndexOf(payload, (byte)0, offset);
+
         if (end < 0)
         {
             throw new IOException("The startup packet contains an unterminated string.");
         }
+
 
         var value = Encoding.UTF8.GetString(payload, offset, end - offset);
         offset = end + 1;
@@ -272,8 +276,11 @@ public sealed class DatabaseChangeContractTests
         Assert.Equal((byte)'X', closeTag);
     }
 
-    private static async Task ServeCanceledBeginAsync(TcpListener listener, TaskCompletionSource<bool> beginReceived,
-        TaskCompletionSource<bool> cancelReceived)
+    private static async Task ServeCanceledBeginAsync(
+        TcpListener listener,
+        TaskCompletionSource<bool> beginReceived,
+        TaskCompletionSource<bool> cancelReceived
+    )
     {
         using var client = await listener.AcceptTcpClientAsync();
         var stream = client.GetStream();

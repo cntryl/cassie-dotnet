@@ -22,8 +22,11 @@ public sealed class ReaderFieldAccessTests
     [InlineData(Int2, "-7", -7L)]
     [InlineData(Int8, "5", 5L)]
     [InlineData(Text, "17", 17L)]
-    public async Task ShouldReturnSameIntegerGivenTextColumnWhenEachIntegerGetterIsCalled(int typeOid, string wireText,
-        long expected)
+    public async Task ShouldReturnSameIntegerGivenTextColumnWhenEachIntegerGetterIsCalled(
+        int typeOid,
+        string wireText,
+        long expected
+    )
     {
         // Arrange
         await using var reader = await OpenAsync([(typeOid, 0)], [Encoding.UTF8.GetBytes(wireText)]);
@@ -69,8 +72,11 @@ public sealed class ReaderFieldAccessTests
     [InlineData(Int8, "9999999999", "int32")]
     [InlineData(Int4, "70000", "int16")]
     [InlineData(Int8, "70000", "int16")]
-    public async Task ShouldReportOverflowGivenValueOutsideRequestedRangeWhenNarrowerGetterIsCalled(int typeOid,
-        string wireText, string getter)
+    public async Task ShouldReportOverflowGivenValueOutsideRequestedRangeWhenNarrowerGetterIsCalled(
+        int typeOid,
+        string wireText,
+        string getter
+    )
     {
         // Arrange
         await using var reader = await OpenAsync([(typeOid, 0)], [Encoding.UTF8.GetBytes(wireText)]);
@@ -306,8 +312,11 @@ public sealed class ReaderFieldAccessTests
         _ = await Assert.ThrowsAsync<InvalidOperationException>(() => closed);
     }
 
-    private static async Task<CassieDataReader> OpenAsync((int TypeOid, short Format)[] columns, byte[]?[] fields,
-        CommandBehavior behavior = CommandBehavior.Default)
+    private static async Task<CassieDataReader> OpenAsync(
+        (int TypeOid, short Format)[] columns,
+        byte[]?[] fields,
+        CommandBehavior behavior = CommandBehavior.Default
+    )
     {
         FakeReaderSession session = new();
         session.Enqueue((byte)'T', RowDescription(columns));
@@ -324,6 +333,7 @@ public sealed class ReaderFieldAccessTests
     {
         using MemoryStream payload = new();
         WriteInt16(payload, (short)columns.Length);
+
         for (var index = 0; index < columns.Length; index++)
         {
             payload.Write(Encoding.UTF8.GetBytes($"c{index}\0"));
@@ -335,6 +345,7 @@ public sealed class ReaderFieldAccessTests
             WriteInt16(payload, columns[index].Format);
         }
 
+
         return payload.ToArray();
     }
 
@@ -342,14 +353,17 @@ public sealed class ReaderFieldAccessTests
     {
         using MemoryStream payload = new();
         WriteInt16(payload, (short)fields.Length);
+
         foreach (var field in fields)
         {
             WriteInt32(payload, field?.Length ?? -1);
+
             if (field is not null)
             {
                 payload.Write(field);
             }
         }
+
 
         return payload.ToArray();
     }

@@ -77,7 +77,8 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         CassieDiagnostics.OperationScope? operationScope = null,
         byte[]? portalPageFrames = null,
         Action<CommandTag?>? statementCompleted = null,
-        Action<CassieException>? statementFailed = null)
+        Action<CassieException>? statementFailed = null
+    )
     {
         _statementCompleted = statementCompleted;
         _statementFailed = statementFailed;
@@ -103,10 +104,12 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         get
         {
             EnsureOpen();
+
             if (_hasRowsKnown)
             {
                 return _hasRows;
             }
+
 
             if (_columns.Count == 0)
             {
@@ -115,10 +118,12 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
             }
 
             var hasRow = Read();
+
             if (hasRow)
             {
                 _prefetchedRow = true;
             }
+
 
             return hasRow;
         }
@@ -161,6 +166,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         while (_columns.Count == 0 && !_complete)
         {
             var (tag, payload) = await ReadQueryFrameAsync(cancellationToken).ConfigureAwait(false);
+
             if (tag == (byte)'T')
             {
                 ParseRowDescription(payload);
@@ -202,6 +208,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     public override bool Read()
     {
         var entered = _session.EnterSynchronous();
+
         try
         {
             return SynchronousCall.Wait(ReadAsync(CancellationToken.None));
@@ -219,6 +226,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     public override async Task<bool> ReadAsync(CancellationToken cancellationToken)
     {
         EnsureOpen();
+
         try
         {
             if (_prefetchedRow)
@@ -233,15 +241,18 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
             }
 
             _rowPayload = null;
+
             if (_singleRow && _rowsReadCurrentResult > 0)
             {
                 await DrainCurrentResultAsync(cancellationToken).ConfigureAwait(false);
                 return false;
             }
 
+
             while (!_complete)
             {
                 var (tag, payload) = await ReadQueryFrameAsync(cancellationToken).ConfigureAwait(false);
+
                 switch (tag)
                 {
                     case (byte)'T':
@@ -305,11 +316,13 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     internal async Task CancelAndDrainAsync()
     {
         MarkOperationFailed(new OperationCanceledException("The query was canceled."));
+
         if (_complete || !_session.IsOpen)
         {
             FinishOperation();
             return;
         }
+
 
         try
         {
@@ -337,6 +350,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     public override bool NextResult()
     {
         var entered = _session.EnterSynchronous();
+
         try
         {
             return SynchronousCall.Wait(NextResultAsync(CancellationToken.None));
@@ -354,6 +368,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     public override async Task<bool> NextResultAsync(CancellationToken cancellationToken)
     {
         EnsureOpen();
+
         try
         {
             if (_complete)
@@ -390,9 +405,11 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
             _hasRowsKnown = false;
             _prefetchedRow = false;
             _rowsReadCurrentResult = 0;
+
             while (!_complete)
             {
                 var (tag, payload) = await ReadQueryFrameAsync(cancellationToken).ConfigureAwait(false);
+
                 switch (tag)
                 {
                     case (byte)'T':
@@ -412,6 +429,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
                         break;
                 }
             }
+
 
             return false;
         }
@@ -446,10 +464,12 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     public override int GetOrdinal(string name)
     {
         var exactIndex = _columns.FindIndex(column => string.Equals(column.Name, name, StringComparison.Ordinal));
+
         if (exactIndex >= 0)
         {
             return exactIndex;
         }
+
 
         var caseInsensitiveIndex =
             _columns.FindIndex(column => string.Equals(column.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -477,16 +497,20 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     public override object GetValue(int ordinal)
     {
         var raw = GetRowValue(ordinal);
+
         if (raw is null)
         {
             return DBNull.Value;
         }
 
+
         var cache = _converted ??= new object?[_columns.Count];
+
         if (cache[ordinal] is { } cached)
         {
             return cached;
         }
+
 
         var column = GetColumn(ordinal);
         var value = raw switch
@@ -505,10 +529,12 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     {
         ArgumentNullException.ThrowIfNull(values);
         var count = Math.Min(values.Length, FieldCount);
+
         for (var i = 0; i < count; i++)
         {
             values[i] = GetValue(i);
         }
+
 
         return count;
     }
@@ -701,6 +727,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     public override void Close()
     {
         var entered = _session.EnterSynchronous();
+
         try
         {
             SynchronousCall.Wait(CloseAsync());
@@ -725,11 +752,13 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
 
         Exception? drainFailure = null;
         var propagateDrainFailure = false;
+
         try
         {
             if (!_complete && _session.IsOpen)
             {
                 _drainDeadline = _session.StartCleanupDeadline();
+
                 while (!_complete)
                 {
                     while (await ReadAsync(CancellationToken.None).ConfigureAwait(false))
@@ -756,14 +785,18 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
             _drainDeadline = null;
         }
 
+
         _closed = true;
+
         try
         {
             await StopCancellationAsync().ConfigureAwait(false);
+
             if (!_complete && _session.IsOpen)
             {
                 _session.AbortTransport();
             }
+
 
             if (_closeConnectionOnClose)
             {
@@ -778,6 +811,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         {
             FinishOperation(drainFailure);
         }
+
 
         if (propagateDrainFailure)
         {
@@ -820,11 +854,13 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     {
         EnsureOpen();
         _ = GetColumn(ordinal);
+
         if (_sequentialAccess && ordinal < _lastSequentialOrdinal)
         {
             throw new InvalidOperationException(
                 "Columns must be read in column order when SequentialAccess is enabled.");
         }
+
 
         _lastSequentialOrdinal = Math.Max(_lastSequentialOrdinal, ordinal);
         return _rowPayload is null
@@ -850,13 +886,16 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     {
         value = 0;
         var length = GetFieldLength(ordinal);
+
         if (length < 0)
         {
             return false;
         }
 
+
         var typeOid = _columns[ordinal].TypeOid;
         ReadOnlySpan<byte> field = _rowPayload.AsSpan(_fieldOffsets[ordinal], length);
+
         if (_formatCodes[ordinal] == 0)
         {
             var (minimum, maximum) = typeOid switch
@@ -872,6 +911,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
                    && value >= minimum
                    && value <= maximum;
         }
+
 
         switch (typeOid)
         {
@@ -906,10 +946,12 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     private bool TryGetBooleanField(int ordinal, out bool value)
     {
         value = false;
+
         if (!TryGetFieldBytes(ordinal, out var typeOid, out var binary, out var field) || typeOid != BoolOid)
         {
             return false;
         }
+
 
         if (binary)
         {
@@ -929,10 +971,12 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     private bool TryGetDoubleField(int ordinal, out double value)
     {
         value = 0;
+
         if (!TryGetFieldBytes(ordinal, out var typeOid, out var binary, out var field))
         {
             return false;
         }
+
 
         switch (typeOid)
         {
@@ -985,10 +1029,12 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     private bool TryGetGuidField(int ordinal, out Guid value)
     {
         value = Guid.Empty;
+
         if (!TryGetFieldBytes(ordinal, out var typeOid, out var binary, out var field) || typeOid != UuidOid)
         {
             return false;
         }
+
 
         if (!binary)
         {
@@ -1019,10 +1065,12 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     {
         var index = text.Length > 0 && text[0] == (byte)'-' ? 1 : 0;
         var integerStart = index;
+
         while (index < text.Length && char.IsAsciiDigit((char)text[index]))
         {
             index++;
         }
+
 
         if (index == integerStart)
         {
@@ -1040,10 +1088,12 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         }
 
         var fractionStart = ++index;
+
         while (index < text.Length && char.IsAsciiDigit((char)text[index]))
         {
             index++;
         }
+
 
         return index > fractionStart && index == text.Length;
     }
@@ -1051,10 +1101,12 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     private bool TryGetDateTimeField(int ordinal, out DateTime value)
     {
         value = default;
+
         if (!TryGetFieldBytes(ordinal, out var typeOid, out var binary, out var field) || !binary)
         {
             return false;
         }
+
 
         switch (typeOid)
         {
@@ -1131,11 +1183,13 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     {
         var rawValue = numeric.Value ?? string.Empty;
         var value = rawValue.AsSpan();
+
         if (value.IsEmpty || value.SequenceEqual("NaN") || value.SequenceEqual("Infinity")
             || value.SequenceEqual("+Infinity") || value.SequenceEqual("-Infinity"))
         {
             throw new InvalidCastException("The NUMERIC value is not a finite UInt64.");
         }
+
 
         var signLength = value[0] is '+' or '-' ? 1 : 0;
         var negative = signLength == 1 && value[0] == '-';
@@ -1144,20 +1198,24 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         var mantissa = exponentIndex < 0 ? value[signLength..] : value[signLength..exponentIndex];
         var exponentText = exponentIndex < 0 ? [] : value[(exponentIndex + 1)..];
         var exponent = 0;
+
         if (exponentIndex >= 0 && !int.TryParse(exponentText, NumberStyles.AllowLeadingSign,
                 CultureInfo.InvariantCulture, out exponent))
         {
             throw new OverflowException("The NUMERIC exponent is outside the UInt64 conversion range.");
         }
 
+
         var point = mantissa.IndexOf('.');
         var integerPart = point < 0 ? mantissa : mantissa[..point];
         var fractionalPart = point < 0 ? [] : mantissa[(point + 1)..];
         var digits = string.Concat(integerPart, fractionalPart);
+
         if (digits.Length == 0)
         {
             throw new InvalidCastException("The NUMERIC value is not a UInt64.");
         }
+
 
         if (!ContainsNonZeroDigit(digits.AsSpan()))
         {
@@ -1170,29 +1228,36 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         }
 
         var power = (long)exponent - fractionalPart.Length;
+
         if (power < 0)
         {
             var fractionalDigitCount = -power;
+
             if (fractionalDigitCount > digits.Length)
             {
                 throw new InvalidCastException("A fractional NUMERIC value cannot be read as UInt64.");
             }
 
+
             var integerDigitCount = digits.Length - (int)fractionalDigitCount;
+
             if (ContainsNonZeroDigit(digits.AsSpan(integerDigitCount)))
             {
                 throw new InvalidCastException("A fractional NUMERIC value cannot be read as UInt64.");
             }
+
 
             digits = digits[..integerDigitCount];
         }
         else
         {
             digits = digits.TrimStart('0');
+
             if (digits.Length == 0)
             {
                 return 0;
             }
+
 
             if (power + digits.Length > 20)
             {
@@ -1201,6 +1266,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
 
             digits += new string('0', (int)power);
         }
+
 
         digits = digits.TrimStart('0');
         return digits.Length <= 20 &&
@@ -1255,14 +1321,19 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         }
     }
 
-    private async Task DrainToReadyAsync(CancellationToken cancellationToken, bool allowAbortOnCancellation = false,
-        bool propagateServerError = false)
+    private async Task DrainToReadyAsync(
+        CancellationToken cancellationToken,
+        bool allowAbortOnCancellation = false,
+        bool propagateServerError = false
+    )
     {
         CassieException? serverError = null;
+
         while (!_complete)
         {
             var (tag, payload) =
                 await ReadQueryFrameAsync(cancellationToken, allowAbortOnCancellation).ConfigureAwait(false);
+
             if (tag == (byte)'E')
             {
                 serverError = ServerErrorParser.Parse(payload);
@@ -1277,11 +1348,13 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
                 throw new IOException(UnexpectedSuspendedPortalMessage);
             }
 
+
             if (tag == (byte)'Z')
             {
                 await MarkReadyAsync(payload).ConfigureAwait(false);
             }
         }
+
 
         if (propagateServerError)
         {
@@ -1294,8 +1367,10 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         }
     }
 
-    private ValueTask<(byte Tag, byte[] Payload)> ReadQueryFrameAsync(CancellationToken cancellationToken,
-        bool allowAbortOnCancellation = false)
+    private ValueTask<(byte Tag, byte[] Payload)> ReadQueryFrameAsync(
+        CancellationToken cancellationToken,
+        bool allowAbortOnCancellation = false
+    )
     {
         return _portalPageFrames is null
             ? _cancellation.ReadFrameAsync(cancellationToken, allowAbortOnCancellation)
@@ -1303,12 +1378,15 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     }
 
     private async ValueTask<(byte Tag, byte[] Payload)> ReadQueryFrameWithProtocolHandlingAsync(
-        bool allowAbortOnCancellation, CancellationToken cancellationToken)
+        bool allowAbortOnCancellation,
+        CancellationToken cancellationToken
+    )
     {
         while (true)
         {
             var (tag, payload) = await _cancellation.ReadFrameAsync(cancellationToken, allowAbortOnCancellation)
                 .ConfigureAwait(false);
+
             if (tag == (byte)'s')
             {
                 if (_portalPageFrames is null || payload.Length != 0)
@@ -1319,6 +1397,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
                 await WritePortalPageAsync(cancellationToken).ConfigureAwait(false);
                 continue;
             }
+
 
             if (tag is (byte)'C' or (byte)'I' or (byte)'E')
             {
@@ -1332,6 +1411,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     private async Task WritePortalPageAsync(CancellationToken cancellationToken)
     {
         using var deadline = new CommandDeadline(_cancellation.Budget, cancellationToken);
+
         if (deadline.TimedOut || cancellationToken.IsCancellationRequested || !_cancellation.TryBeginWrite())
         {
             await CancelAndDrainAsync().ConfigureAwait(false);
@@ -1339,7 +1419,9 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
             throw new TimeoutException("The command exceeded CommandTimeout.");
         }
 
+
         var dispatched = false;
+
         try
         {
             await _session.WritePortalPageAsync(_portalPageFrames, deadline.Token).ConfigureAwait(false);
@@ -1354,6 +1436,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         finally
         {
             _cancellation.EndWrite(dispatched);
+
             if (!dispatched)
             {
                 _session.AbortTransport();
@@ -1375,6 +1458,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
             : null;
         using var deadline = new CommandDeadline(useRecoveryBudget ? default : _cancellation.Budget,
             recoveryTimeout?.Token ?? cancellationToken);
+
         try
         {
             await _session.WriteExtendedSyncAsync(deadline.Token).ConfigureAwait(false);
@@ -1382,10 +1466,12 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         catch
         {
             _session.AbortTransport();
+
             if (!useRecoveryBudget)
             {
                 deadline.ThrowIfExpired();
             }
+
 
             throw;
         }
@@ -1419,6 +1505,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     private void ThrowIfCompletionCanceled(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         if (_completedAfterDeadline)
         {
             throw new TimeoutException("The command exceeded CommandTimeout before ReadyForQuery.");
@@ -1430,6 +1517,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         while (!_complete)
         {
             var (tag, payload) = await ReadQueryFrameAsync(cancellationToken).ConfigureAwait(false);
+
             switch (tag)
             {
                 case (byte)'C':
@@ -1478,6 +1566,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         _hasRowsKnown = false;
         _prefetchedRow = false;
         _rowsReadCurrentResult = 0;
+
         for (var i = 0; i < fields.Length; i++)
         {
             var field = fields[i];
@@ -1502,10 +1591,12 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         var fieldCount = _formatCodes.Length;
         RowMessages.IndexDataRow(_rowBuffer.GetPayload(payload), _fieldOffsets.AsSpan(0, fieldCount), _fieldLengths.AsSpan(0, fieldCount));
         Array.Clear(_rawValues);
+
         if (_converted is not null)
         {
             Array.Clear(_converted);
         }
+
 
         _rowPayload = payload;
     }
@@ -1514,10 +1605,12 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     {
         var tag = CommandTag.FromPayload(payload);
         _session.ObserveCommandComplete(tag);
+
         if (tag.CountsRecords)
         {
             _recordsAffected = _recordsAffected < 0 ? tag.RowCount : checked(_recordsAffected + tag.RowCount);
         }
+
 
         _statementCompleted?.Invoke(tag);
     }
@@ -1528,8 +1621,13 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         _statementCompleted?.Invoke(null);
     }
 
-    private static long CopyFieldData<T>(T[] source, long dataOffset, T[]? destination, int destinationOffset,
-        int length)
+    private static long CopyFieldData<T>(
+        T[] source,
+        long dataOffset,
+        T[]? destination,
+        int destinationOffset,
+        int length
+    )
     {
         if (dataOffset < 0 || dataOffset > source.LongLength)
         {
@@ -1556,6 +1654,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         var error = ServerErrorParser.Parse(payload);
         _statementFailed?.Invoke(error);
         MarkOperationFailed(error);
+
         try
         {
             await DrainToReadyAsync(cancellationToken).ConfigureAwait(false);
@@ -1565,6 +1664,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         {
             // The original server error belongs to the operation the caller is executing.
         }
+
 
         return TranslateServerError(error, cancellationToken);
     }

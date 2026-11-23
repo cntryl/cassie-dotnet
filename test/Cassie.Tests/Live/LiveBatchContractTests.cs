@@ -71,6 +71,7 @@ public sealed class LiveBatchContractTests : IAsyncLifetime
         // Arrange
         await _live.CreateProbeTableAsync();
         await using CassieBatch batch = new(_live.Connection);
+
         for (var id = 1; id <= 3; id++)
         {
             var insert =
@@ -79,6 +80,7 @@ public sealed class LiveBatchContractTests : IAsyncLifetime
         }
 
         // Act
+
         var affected = await batch.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
         using var verify = _live.CreateCommand();
         verify.CommandText = $"SELECT count(*) FROM {LiveSession.ProbeTable}";

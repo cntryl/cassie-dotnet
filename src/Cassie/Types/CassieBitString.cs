@@ -7,10 +7,12 @@ public readonly record struct CassieBitString
     public CassieBitString(string value, bool isVarying)
     {
         ArgumentNullException.ThrowIfNull(value);
+
         if (!value.All(static bit => bit is '0' or '1'))
         {
             throw new ArgumentException("A bit string can contain only '0' and '1'.", nameof(value));
         }
+
 
         Value = value;
         IsVarying = isVarying;

@@ -115,6 +115,7 @@ public sealed class ExtendedQueryContractTests
 
         // Act
         DbDataReader reader;
+
         try
         {
             reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
@@ -124,6 +125,7 @@ public sealed class ExtendedQueryContractTests
             await peer;
             throw;
         }
+
 
         await using (reader)
         {
@@ -859,6 +861,7 @@ public sealed class ExtendedQueryContractTests
                 {
                     var value = Assert.IsType<CassieTemporalValue>(reader.GetValue(0));
                     Assert.Equal(kind, value.Kind);
+
                     if (rawValue is long expectedRawValue)
                     {
                         Assert.True(value.HasRawValue);
@@ -2028,9 +2031,17 @@ public sealed class ExtendedQueryContractTests
         await peer;
     }
 
-    private static async Task ServeOneBoundQueryAsync(TcpListener listener, int typeOid = 23,
-        byte[]? expectedValue = null, short parameterFormat = 1, short resultFormat = 0, int resultOid = 23,
-        byte[]? encodedResult = null, byte[]? encodedDataRowPayload = null, string? startupDateStyle = null)
+    private static async Task ServeOneBoundQueryAsync(
+        TcpListener listener,
+        int typeOid = 23,
+        byte[]? expectedValue = null,
+        short parameterFormat = 1,
+        short resultFormat = 0,
+        int resultOid = 23,
+        byte[]? encodedResult = null,
+        byte[]? encodedDataRowPayload = null,
+        string? startupDateStyle = null
+    )
     {
         using var client = await listener.AcceptTcpClientAsync();
         var stream = client.GetStream();
@@ -2038,6 +2049,7 @@ public sealed class ExtendedQueryContractTests
         await stream.ReadExactlyAsync(startup);
         await ReadStartupPacketAsync(stream, startup);
         await WriteFrameAsync(stream, (byte)'R', BitConverter.GetBytes(IPAddress.HostToNetworkOrder(0)));
+
         if (startupDateStyle is not null)
         {
             using MemoryStream parameterStatus = new();
@@ -2046,7 +2058,9 @@ public sealed class ExtendedQueryContractTests
             await WriteFrameAsync(stream, (byte)'S', parameterStatus.ToArray());
         }
 
+
         await WriteFrameAsync(stream, (byte)'Z', [(byte)'I']);
+
         if (resultFormat != 0 || typeOid == InstalledVectorOid)
         {
             var catalog = await ReadFrontendFrameAsync(stream);
@@ -2062,15 +2076,18 @@ public sealed class ExtendedQueryContractTests
             WriteInt32(oidDescription, -1);
             WriteInt16(oidDescription, 0);
             await WriteFrameAsync(stream, (byte)'T', oidDescription.ToArray());
+
             if (typeOid == InstalledVectorOid || resultOid == InstalledVectorOid)
             {
                 var oidText = Encoding.UTF8.GetBytes(InstalledVectorOid.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 await WriteFrameAsync(stream, (byte)'D', [0, 1, 0, 0, 0, (byte)oidText.Length, .. oidText]);
             }
 
+
             await WriteFrameAsync(stream, (byte)'C', "SELECT 1\0"u8.ToArray());
             await WriteFrameAsync(stream, (byte)'Z', [(byte)'I']);
         }
+
 
         var parse = await ReadFrontendFrameAsync(stream);
         var bind = await ReadFrontendFrameAsync(stream);
@@ -2097,10 +2114,12 @@ public sealed class ExtendedQueryContractTests
         WriteInt32(expectedBind, encodedValue.Length);
         expectedBind.Write(encodedValue);
         WriteInt16(expectedBind, resultFormat == 0 ? (short)0 : (short)1);
+
         if (resultFormat != 0)
         {
             WriteInt16(expectedBind, resultFormat);
         }
+
 
         Assert.Equal(expectedBind.ToArray(), bind.Skip(1));
 
@@ -2139,6 +2158,7 @@ public sealed class ExtendedQueryContractTests
         WriteInt16(description, resultFormat);
         await WriteFrameAsync(stream, (byte)'T', description.ToArray());
         byte[] dataRowPayload;
+
         if (encodedDataRowPayload is not null)
         {
             dataRowPayload = encodedDataRowPayload;
@@ -2152,6 +2172,7 @@ public sealed class ExtendedQueryContractTests
             row.Write(resultValue);
             dataRowPayload = row.ToArray();
         }
+
 
         await WriteFrameAsync(stream, (byte)'D', dataRowPayload);
         await WriteFrameAsync(stream, (byte)'C', [.. Encoding.UTF8.GetBytes("SELECT 1"), 0]);
@@ -2183,10 +2204,12 @@ public sealed class ExtendedQueryContractTests
         await ReadStartupPacketAsync(stream, startup);
         await WriteFrameAsync(stream, (byte)'R', BitConverter.GetBytes(IPAddress.HostToNetworkOrder(0)));
         await WriteFrameAsync(stream, (byte)'Z', [(byte)'I']);
+
         for (var index = 0; index < 5; index++)
         {
             _ = await ReadFrontendFrameAsync(stream);
         }
+
 
         await WriteFrameAsync(stream, (byte)'1', []);
         await WriteFrameAsync(stream, (byte)'2', []);
@@ -2212,6 +2235,7 @@ public sealed class ExtendedQueryContractTests
 
         IOException? exception = null;
         DbDataReader? reader = null;
+
         try
         {
             reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
@@ -2220,6 +2244,7 @@ public sealed class ExtendedQueryContractTests
         {
             exception = error;
         }
+
 
         if (reader is not null)
         {
@@ -2238,12 +2263,23 @@ public sealed class ExtendedQueryContractTests
         await peer;
     }
 
-    private static async Task AssertBoundParameterAsync(object value, int typeOid, byte[] encodedValue,
-        short parameterFormat = 1, short resultFormat = 0, int resultOid = 23, object? resultValue = null,
-        byte[]? encodedResult = null, int parameterOid = 0, string? resultTypeName = null,
-        Action<DbDataReader>? verifyResult = null, Type? resultFieldType = null,
-        CassieParameterFormat parameterEncoding = CassieParameterFormat.Auto, DbType parameterDbType = DbType.Object,
-        string? startupDateStyle = null)
+    private static async Task AssertBoundParameterAsync(
+        object value,
+        int typeOid,
+        byte[] encodedValue,
+        short parameterFormat = 1,
+        short resultFormat = 0,
+        int resultOid = 23,
+        object? resultValue = null,
+        byte[]? encodedResult = null,
+        int parameterOid = 0,
+        string? resultTypeName = null,
+        Action<DbDataReader>? verifyResult = null,
+        Type? resultFieldType = null,
+        CassieParameterFormat parameterEncoding = CassieParameterFormat.Auto,
+        DbType parameterDbType = DbType.Object,
+        string? startupDateStyle = null
+    )
     {
         using TcpListener listener = new(IPAddress.Loopback, 0);
         listener.Start();
@@ -2269,6 +2305,7 @@ public sealed class ExtendedQueryContractTests
             ParameterFormat = parameterEncoding
         });
         DbDataReader reader;
+
         try
         {
             reader = await command.ExecuteReaderAsync();
@@ -2278,6 +2315,7 @@ public sealed class ExtendedQueryContractTests
             await peer;
             throw;
         }
+
 
         await using (reader)
         {
@@ -2294,6 +2332,7 @@ public sealed class ExtendedQueryContractTests
             if (resultFormat != 0 || resultValue is not null || verifyResult is not null)
             {
                 Assert.True(await reader.ReadAsync());
+
                 if (verifyResult is null)
                 {
                     Assert.Equal(resultValue ?? 42, reader.GetValue(0));

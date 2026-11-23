@@ -31,10 +31,12 @@ internal sealed class DateHandler : CassieTypeHandler
             DateTime dateTime => DateOnly.FromDateTime(dateTime),
             _ => null
         };
+
         if (date is not { } found)
         {
             return null;
         }
+
 
         var bytes = new byte[sizeof(int)];
         BinaryPrimitives.WriteInt32BigEndian(bytes, found.DayNumber - new DateOnly(2000, 1, 1).DayNumber);
@@ -53,11 +55,13 @@ internal sealed class DateHandler : CassieTypeHandler
     {
         var days = BinaryPrimitives.ReadInt32BigEndian(bytes);
         var dayNumber = (long)new DateOnly(2000, 1, 1).DayNumber + days;
+
         if (days is int.MinValue or int.MaxValue || dayNumber is < 0 or > 3_652_058)
         {
             value = default;
             return false;
         }
+
 
         value = DateOnly.FromDayNumber((int)dayNumber);
         return true;
@@ -89,10 +93,12 @@ internal sealed class TimeHandler : CassieTypeHandler
             TimeSpan time => GetTimeMicroseconds(time),
             _ => null
         };
+
         if (microseconds is not { } found)
         {
             return null;
         }
+
 
         var bytes = new byte[sizeof(long)];
         BinaryPrimitives.WriteInt64BigEndian(bytes, found);
@@ -169,12 +175,14 @@ internal sealed class TimestampHandler : CassieTypeHandler
         var epochTicks = new DateTime(2000, 1, 1).Ticks;
         var minimumMicroseconds = (DateTime.MinValue.Ticks - epochTicks) / 10;
         var maximumMicroseconds = (DateTime.MaxValue.Ticks - epochTicks) / 10;
+
         if (microseconds is long.MinValue or long.MaxValue || microseconds < minimumMicroseconds ||
             microseconds > maximumMicroseconds)
         {
             value = default;
             return false;
         }
+
 
         value = new DateTime(epochTicks + (microseconds * 10), DateTimeKind.Unspecified);
         return true;
@@ -225,12 +233,14 @@ internal sealed class TimestampTzHandler : CassieTypeHandler
         var epochTicks = new DateTime(2000, 1, 1).Ticks;
         var minimumMicroseconds = (DateTimeOffset.MinValue.UtcTicks - epochTicks) / 10;
         var maximumMicroseconds = (DateTimeOffset.MaxValue.UtcTicks - epochTicks) / 10;
+
         if (microseconds is long.MinValue or long.MaxValue || microseconds < minimumMicroseconds ||
             microseconds > maximumMicroseconds)
         {
             value = default;
             return false;
         }
+
 
         value = new DateTime(epochTicks + (microseconds * 10), DateTimeKind.Utc);
         return true;

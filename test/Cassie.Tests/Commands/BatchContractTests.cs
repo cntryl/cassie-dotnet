@@ -27,10 +27,12 @@ public sealed class BatchContractTests
             }
 
             await session.WriteIntRowDescriptionAsync();
+
             while (peer!.CancelRequests == 0)
             {
                 await Task.Delay(10, TestContext.Current.CancellationToken);
             }
+
 
             await BatchPeer.ReplyWithErrorAsync(session, "57014", "query canceled");
             await session.WriteReadyAsync();
@@ -120,10 +122,12 @@ public sealed class BatchContractTests
             do
             {
                 List<int> values = [];
+
                 while (await reader.ReadAsync(TestContext.Current.CancellationToken))
                 {
                     values.Add(reader.GetInt32(0));
                 }
+
 
                 results.Add((reader.FieldCount, values));
             } while (await reader.NextResultAsync(TestContext.Current.CancellationToken));
@@ -280,12 +284,14 @@ public sealed class BatchContractTests
         await using CassieConnection connection = new() { ConnectionString = server.ConnectionString("Pooling=false") };
         await connection.OpenAsync(TestContext.Current.CancellationToken);
         await using CassieBatch batch = new(connection);
+
         for (var index = 0; index < commandCount; index++)
         {
             _ = batch.BatchCommands.Add("SELECT value FROM numbers");
         }
 
         // Act
+
         await using (var reader = await batch.ExecuteReaderAsync(TestContext.Current.CancellationToken))
         {
             Assert.True(await reader.ReadAsync(TestContext.Current.CancellationToken));
@@ -543,6 +549,7 @@ public sealed class BatchContractTests
         await using CassieConnection connection = new() { ConnectionString = server.ConnectionString("Pooling=false") };
         await connection.OpenAsync(TestContext.Current.CancellationToken);
         CassieBatch batch = new(connection);
+
         foreach (var table in new[] { "a", "b" })
         {
             var command = batch.BatchCommands.Add($"INSERT INTO {table} VALUES (@x)");
@@ -550,6 +557,7 @@ public sealed class BatchContractTests
         }
 
         // Act
+
         await batch.PrepareAsync(TestContext.Current.CancellationToken);
         var first = await batch.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
         var second = await batch.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
@@ -562,11 +570,13 @@ public sealed class BatchContractTests
             [BatchPeer.ParseStatementName(exchanges[0][0]), BatchPeer.ParseStatementName(exchanges[1][0])];
         Assert.All(prepared, static name => Assert.NotEmpty(name));
         Assert.NotEqual(prepared[0], prepared[1]);
+
         foreach (var execution in exchanges[2..4])
         {
             Assert.Equal(prepared,
                 execution.Where(static frame => frame.Tag == (byte)'B').Select(BatchPeer.BindStatementName));
         }
+
 
         Assert.Equal(2, first);
         Assert.Equal(2, second);

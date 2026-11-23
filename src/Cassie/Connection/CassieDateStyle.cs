@@ -10,6 +10,7 @@ internal readonly record struct CassieDateStyle(CassieDateOutput Output, CassieD
     {
         CassieDateOutput? output = null;
         CassieDateOrder? order = null;
+
         foreach (var component in value.Split([',', ' '],
                      StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
@@ -30,6 +31,7 @@ internal readonly record struct CassieDateStyle(CassieDateOutput Output, CassieD
                     return false;
             }
         }
+
 
         if (output is null && order is null)
         {

@@ -22,6 +22,7 @@ public sealed class CodecCharacterizationTests
         foreach (var (label, oid, value) in EncodeCases())
         {
             actual.Add($"binary {label}: {Run(() => Describe(CassieParameterCodec.GetBinaryParameter(value, oid)))}");
+
             if (value is not null and not DBNull)
             {
                 actual.Add(

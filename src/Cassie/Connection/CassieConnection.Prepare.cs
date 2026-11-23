@@ -12,8 +12,11 @@ public sealed partial class CassieConnection
     private const int StatementCloseGroupSize = 64;
     private int _nextPreparedStatementId;
 
-    internal async Task<string> PrepareServerStatementAsync(CassiePreparedCommand prepared, CommandBudget budget,
-        CancellationToken cancellationToken)
+    internal async Task<string> PrepareServerStatementAsync(
+        CassiePreparedCommand prepared,
+        CommandBudget budget,
+        CancellationToken cancellationToken
+    )
     {
         var session = RequireSession("The connection must be open to prepare a command.");
         ThrowIfReaderActive();
@@ -51,16 +54,20 @@ public sealed partial class CassieConnection
         lock (_abortGate)
         {
             session = _session;
+
             if (_state != ConnectionState.Open || session is null || SessionIdentity != lease)
             {
                 return Task.CompletedTask;
             }
 
+
             _ = (session.StatementsToClose ??= []).Add(statementName);
+
             if (_gate.IsActive)
             {
                 return Task.CompletedTask;
             }
+
 
             _gate.Begin();
             serial = _cleanupOperation = _gate.Serial;
@@ -78,12 +85,14 @@ public sealed partial class CassieConnection
         {
             pendingCancel = _pendingQueryCancel;
             _pendingQueryCancel = null;
+
             if (_session is not { } current ||
                 (drainDeadline is null && pendingCancel is null && current.StatementsToClose is not { Count: > 0 }))
             {
                 _gate.End();
                 return Task.CompletedTask;
             }
+
 
             session = current;
             // ReadyForQuery retires the query, but its cancel must settle before further wire I/O.
@@ -94,12 +103,18 @@ public sealed partial class CassieConnection
         return FinishQueryAsync(session, serial, pendingCancel, drainDeadline, CancellationToken.None);
     }
 
-    private async Task FinishQueryAsync(PgSession session, long serial, Task<bool>? pendingCancel,
-        CleanupDeadline? drainDeadline, CancellationToken cancellationToken)
+    private async Task FinishQueryAsync(
+        PgSession session,
+        long serial,
+        Task<bool>? pendingCancel,
+        CleanupDeadline? drainDeadline,
+        CancellationToken cancellationToken
+    )
     {
         using var ownedDeadline = drainDeadline is null ? new CleanupDeadline(session, CleanupTimeProvider) : null;
         var deadline = drainDeadline ?? ownedDeadline!;
         CassieException? firstError = null;
+
         try
         {
             if (pendingCancel is not null && !await pendingCancel.WaitAsync(deadline.Token).ConfigureAwait(false))
@@ -130,6 +145,7 @@ public sealed partial class CassieConnection
                 }
 
                 using MemoryStream request = new();
+
                 foreach (var statement in group)
                 {
                     using var close = ExtendedQueryMessages.CloseStatement(statement);
@@ -137,10 +153,13 @@ public sealed partial class CassieConnection
                     PgWriter.AppendFrame(request, FrontendMessage.Sync, []);
                 }
 
+
                 await session.WriteBatchAsync(request, cancellationToken).ConfigureAwait(false);
+
                 for (var index = 0; index < group.Length; index++)
                 {
                     var error = await ReadStatementCloseAsync(session, cancellationToken).ConfigureAwait(false);
+
                     if (error is not null && error.SqlState != UndefinedPreparedStatementSqlState)
                     {
                         firstError ??= error;
@@ -159,6 +178,7 @@ public sealed partial class CassieConnection
             throw;
         }
 
+
         if (firstError is not null)
         {
             throw firstError;
@@ -169,9 +189,11 @@ public sealed partial class CassieConnection
     {
         var acknowledged = false;
         CassieException? error = null;
+
         while (true)
         {
             var (tag, payload) = await session.ReadFrameAsync(cancellationToken).ConfigureAwait(false);
+
             switch (tag)
             {
                 case BackendMessage.CloseComplete when !acknowledged && payload.Length == 0:

@@ -7,15 +7,18 @@ internal static class SqlLexicalTraversal
     {
         ArgumentNullException.ThrowIfNull(sql);
         var index = 0;
+
         while (index < sql.Length)
         {
             var current = sql[index];
             var next = index + 1 < sql.Length ? sql[index + 1] : '\0';
+
             if (char.IsWhiteSpace(current))
             {
                 index++;
                 continue;
             }
+
 
             if (current == '-' && next == '-')
             {
@@ -35,6 +38,7 @@ internal static class SqlLexicalTraversal
 
             var start = index;
             SqlTokenKind kind;
+
             if (current is '\'' or '"')
             {
                 var escapes = current == '\'' && IsEscapeStringPrefix(sql, index);
@@ -50,10 +54,12 @@ internal static class SqlLexicalTraversal
             else if ((current == '@' || current == '<') && next == '@')
             {
                 index += 2;
+
                 while (index < sql.Length && sql[index] == '@')
                 {
                     index++;
                 }
+
 
                 kind = SqlTokenKind.Symbol;
             }
@@ -75,6 +81,7 @@ internal static class SqlLexicalTraversal
                 kind = SqlTokenKind.Symbol;
             }
 
+
             yield return new SqlToken(kind, start, index - start);
         }
     }
@@ -82,13 +89,16 @@ internal static class SqlLexicalTraversal
     public static bool ContainsFunctionCall(string sql, string functionName)
     {
         var expectingParenthesis = false;
+
         foreach (var token in Read(sql))
         {
             var text = sql.AsSpan(token.Start, token.Length);
+
             if (expectingParenthesis && token.Kind == SqlTokenKind.Symbol && text.SequenceEqual("("))
             {
                 return true;
             }
+
 
             expectingParenthesis = token.Kind switch
             {
@@ -99,6 +109,7 @@ internal static class SqlLexicalTraversal
             };
         }
 
+
         return false;
     }
 
@@ -106,10 +117,12 @@ internal static class SqlLexicalTraversal
     {
         var depth = 1;
         index += 2;
+
         while (index < sql.Length && depth > 0)
         {
             var current = sql[index++];
             var next = index < sql.Length ? sql[index] : '\0';
+
             if (current == '/' && next == '*')
             {
                 depth++;
@@ -126,9 +139,11 @@ internal static class SqlLexicalTraversal
     private static void SkipQuoted(string sql, ref int index, char delimiter, bool escapes)
     {
         index++;
+
         while (index < sql.Length)
         {
             var current = sql[index++];
+
             if (current == delimiter)
             {
                 if (index >= sql.Length || sql[index] != delimiter)
@@ -169,11 +184,13 @@ internal static class SqlLexicalTraversal
     {
         delimiter = string.Empty;
         var index = start + 1;
+
         if (index < sql.Length && sql[index] == '$')
         {
             delimiter = "$$";
             return true;
         }
+
 
         if (index >= sql.Length || !IsIdentifierStart(sql[index]))
         {

@@ -208,6 +208,7 @@ public sealed class CassieDataSourceContractTests
         await using CassieDataSource first = new(connectionString);
         await using CassieDataSource second = new(connectionString);
         await using CassieConnection identity = new() { ConnectionString = connectionString };
+
         try
         {
             await using (var initial = await first.OpenConnectionAsync(TestContext.Current.CancellationToken))
