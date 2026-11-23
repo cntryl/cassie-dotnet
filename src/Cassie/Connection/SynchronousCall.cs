@@ -40,12 +40,17 @@ internal static class SynchronousCall
     ///     Runs blocking I/O. Blocking calls cannot observe a token, so cancellation disposes
     ///     <paramref name="abortTarget" />, which fails the call and is reported as cancellation.
     /// </summary>
-    internal static void RunBlocking<TState>(IDisposable abortTarget, TState state, Action<TState> io,
-        CancellationToken cancellationToken)
+    internal static void RunBlocking<TState>(
+        IDisposable abortTarget,
+        TState state,
+        Action<TState> io,
+        CancellationToken cancellationToken
+    )
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var abort =
             cancellationToken.UnsafeRegister(static target => ((IDisposable)target!).Dispose(), abortTarget);
+
         try
         {
             io(state);

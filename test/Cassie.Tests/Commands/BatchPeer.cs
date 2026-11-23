@@ -30,13 +30,16 @@ internal sealed class BatchPeer
             List<BatchFrame> pending = [];
             var inTransaction = false;
             var batchNumber = 0;
+
             while (true)
             {
                 var (tag, payload) = await session.ReadFrameAsync();
+
                 if (tag == (byte)'X')
                 {
                     return;
                 }
+
 
                 if (tag == (byte)'S')
                 {
@@ -51,6 +54,7 @@ internal sealed class BatchPeer
                 {
                     var sql = Encoding.UTF8.GetString(payload, 0, payload.Length - 1);
                     _simpleQueries.Enqueue(sql);
+
                     if (sql.StartsWith("BEGIN", StringComparison.Ordinal))
                     {
                         inTransaction = true;
@@ -68,6 +72,7 @@ internal sealed class BatchPeer
                         await session.WriteCommandCompleteAsync("SELECT 1");
                     }
 
+
                     await session.WriteReadyAsync(inTransaction ? 'T' : 'I');
                 }
                 else
@@ -84,10 +89,12 @@ internal sealed class BatchPeer
         await session.WriteAsync((byte)'1', []);
         await session.WriteAsync((byte)'2', []);
         await session.WriteIntRowDescriptionAsync();
+
         foreach (var value in values)
         {
             await session.WriteTextRowAsync(value);
         }
+
 
         await session.WriteCommandCompleteAsync("SELECT " + values.Length.ToString(CultureInfo.InvariantCulture));
     }

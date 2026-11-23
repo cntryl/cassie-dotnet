@@ -51,10 +51,12 @@ internal static class CassieResultCodec
         var rank = BinaryWire.ReadInt32(bytes, ref offset);
         var hasNull = BinaryWire.ReadInt32(bytes, ref offset);
         var elementTypeOid = BinaryWire.ReadInt32(bytes, ref offset);
+
         if (rank is < 0 or > 6 || hasNull is not 0 and not 1 || elementTypeOid != expectedElementTypeOid)
         {
             throw new FormatException("Cassie returned an invalid binary array header.");
         }
+
 
         if (rank == 0 && hasNull != 0)
         {
@@ -64,14 +66,17 @@ internal static class CassieResultCodec
         var dimensions = new int[rank];
         var lowerBounds = new int[rank];
         long elementCount = rank == 0 ? 0 : 1;
+
         for (var dimension = 0; dimension < rank; dimension++)
         {
             var length = BinaryWire.ReadInt32(bytes, ref offset);
             var lowerBound = BinaryWire.ReadInt32(bytes, ref offset);
+
             if (length <= 0)
             {
                 throw new FormatException("Cassie returned a nonpositive binary array dimension.");
             }
+
 
             if ((long)lowerBound + length - 1 > int.MaxValue)
             {
@@ -81,22 +86,27 @@ internal static class CassieResultCodec
             dimensions[dimension] = length;
             lowerBounds[dimension] = lowerBound;
             elementCount = checked(elementCount * length);
+
             if (elementCount > bytes.Length / sizeof(int))
             {
                 throw new FormatException("Cassie returned binary array dimensions larger than the available payload.");
             }
         }
 
+
         var elements = new object?[checked((int)elementCount)];
         var foundNull = false;
+
         for (var index = 0; index < elements.Length; index++)
         {
             var length = BinaryWire.ReadInt32(bytes, ref offset);
+
             if (length == -1)
             {
                 foundNull = true;
                 continue;
             }
+
 
             if (length < 0 || offset > bytes.Length - length)
             {
@@ -106,6 +116,7 @@ internal static class CassieResultCodec
             elements[index] = ConvertBinaryValue(bytes.Slice(offset, length).ToArray(), elementTypeOid);
             offset += length;
         }
+
 
         _ = offset != bytes.Length || (hasNull == 0 && foundNull)
             ? throw new FormatException("Cassie returned inconsistent binary array framing.")

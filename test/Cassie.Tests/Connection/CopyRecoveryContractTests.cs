@@ -108,6 +108,7 @@ public sealed class CopyRecoveryContractTests
 
         var copying = CopyAsync();
         Exception? failure;
+
         try
         {
             await copyFailReceived.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
@@ -134,6 +135,7 @@ public sealed class CopyRecoveryContractTests
         }
 
         // Assert
+
         Assert.Same(original, failure);
         Assert.Equal(ConnectionState.Closed, connection.State);
     }
@@ -166,6 +168,7 @@ public sealed class CopyRecoveryContractTests
             }
 
             _ = await session.ReadFrameAsync();
+
             switch (scenario)
             {
                 case "start-error":
@@ -192,13 +195,16 @@ public sealed class CopyRecoveryContractTests
                     break;
             }
 
+
             queryStarted.SetResult();
+
             if (scenario is "input-failure" or "input-cancellation" or "wrong-direction" or "reject-input")
             {
                 var (failed, _) = await session.ReadFrameAsync();
                 Assert.Equal((byte)'f', failed);
                 recoveryMessageReceived.SetResult();
             }
+
 
             await session.StayVerySilentAsync();
         });
@@ -242,13 +248,16 @@ public sealed class CopyRecoveryContractTests
 
         var copying = CopyAsync();
         Exception? failure;
+
         try
         {
             await queryStarted.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+
             if (scenario == "input-cancellation")
             {
                 await inputReadStarted.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
             }
+
 
             if (scenario is "output-cancellation" or "output-timeout" or "output-timeout-then-cancellation")
             {
@@ -261,10 +270,12 @@ public sealed class CopyRecoveryContractTests
             }
 
             await clock.TimerCreated.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+
             if (scenario == "output-timeout-then-cancellation")
             {
                 await caller.CancelAsync();
             }
+
 
             if (scenario is "input-failure" or "input-cancellation" or "wrong-direction" or "reject-input")
             {
@@ -303,6 +314,7 @@ public sealed class CopyRecoveryContractTests
         }
 
         // Assert
+
         AssertOriginalFailure(scenario, failure, inputFailure, caller.Token);
         Assert.Equal(TimeSpan.FromSeconds(5), Assert.Single(clock.InitialDueTimes));
         Assert.Equal(ConnectionState.Closed, connection.State);
@@ -326,17 +338,21 @@ public sealed class CopyRecoveryContractTests
         {
             _ = await session.ReadFrameAsync();
             await session.WriteAsync(cancelOutput ? (byte)'H' : (byte)'G', [0, 0, 0]);
+
             if (cancelOutput)
             {
                 await session.WriteAsync((byte)'d', [1]);
             }
 
+
             queryStarted.SetResult();
+
             if (!cancelOutput)
             {
                 var (failed, _) = await session.ReadFrameAsync();
                 Assert.Equal((byte)'f', failed);
             }
+
 
             await sendReady.Task;
             await session.WriteAsync((byte)'E', ServerError("57014"));
@@ -365,19 +381,23 @@ public sealed class CopyRecoveryContractTests
 
         var copying = CopyAsync();
         await queryStarted.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+
         if (cancelOutput)
         {
             await outputWriteStarted.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
             await caller.CancelAsync();
         }
 
+
         await clock.TimerCreated.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+
         if (cancelOutput)
         {
             Assert.True(ScriptedServer.WaitUntil(() => server.CancelRequests == 1));
         }
 
         // Act
+
         sendReady.SetResult();
         var failure = await Record.ExceptionAsync(async () =>
             _ = await copying.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
@@ -458,6 +478,7 @@ public sealed class CopyRecoveryContractTests
 
         var copying = CopyAsync();
         Exception? failure;
+
         try
         {
             await copyStarted.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
@@ -479,10 +500,12 @@ public sealed class CopyRecoveryContractTests
         finally
         {
             _ = continueCancelNegotiation.TrySetResult();
+
             if (!copying.IsCompleted)
             {
                 connection.AbortTransport();
             }
+
 
             try
             {
@@ -497,13 +520,18 @@ public sealed class CopyRecoveryContractTests
         }
 
         // Assert
+
         Assert.Equal(caller.Token, Assert.IsType<OperationCanceledException>(failure).CancellationToken);
         Assert.Equal(ConnectionState.Closed, connection.State);
         Assert.Equal(TimeSpan.FromSeconds(5), Assert.Single(clock.InitialDueTimes));
     }
 
-    private static void AssertOriginalFailure(string scenario, Exception? failure, IOException inputFailure,
-        CancellationToken caller)
+    private static void AssertOriginalFailure(
+        string scenario,
+        Exception? failure,
+        IOException inputFailure,
+        CancellationToken caller
+    )
     {
         switch (scenario)
         {

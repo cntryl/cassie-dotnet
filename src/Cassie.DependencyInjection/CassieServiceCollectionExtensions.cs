@@ -48,19 +48,23 @@ public static class CassieServiceCollectionExtensions
         return services;
     }
 
-    private static void TryAddAlias<TService, TRegistered>(IServiceCollection services,
-        Func<TRegistered, TService> project)
+    private static void TryAddAlias<TService, TRegistered>(
+        IServiceCollection services,
+        Func<TRegistered, TService> project
+    )
         where TService : class
         where TRegistered : class
     {
         var registration = services.Last(static descriptor =>
             !descriptor.IsKeyedService && descriptor.ServiceType == typeof(TRegistered));
+
         if (registration.ImplementationInstance is TRegistered instance)
         {
             // An instance registration remains caller-owned, including through its alias.
             services.TryAddSingleton(project(instance));
             return;
         }
+
 
         services.TryAdd(ServiceDescriptor.Describe(typeof(TService),
             provider => project(provider.GetRequiredService<TRegistered>()), registration.Lifetime));

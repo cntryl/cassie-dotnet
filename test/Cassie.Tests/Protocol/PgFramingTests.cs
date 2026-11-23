@@ -43,6 +43,7 @@ public sealed class PgFramingTests
         byte[] first;
         byte[] second;
         byte[] oversized;
+
         try
         {
             (_, first) = await PgFraming.ReadBackendFrameAsync(stream, buffer, token);
@@ -58,6 +59,7 @@ public sealed class PgFramingTests
         }
 
         // Assert
+
         Assert.Same(first, second);
         Assert.Equal(1, lengths[0]);
         Assert.Equal([1, 2, 3], retained);
@@ -88,8 +90,10 @@ public sealed class PgFramingTests
     [InlineData("", 0)]
     [InlineData("5A000000", 0)]
     [InlineData("5A0000000549", 1)]
-    public async Task ShouldRejectTruncationGivenIncompleteHeaderOrPayloadWhenFrameIsRead(string frame,
-        int omittedBytes)
+    public async Task ShouldRejectTruncationGivenIncompleteHeaderOrPayloadWhenFrameIsRead(
+        string frame,
+        int omittedBytes
+    )
     {
         // Arrange
         var bytes = Convert.FromHexString(frame);

@@ -58,12 +58,14 @@ internal sealed class DateStyleTracker
 
         var prior = TransactionStatus;
         TransactionStatus = payload[0];
+
         if ((TransactionStatus == Protocol.TransactionStatus.Idle && prior != Protocol.TransactionStatus.Idle)
             || (TransactionStatus == Protocol.TransactionStatus.InTransaction &&
                 prior == Protocol.TransactionStatus.Idle))
         {
             _transactionMayHaveChangedDateStyle = false;
         }
+
 
         return true;
     }
@@ -79,6 +81,7 @@ internal sealed class DateStyleTracker
     public void ObserveSql(string sql)
     {
         ArgumentNullException.ThrowIfNull(sql);
+
         if (SqlLexicalTraversal.ContainsFunctionCall(sql, "set_config"))
         {
             NoteSettingChange();

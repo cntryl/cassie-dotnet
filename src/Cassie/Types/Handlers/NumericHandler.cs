@@ -40,10 +40,12 @@ internal sealed class NumericHandler : CassieTypeHandler
         int weight = BinaryPrimitives.ReadInt16BigEndian(bytes[2..]);
         var sign = BinaryPrimitives.ReadUInt16BigEndian(bytes[4..]);
         int scale = BinaryPrimitives.ReadUInt16BigEndian(bytes[6..]);
+
         if (digitCount < 0 || bytes.Length != 8 + (digitCount * sizeof(ushort)))
         {
             throw new FormatException("Cassie returned invalid binary numeric framing.");
         }
+
 
         if (sign is 0xC000 or 0xD000 or 0xF000)
         {
@@ -65,27 +67,34 @@ internal sealed class NumericHandler : CassieTypeHandler
 
         var digits = new int[digitCount];
         var nonzero = false;
+
         for (var index = 0; index < digitCount; index++)
         {
             int digit = BinaryPrimitives.ReadUInt16BigEndian(bytes[(8 + (index * sizeof(ushort)))..]);
+
             if (digit > 9999)
             {
                 throw new FormatException("Cassie returned an out-of-range binary numeric digit.");
             }
 
+
             digits[index] = digit;
             nonzero |= digit != 0;
         }
 
+
         var fractionalGroups = (scale + 3) / 4;
         var integerGroups = Math.Max(0, weight + 1);
         StringBuilder text = new(checked(Math.Max(1, integerGroups * 4) + (scale == 0 ? 0 : scale + 1) + 1));
+
         if (sign == 0x4000 && nonzero)
         {
             _ = text.Append('-');
         }
 
+
         var firstInteger = ReadNumericBase10000Digit(digits, weight, weight);
+
         if (integerGroups == 0)
         {
             _ = text.Append('0');
@@ -93,6 +102,7 @@ internal sealed class NumericHandler : CassieTypeHandler
         else
         {
             _ = text.Append(firstInteger.ToString(CultureInfo.InvariantCulture));
+
             for (var group = 1; group < integerGroups; group++)
             {
                 var position = weight - group;
@@ -101,15 +111,18 @@ internal sealed class NumericHandler : CassieTypeHandler
             }
         }
 
+
         if (scale > 0)
         {
             _ = text.Append('.');
+
             for (var group = 1; group <= fractionalGroups; group++)
             {
                 var position = -group;
                 _ = text.Append(ReadNumericBase10000Digit(digits, weight, position)
                     .ToString("D4", CultureInfo.InvariantCulture));
             }
+
 
             text.Length -= (fractionalGroups * 4) - scale;
         }
@@ -127,12 +140,14 @@ internal sealed class NumericHandler : CassieTypeHandler
     {
         ushort sign = 0x0000;
         ushort scale;
+
         if (value == "NaN")
         {
             sign = 0xC000;
             scale = 0;
             return EncodeNumericHeader([], 0, sign, scale);
         }
+
 
         if (value is "Infinity" or "+Infinity" or "-Infinity")
         {
@@ -142,35 +157,43 @@ internal sealed class NumericHandler : CassieTypeHandler
 
         var index = 0;
         var negative = value.Length > 0 && value[0] == '-';
+
         if (negative || (value.Length > 0 && value[0] == '+'))
         {
             index++;
         }
 
+
         var exponent = 0;
         var exponentIndex = value.IndexOfAny(['e', 'E'], index);
         var mantissa = exponentIndex < 0 ? value.AsSpan(index) : value.AsSpan(index, exponentIndex - index);
+
         if (exponentIndex >= 0 && !int.TryParse(value.AsSpan(exponentIndex + 1), NumberStyles.AllowLeadingSign,
                 CultureInfo.InvariantCulture, out exponent))
         {
             throw new FormatException("CassieNumeric exponent is outside the supported range.");
         }
 
+
         var point = mantissa.IndexOf('.');
         var integerPart = point < 0 ? mantissa : mantissa[..point];
         var fractionalPart = point < 0 ? [] : mantissa[(point + 1)..];
         var decimalScale = checked(fractionalPart.Length - exponent);
+
         if (decimalScale > 16383 || integerPart.Length + fractionalPart.Length + Math.Max(0, -decimalScale) > 131072)
         {
             throw new ArgumentOutOfRangeException(nameof(value),
                 "The numeric value exceeds Cassie's binary NUMERIC limits.");
         }
 
+
         var coefficient = integerPart.ToString() + fractionalPart.ToString();
+
         if (coefficient.Length == 0)
         {
             coefficient = "0";
         }
+
 
         if (decimalScale < 0)
         {
@@ -193,10 +216,12 @@ internal sealed class NumericHandler : CassieTypeHandler
         integerDigits = new string('0', integerPadding) + integerDigits;
         fractionDigits += new string('0', fractionPadding);
         List<ushort> digits = [];
+
         for (var start = 0; start < integerDigits.Length; start += 4)
         {
             digits.Add(ushort.Parse(integerDigits.AsSpan(start, 4), CultureInfo.InvariantCulture));
         }
+
 
         for (var start = 0; start < fractionDigits.Length; start += 4)
         {
@@ -205,10 +230,12 @@ internal sealed class NumericHandler : CassieTypeHandler
 
         var weight = (integerDigits.Length / 4) - 1;
         var leading = 0;
+
         while (leading < digits.Count && digits[leading] == 0)
         {
             leading++;
         }
+
 
         if (leading > 0)
         {
@@ -241,10 +268,12 @@ internal sealed class NumericHandler : CassieTypeHandler
         PgWriter.WriteInt16(payload, weight);
         WriteUInt16(payload, sign);
         WriteUInt16(payload, scale);
+
         foreach (var digit in digits)
         {
             WriteUInt16(payload, digit);
         }
+
 
         return payload.ToArray();
     }

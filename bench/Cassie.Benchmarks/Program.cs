@@ -58,6 +58,7 @@ await MeasureAsync("simple_query_scalar", iterations, warmupIterations, async ()
     using DbCommand command = connection.CreateCommand();
     command.CommandText = "SELECT 42::int4";
     using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+
     if (!await reader.ReadAsync().ConfigureAwait(false) || reader.GetInt32(0) != 42)
     {
         throw new InvalidOperationException("The simple-query benchmark returned an unexpected result.");
@@ -71,6 +72,7 @@ await MeasureAsync("extended_binary_parameter", iterations, warmupIterations, as
     command.CommandText = "SELECT @value::int4";
     _ = command.Parameters.Add(new CassieParameter { ParameterName = "value", Value = 42 });
     using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+
     if (!await reader.ReadAsync().ConfigureAwait(false) || reader.GetInt32(0) != 42)
     {
         throw new InvalidOperationException("The extended-protocol benchmark returned an unexpected result.");
@@ -82,6 +84,7 @@ await MeasureAsync("multi_result_query", iterations, warmupIterations, async () 
     using DbCommand command = connection.CreateCommand();
     command.CommandText = "SELECT 41::int4; SELECT 42::int4";
     using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+
     if (!await reader.ReadAsync().ConfigureAwait(false) || reader.GetInt32(0) != 41
                                                         || !await reader.NextResultAsync().ConfigureAwait(false)
                                                         || !await reader.ReadAsync().ConfigureAwait(false) ||
@@ -123,6 +126,7 @@ await MeasureAsync("read_1024_rows", iterations, warmupIterations, async () =>
     await using (reader.ConfigureAwait(false))
     {
         var count = 0;
+
         while (await reader.ReadAsync().ConfigureAwait(false))
         {
             if (reader.GetInt32(0) != ++count)
@@ -130,6 +134,7 @@ await MeasureAsync("read_1024_rows", iterations, warmupIterations, async () =>
                 throw new InvalidOperationException("The row benchmark returned an unexpected value.");
             }
         }
+
 
         if (count != 1024)
         {
@@ -178,6 +183,7 @@ await MeasureAsync("close_64_deferred_statements", Math.Max(3, iterations / 10),
     }, async () =>
     {
         var prepared = new CassieCommand[64];
+
         for (var index = 0; index < prepared.Length; index++)
         {
             var command = connection.CreateCommand();
@@ -186,11 +192,14 @@ await MeasureAsync("close_64_deferred_statements", Math.Max(3, iterations / 10),
             await command.PrepareAsync().ConfigureAwait(false);
         }
 
+
         activeReader = await query.ExecuteReaderAsync().ConfigureAwait(false);
+
         foreach (var command in prepared)
         {
             await command.DisposeAsync().ConfigureAwait(false);
         }
+
 
         if (!await activeReader.ReadAsync().ConfigureAwait(false) || activeReader.GetInt32(0) != 42)
         {
@@ -207,6 +216,7 @@ if (Environment.GetEnvironmentVariable("CASSIE_DOTNET_BENCHMARK_REST_BASE_ADDRES
     await MeasureAsync("rest_query_256_rows", iterations, warmupIterations, async () =>
     {
         var result = await rest.Admin.ExecuteQueryAsync(request).ConfigureAwait(false);
+
         if (result.Rows.Count != 256 || result.Rows[0][0].GetString()?.Length != 128)
         {
             throw new InvalidOperationException("The REST benchmark returned an unexpected result.");
@@ -227,8 +237,13 @@ static int ReadPositiveInteger(string name, int fallback)
             : throw new ArgumentException($"{name} must be between 1 and 1000000.", name);
 }
 
-static async Task MeasureAsync(string name, int count, int warmupCount, Func<Task> operation,
-    Func<Task>? setup = null)
+static async Task MeasureAsync(
+    string name,
+    int count,
+    int warmupCount,
+    Func<Task> operation,
+    Func<Task>? setup = null
+)
 {
     for (var i = 0; i < warmupCount; i++)
     {
@@ -246,6 +261,7 @@ static async Task MeasureAsync(string name, int count, int warmupCount, Func<Tas
 
     var samples = new double[count];
     var allocatedBytes = 0L;
+
     for (var i = 0; i < count; i++)
     {
         if (setup is not null)
@@ -259,6 +275,7 @@ static async Task MeasureAsync(string name, int count, int warmupCount, Func<Tas
         samples[i] = Stopwatch.GetElapsedTime(operationStarted).TotalMilliseconds;
         allocatedBytes += GC.GetTotalAllocatedBytes(true) - allocatedBefore;
     }
+
 
     var elapsedSeconds = samples.Sum() / 1000;
     Array.Sort(samples);

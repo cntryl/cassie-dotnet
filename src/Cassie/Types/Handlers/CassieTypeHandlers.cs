@@ -64,8 +64,11 @@ internal static class CassieTypeHandlers
         return handlers.ToFrozenDictionary();
     }
 
-    private static void Register(Dictionary<int, CassieTypeHandler> handlers, CassieTypeHandler handler,
-        params int[] oids)
+    private static void Register(
+        Dictionary<int, CassieTypeHandler> handlers,
+        CassieTypeHandler handler,
+        params int[] oids
+    )
     {
         foreach (var oid in oids)
         {

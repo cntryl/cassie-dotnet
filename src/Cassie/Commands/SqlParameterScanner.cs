@@ -11,6 +11,7 @@ internal static class SqlParameterScanner
         ArgumentNullException.ThrowIfNull(sql);
         List<string> names = [];
         HashSet<string> seen = [with(StringComparer.OrdinalIgnoreCase)];
+
         foreach (var token in SqlLexicalTraversal.Read(sql))
         {
             if (token.Kind != SqlTokenKind.Parameter)
@@ -19,11 +20,13 @@ internal static class SqlParameterScanner
             }
 
             var name = sql.Substring(token.Start + 1, token.Length - 1);
+
             if (seen.Add(name))
             {
                 names.Add(name);
             }
         }
+
 
         return names;
     }

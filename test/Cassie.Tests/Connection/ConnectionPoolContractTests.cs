@@ -80,6 +80,7 @@ public sealed class ConnectionPoolContractTests
         {
             CassieConnection.ClearAllPools();
             listener.Stop();
+
             try
             {
                 _ = await peer.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
@@ -154,6 +155,7 @@ public sealed class ConnectionPoolContractTests
         {
             CassieConnection.ClearAllPools();
             listener.Stop();
+
             try
             {
                 _ = await peer.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
@@ -177,7 +179,8 @@ public sealed class ConnectionPoolContractTests
         string firstPassword,
         string secondUsername,
         string secondPassword,
-        string database)
+        string database
+    )
     {
         using var firstClient = await listener.AcceptTcpClientAsync();
         var firstStream = firstClient.GetStream();
@@ -191,6 +194,7 @@ public sealed class ConnectionPoolContractTests
         var nextClient = listener.AcceptTcpClientAsync();
         var completed = await Task.WhenAny(previousSessionActivity, nextClient)
             .WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+
         if (completed == nextClient)
         {
             using var secondClient = await nextClient;
@@ -203,7 +207,9 @@ public sealed class ConnectionPoolContractTests
             return false;
         }
 
+
         byte[]? nextFrame;
+
         try
         {
             nextFrame = await previousSessionActivity;
@@ -221,6 +227,7 @@ public sealed class ConnectionPoolContractTests
             await ReadSelectOneAndCompleteAsync(secondStream);
             return false;
         }
+
 
         Assert.Equal((byte)'Q', nextFrame[0]);
         await WriteSelectOneResultAsync(firstStream);
@@ -248,12 +255,14 @@ public sealed class ConnectionPoolContractTests
 
         Dictionary<string, string> parameters = [];
         var offset = 8;
+
         while (offset < packet.Length && packet[offset] != 0)
         {
             var key = ReadCString(packet, ref offset);
             var value = ReadCString(packet, ref offset);
             parameters.Add(key, value);
         }
+
 
         return parameters;
     }
@@ -322,10 +331,12 @@ public sealed class ConnectionPoolContractTests
     private static string ReadCString(byte[] packet, ref int offset)
     {
         var end = Array.IndexOf(packet, (byte)0, offset);
+
         if (end < 0)
         {
             throw new IOException("Invalid startup packet.");
         }
+
 
         var value = Encoding.UTF8.GetString(packet, offset, end - offset);
         offset = end + 1;

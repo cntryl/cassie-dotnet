@@ -13,10 +13,12 @@ internal static class ExtendedQueryMessages
         PgWriter.WriteCString(payload, statementName);
         PgWriter.WriteCString(payload, sql);
         PgWriter.WriteInt16(payload, checked((short)parameterTypeOids.Count));
+
         foreach (var typeOid in parameterTypeOids)
         {
             PgWriter.WriteInt32(payload, typeOid);
         }
+
 
         return payload;
     }

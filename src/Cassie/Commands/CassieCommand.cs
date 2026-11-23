@@ -134,10 +134,12 @@ public sealed class CassieCommand : DbCommand
     public Task<int> CopyFromAsync(Stream source, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
+
         if (!source.CanRead)
         {
             throw new ArgumentException("The COPY input stream must be readable.", nameof(source));
         }
+
 
         if (CommandType != CommandType.Text)
         {
@@ -167,10 +169,12 @@ public sealed class CassieCommand : DbCommand
     public Task<int> CopyToAsync(Stream destination, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(destination);
+
         if (!destination.CanWrite)
         {
             throw new ArgumentException("The COPY output stream must be writable.", nameof(destination));
         }
+
 
         if (CommandType != CommandType.Text)
         {
@@ -229,13 +233,16 @@ public sealed class CassieCommand : DbCommand
     public override async Task PrepareAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         if (CommandType is not (CommandType.Text or CommandType.StoredProcedure))
         {
             throw new NotSupportedException($"Cassie cannot prepare command type '{CommandType}'.");
         }
 
+
         var prepared = PrepareParameters();
         _preparedStatement.Request();
+
         if (DbConnection is CassieConnection connection && connection.State == ConnectionState.Open)
         {
             connection.ValidateCommandTransaction(DbTransaction);
@@ -295,8 +302,10 @@ public sealed class CassieCommand : DbCommand
     /// <inheritdoc />
     [SuppressMessage("Reliability", "CA2000",
         Justification = "The returned reader is transferred to the DbCommand caller, who owns disposal.")]
-    protected override async Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior,
-        CancellationToken cancellationToken)
+    protected override async Task<DbDataReader> ExecuteDbDataReaderAsync(
+        CommandBehavior behavior,
+        CancellationToken cancellationToken
+    )
     {
         if (CommandType is not (CommandType.Text or CommandType.StoredProcedure))
         {
@@ -310,6 +319,7 @@ public sealed class CassieCommand : DbCommand
 
         connection.ValidateCommandTransaction(DbTransaction);
         var operationScope = CassieDiagnostics.StartOperation("query");
+
         try
         {
             var prepared = PrepareParameters();
@@ -320,11 +330,13 @@ public sealed class CassieCommand : DbCommand
                            _preparedStatement.IsRequested;
             var encoded = extended && !schemaOnly ? ParameterizedQueryBatch.EncodeParameters(prepared) : null;
             var budget = connection.StartCommandBudget(CommandTimeout, cancellationToken);
+
             if (extended)
             {
                 prepared = await connection.ResolveVectorTypesAsync(prepared, BinaryResults || schemaOnly, budget,
                     cancellationToken).ConfigureAwait(false);
             }
+
 
             var statementName = _preparedStatement.IsRequested
                 ? await _preparedStatement.EnsurePreparedAsync(connection, prepared, budget, cancellationToken)

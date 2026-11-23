@@ -91,6 +91,7 @@ public sealed class CassieRestClientContractTests
         using ScriptedHttpHandler handler = new(async (request, cancellationToken) =>
         {
             var current = Interlocked.Increment(ref step);
+
             if (current == 1)
             {
                 Assert.Equal(HttpMethod.Post, request.Method);
@@ -104,13 +105,16 @@ public sealed class CassieRestClientContractTests
                 return ScriptedHttpHandler.Json( /*lang=json,strict*/ "{\"id\":\"doc-1\"}");
             }
 
+
             Assert.Equal(new Uri(ServiceAddress, "api/v1/collections/docs/documents/doc-1"), request.RequestUri);
             Assert.Null(request.Content);
+
             if (current == 2)
             {
                 Assert.Equal(HttpMethod.Get, request.Method);
                 return ScriptedHttpHandler.Json(payload);
             }
+
 
             Assert.Equal(3, current);
             Assert.Equal(HttpMethod.Delete, request.Method);

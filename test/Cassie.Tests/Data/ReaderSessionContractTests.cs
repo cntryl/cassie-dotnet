@@ -18,6 +18,7 @@ public sealed class ReaderSessionContractTests
         var drainFailure = new TimeoutException("Drain failed.");
         await using CassieDataReader reader = new(session, 0, CommandBehavior.CloseConnection);
         await reader.InitializeAsync(TestContext.Current.CancellationToken);
+
         if (synchronized)
         {
             session.Enqueue((byte)'Z', [(byte)'I']);
@@ -27,6 +28,7 @@ public sealed class ReaderSessionContractTests
         {
             session.ReadHandler = _ => Task.FromException<(byte, byte[])>(drainFailure);
         }
+
 
         session.CloseHandler = () => Task.FromException(new InvalidOperationException("Cleanup failed."));
         // Act
@@ -50,15 +52,19 @@ public sealed class ReaderSessionContractTests
     [InlineData("next", true)]
     [InlineData("single-row", true)]
     [InlineData("single-result", true)]
-    public async Task ShouldDrainAndTranslateServerErrorGivenErrorResponseWhenReaderPhaseFails(string phase,
-        bool canceled)
+    public async Task ShouldDrainAndTranslateServerErrorGivenErrorResponseWhenReaderPhaseFails(
+        string phase,
+        bool canceled
+    )
     {
         // Arrange
         FakeReaderSession session = new();
+
         if (phase != "initialize")
         {
             session.Enqueue((byte)'T', OneInt32Column(false));
         }
+
 
         if (phase == "next")
         {
@@ -82,10 +88,12 @@ public sealed class ReaderSessionContractTests
         };
         await using CassieDataReader reader = new(session, 0, behavior);
         using CancellationTokenSource caller = new();
+
         if (phase != "initialize")
         {
             await reader.InitializeAsync(TestContext.Current.CancellationToken);
         }
+
 
         if (phase is "next" or "single-row")
         {
@@ -102,6 +110,7 @@ public sealed class ReaderSessionContractTests
 
         // Assert
         CassieException serverError;
+
         if (canceled)
         {
             var error = Assert.IsType<OperationCanceledException>(failure);
@@ -112,6 +121,7 @@ public sealed class ReaderSessionContractTests
         {
             serverError = Assert.IsType<CassieException>(failure);
         }
+
 
         Assert.Equal(sqlState, serverError.SqlState);
         Assert.Equal("query failed", serverError.Message);

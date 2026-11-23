@@ -31,10 +31,12 @@ public sealed class CassieRestErrorContractTests
             Assert.Equal("write once", body["content"]!.GetValue<string>());
             var response = ScriptedHttpHandler.Json( /*lang=json,strict*/ "{\"error\":\"server rejected request\"}",
                 (HttpStatusCode)status);
+
             if (status == 429)
             {
                 response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(60));
             }
+
 
             return response;
         });

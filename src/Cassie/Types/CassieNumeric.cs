@@ -11,10 +11,12 @@ public readonly record struct CassieNumeric : IFormattable, IConvertible
     public CassieNumeric(string value)
     {
         ArgumentNullException.ThrowIfNull(value);
+
         if (!IsValid(value))
         {
             throw new FormatException("The value is not a valid PostgreSQL numeric representation.");
         }
+
 
         Value = value;
     }
@@ -145,17 +147,21 @@ public readonly record struct CassieNumeric : IFormattable, IConvertible
         }
 
         var index = 0;
+
         if (index < value.Length && value[index] is '+' or '-')
         {
             index++;
         }
 
+
         var digits = ConsumeDigits(value, ref index);
+
         if (index < value.Length && value[index] == '.')
         {
             index++;
             digits += ConsumeDigits(value, ref index);
         }
+
 
         if (digits == 0)
         {
@@ -165,10 +171,12 @@ public readonly record struct CassieNumeric : IFormattable, IConvertible
         if (index < value.Length && value[index] is 'e' or 'E')
         {
             index++;
+
             if (index < value.Length && value[index] is '+' or '-')
             {
                 index++;
             }
+
 
             if (ConsumeDigits(value, ref index) == 0)
             {
@@ -182,10 +190,12 @@ public readonly record struct CassieNumeric : IFormattable, IConvertible
     private static int ConsumeDigits(ReadOnlySpan<char> value, ref int index)
     {
         var start = index;
+
         while (index < value.Length && char.IsAsciiDigit(value[index]))
         {
             index++;
         }
+
 
         return index - start;
     }

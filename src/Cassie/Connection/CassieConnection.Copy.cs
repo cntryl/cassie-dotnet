@@ -14,8 +14,12 @@ public sealed partial class CassieConnection
     // Each connection supplies its clock so recovery tests can advance the fixed deadline without sleeping.
     internal TimeProvider CopyRecoveryTimeProvider { get; set; } = TimeProvider.System;
 
-    internal async Task<int> ExecuteCopyToAsync(string sql, Stream destination, int commandTimeout,
-        CancellationToken cancellationToken)
+    internal async Task<int> ExecuteCopyToAsync(
+        string sql,
+        Stream destination,
+        int commandTimeout,
+        CancellationToken cancellationToken
+    )
     {
         ValidateSqlText(sql);
         var session = RequireSession("The connection is not open.");
@@ -23,6 +27,7 @@ public sealed partial class CassieConnection
         _gate.Begin();
         using CommandDeadline deadline = new(commandTimeout, cancellationToken);
         var writingFrame = false;
+
         try
         {
             writingFrame = true;
@@ -36,6 +41,7 @@ public sealed partial class CassieConnection
         catch (OperationCanceledException) when (deadline.IsCancellationRequested)
         {
             var failure = TimeoutOrOriginal(deadline, commandTimeout, cancellationToken);
+
             if (writingFrame)
             {
                 AbortTransport();
@@ -45,6 +51,7 @@ public sealed partial class CassieConnection
                 await RecoverCopyAsync(CancelAndDrainCopyAsync).ConfigureAwait(false);
             }
 
+
             throw failure;
         }
         finally
@@ -53,8 +60,12 @@ public sealed partial class CassieConnection
         }
     }
 
-    internal async Task<int> ExecuteCopyFromAsync(string sql, Stream source, int commandTimeout,
-        CancellationToken cancellationToken)
+    internal async Task<int> ExecuteCopyFromAsync(
+        string sql,
+        Stream source,
+        int commandTimeout,
+        CancellationToken cancellationToken
+    )
     {
         ValidateSqlText(sql);
         var session = RequireSession("The connection is not open.");
@@ -64,6 +75,7 @@ public sealed partial class CassieConnection
         var copyMode = false;
         var writingFrame = false;
         byte[]? buffer = null;
+
         try
         {
             writingFrame = true;
@@ -75,13 +87,16 @@ public sealed partial class CassieConnection
             copyMode = true;
             buffer = ArrayPool<byte>.Shared.Rent(CopyBufferSize + PgFraming.HeaderLength);
             var payload = buffer.AsMemory(PgFraming.HeaderLength, CopyBufferSize);
+
             while (true)
             {
                 var bytesRead = await source.ReadAsync(payload, deadline.Token).ConfigureAwait(false);
+
                 if (bytesRead == 0)
                 {
                     break;
                 }
+
 
                 if ((uint)bytesRead > (uint)payload.Length)
                 {
@@ -95,6 +110,7 @@ public sealed partial class CassieConnection
                 writingFrame = false;
             }
 
+
             writingFrame = true;
             await session.WriteFrameAsync(FrontendMessage.CopyDone, [], deadline.Token).ConfigureAwait(false);
             writingFrame = false;
@@ -104,6 +120,7 @@ public sealed partial class CassieConnection
         catch (OperationCanceledException) when (deadline.IsCancellationRequested)
         {
             var failure = TimeoutOrOriginal(deadline, commandTimeout, cancellationToken);
+
             if (writingFrame)
             {
                 AbortTransport();
@@ -117,6 +134,7 @@ public sealed partial class CassieConnection
             {
                 await RecoverCopyAsync(CancelAndDrainCopyAsync).ConfigureAwait(false);
             }
+
 
             throw failure;
         }
@@ -164,8 +182,11 @@ public sealed partial class CassieConnection
         }
     }
 
-    private static Exception TimeoutOrOriginal(CommandDeadline deadline, int commandTimeout,
-        CancellationToken cancellationToken)
+    private static Exception TimeoutOrOriginal(
+        CommandDeadline deadline,
+        int commandTimeout,
+        CancellationToken cancellationToken
+    )
     {
         return deadline.TimedOut
             ? new TimeoutException($"The COPY command exceeded {commandTimeout} seconds.")
@@ -180,6 +201,7 @@ public sealed partial class CassieConnection
         // The recovery task is still awaited so none of its callbacks can act on a later operation.
         using var abortOnDeadline =
             timeout.Token.UnsafeRegister(static state => ((PgSession?)state)?.Client.Dispose(), _session);
+
         try
         {
             await recovery(timeout.Token).ConfigureAwait(false);
@@ -200,6 +222,7 @@ public sealed partial class CassieConnection
     private async Task CancelAndDrainCopyAsync(CancellationToken cancellationToken)
     {
         var session = _session!;
+
         if (session.CanCancel && await QueryCanceler.SendAsync([with(_connectionString)], session.BackendProcessId,
                 session.BackendSecretKey, cancellationToken).ConfigureAwait(false))
         {
@@ -219,6 +242,7 @@ public sealed partial class CassieConnection
         PgWriter.WriteCString(payload, message);
         await session.WriteFrameAsync(FrontendMessage.CopyFail, payload.ToArray(), cancellationToken)
             .ConfigureAwait(false);
+
         try
         {
             _ = await DrainCopyCompletionAsync(session, cancellationToken, true).ConfigureAwait(false);
@@ -241,17 +265,24 @@ public sealed partial class CassieConnection
     ///     Reads until the server confirms the expected COPY direction, translating any other outcome into the matching
     ///     failure.
     /// </summary>
-    private async Task AwaitCopyStartAsync(PgSession session, byte expectedTag, string direction, string operation,
-        CancellationToken cancellationToken)
+    private async Task AwaitCopyStartAsync(
+        PgSession session,
+        byte expectedTag,
+        string direction,
+        string operation,
+        CancellationToken cancellationToken
+    )
     {
         while (true)
         {
             var (tag, payload) = await session.ReadFrameAsync(cancellationToken).ConfigureAwait(false);
+
             if (tag == expectedTag)
             {
                 ValidateCopyResponse(payload, direction);
                 return;
             }
+
 
             switch (tag)
             {
@@ -276,12 +307,16 @@ public sealed partial class CassieConnection
         }
     }
 
-    private async Task<int> StreamCopyOutAsync(PgSession session, Stream destination,
-        CancellationToken cancellationToken)
+    private async Task<int> StreamCopyOutAsync(
+        PgSession session,
+        Stream destination,
+        CancellationToken cancellationToken
+    )
     {
         while (true)
         {
             var (tag, payload) = await session.ReadFrameAsync(cancellationToken).ConfigureAwait(false);
+
             switch (tag)
             {
                 case BackendMessage.CopyData:
@@ -300,14 +335,19 @@ public sealed partial class CassieConnection
         }
     }
 
-    private async Task<int> DrainCopyCompletionAsync(PgSession session, CancellationToken cancellationToken,
-        bool recovering = false)
+    private async Task<int> DrainCopyCompletionAsync(
+        PgSession session,
+        CancellationToken cancellationToken,
+        bool recovering = false
+    )
     {
         CassieException? serverError = null;
         var recordsAffected = 0;
+
         while (true)
         {
             var (tag, payload) = await session.ReadFrameAsync(cancellationToken).ConfigureAwait(false);
+
             switch (tag)
             {
                 case BackendMessage.CommandComplete:
@@ -341,14 +381,17 @@ public sealed partial class CassieConnection
         }
 
         var columnCount = BinaryPrimitives.ReadInt16BigEndian(payload.AsSpan(1));
+
         if (columnCount < 0 || payload.Length != 3 + (columnCount * sizeof(short)))
         {
             throw new IOException($"Invalid COPY {direction} column-format list from Cassie.");
         }
 
+
         for (var index = 0; index < columnCount; index++)
         {
             var formatCode = BinaryPrimitives.ReadInt16BigEndian(payload.AsSpan(3 + (index * sizeof(short))));
+
             if (formatCode is not 0 and not 1)
             {
                 throw new IOException($"Cassie returned an invalid COPY {direction} column format code.");

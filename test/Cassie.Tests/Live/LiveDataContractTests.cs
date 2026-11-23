@@ -267,6 +267,7 @@ public sealed class LiveDataContractTests : IAsyncLifetime
 
         // Act
         CassieException? duplicate = null;
+
         try
         {
             _ = await restore.CopyFromAsync(image, TestContext.Current.CancellationToken);
@@ -276,6 +277,7 @@ public sealed class LiveDataContractTests : IAsyncLifetime
         {
             duplicate = exception;
         }
+
 
         Assert.SkipWhen(duplicate is not null,
             $"{RestoredDatabase} already exists and this server cannot drop restored databases; use a fresh server.");
@@ -289,12 +291,14 @@ public sealed class LiveDataContractTests : IAsyncLifetime
         verify.CommandText = $"SELECT id, label FROM {LiveSession.ProbeTable} ORDER BY id";
         List<(int Id, string Label)> rows = [];
         await using var reader = await verify.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+
         while (await reader.ReadAsync(TestContext.Current.CancellationToken))
         {
             rows.Add((reader.GetInt32(0), reader.GetString(1)));
         }
 
         // Assert
+
         Assert.Equal(0, backupRows);
         Assert.NotEqual(0, image.Length);
         Assert.Equal([(1, "alpha"), (2, "beta"), (3, "gamma")], rows);

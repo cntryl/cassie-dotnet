@@ -30,6 +30,7 @@ public static class CassieDiagnostics
     internal static async Task<T> ObserveAsync<T>(string operation, Func<Task<T>> action, ILogger? logger = null)
     {
         using var scope = StartOperation(operation);
+
         try
         {
             return await action().ConfigureAwait(false);
@@ -44,6 +45,7 @@ public static class CassieDiagnostics
     internal static async Task ObserveAsync(string operation, Func<Task> action, ILogger? logger = null)
     {
         using var scope = StartOperation(operation);
+
         try
         {
             await action().ConfigureAwait(false);
@@ -110,6 +112,7 @@ public static class CassieDiagnostics
 
                 _failed = true;
                 _ = _activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
+
                 if (logger is not null && !_failureLogged)
                 {
                     _failureLogged = true;

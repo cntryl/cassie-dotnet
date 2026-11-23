@@ -14,11 +14,13 @@ public sealed class CassieVector : IReadOnlyList<float>
     public CassieVector(params float[] values)
     {
         ArgumentNullException.ThrowIfNull(values);
+
         if (values.Length is < 1 or > short.MaxValue || values.Any(static value => !float.IsFinite(value)))
         {
             throw new ArgumentException("A Cassie vector requires one through 32767 finite FLOAT4 components.",
                 nameof(values));
         }
+
 
         _values = [.. values];
         _readOnlyValues = Array.AsReadOnly(_values);

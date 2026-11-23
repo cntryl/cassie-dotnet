@@ -51,10 +51,12 @@ internal static class CassieConnectionPools
         FileInfo file = new(path);
         var stamp = file.LastWriteTimeUtc;
         var length = file.Length;
+
         if (TrustFingerprints.TryGetValue(path, out var cached) && cached.Stamp == stamp && cached.Length == length)
         {
             return cached.Hash;
         }
+
 
         var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
         TrustFingerprints[path] = (stamp, length, hash);
@@ -83,10 +85,12 @@ internal static class CassieConnectionPools
             settings.ConnectionLifetime.ToString(CultureInfo.InvariantCulture)
         ];
         StringBuilder material = new();
+
         foreach (var component in components)
         {
             _ = material.Append(component.Length.ToString(CultureInfo.InvariantCulture)).Append(':').Append(component);
         }
+
 
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material.ToString())));
     }

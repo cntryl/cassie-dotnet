@@ -23,6 +23,7 @@ public sealed class SyncCommandTimeoutContractTests
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT 1 /*" + new string('x', 8 * 1024 * 1024) + "*/";
         command.CommandTimeout = 1;
+
         try
         {
             // Act
@@ -91,6 +92,7 @@ public sealed class AsyncCommandTimeoutContractTests
             Assert.Equal((byte)'E', (await session.ReadFrameAsync()).Tag);
             Assert.Equal((byte)'H', (await session.ReadFrameAsync()).Tag);
             await Task.Delay(750, token);
+
             if (peer!.CancelRequests == 0)
             {
                 await session.WriteTextRowAsync("2");
@@ -100,6 +102,7 @@ public sealed class AsyncCommandTimeoutContractTests
             {
                 await BatchPeer.ReplyWithErrorAsync(session, "57014", "query canceled");
             }
+
 
             Assert.Equal(FrontendMessage.Sync, (await session.ReadFrameAsync()).Tag);
             await session.WriteReadyAsync();

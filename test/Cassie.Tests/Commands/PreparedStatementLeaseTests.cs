@@ -192,10 +192,12 @@ public sealed class PreparedStatementLeaseTests
             await session.WriteIntRowDescriptionAsync();
             await session.WriteCommandCompleteAsync("SELECT 0");
             await session.WriteReadyAsync();
+
             for (var group = 0; group < 2; group++)
             {
                 var count = group == 0 ? 64 : 2;
                 List<string> names = [];
+
                 for (var index = 0; index < count; index++)
                 {
                     var (tag, payload) = await session.ReadFrameAsync();
@@ -205,6 +207,7 @@ public sealed class PreparedStatementLeaseTests
                     names.Add(PgPayload.ReadCString(payload, ref offset));
                 }
 
+
                 if (loseSync)
                 {
                     await session.WriteReadyAsync();
@@ -212,6 +215,7 @@ public sealed class PreparedStatementLeaseTests
                 }
 
                 Assert.Equal(count, names.Distinct(StringComparer.Ordinal).Count());
+
                 for (var index = 0; index < count; index++)
                 {
                     if (group == 0 && index < 3)
@@ -229,6 +233,7 @@ public sealed class PreparedStatementLeaseTests
                 }
             }
 
+
             await session.ServeQueriesAsync(session.WriteCommandCompleteAsync);
         });
         await using CassieConnection connection = new() { ConnectionString = server.ConnectionString("Pooling=false") };
@@ -236,11 +241,13 @@ public sealed class PreparedStatementLeaseTests
         using var query = connection.CreateCommand();
         query.CommandText = "SELECT 1";
         await using var reader = await query.ExecuteReaderAsync(token);
+
         for (var index = 0; index < 66; index++)
         {
             await connection.CloseServerStatementAsync(index.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 connection.SessionIdentity, token);
         }
+
 
         await connection.CloseServerStatementAsync("0", connection.SessionIdentity, token);
 
@@ -261,12 +268,17 @@ public sealed class PreparedStatementLeaseTests
         }
     }
 
-    private static async Task ServePreparedAsync(ScriptedSession session, ConcurrentQueue<string> prepared,
-        ConcurrentQueue<string> closed, ConcurrentQueue<string> bound)
+    private static async Task ServePreparedAsync(
+        ScriptedSession session,
+        ConcurrentQueue<string> prepared,
+        ConcurrentQueue<string> closed,
+        ConcurrentQueue<string> bound
+    )
     {
         while (true)
         {
             var (tag, payload) = await session.ReadFrameAsync();
+
             switch (tag)
             {
                 case (byte)'P':

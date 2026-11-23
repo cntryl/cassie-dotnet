@@ -12,15 +12,20 @@ internal static class PgSessionConnector
     private const int AuthenticationOk = 0;
     private const int AuthenticationCleartextPassword = 3;
 
-    public static async Task<PgSession> ConnectAsync(CassieConnectionStringBuilder settings, bool synchronous,
-        CancellationToken cancellationToken)
+    public static async Task<PgSession> ConnectAsync(
+        CassieConnectionStringBuilder settings,
+        bool synchronous,
+        CancellationToken cancellationToken
+    )
     {
         ArgumentNullException.ThrowIfNull(settings);
         PgSession session = new(new DateStyleTracker(), Stopwatch.GetTimestamp());
+
         try
         {
             await session.ConnectAsync(settings.Host, settings.Port, synchronous, cancellationToken)
                 .ConfigureAwait(false);
+
             if (settings.SslMode != CassieSslMode.Disable)
             {
                 if (synchronous)
@@ -35,6 +40,7 @@ internal static class PgSessionConnector
             }
 
             // Buffer only once the final transport is in place: TLS negotiation must see the raw socket bytes.
+
             session.UseStream(new ReadBufferedStream(session.Stream) { Synchronous = synchronous });
 
             await session.Stream
@@ -55,16 +61,22 @@ internal static class PgSessionConnector
         }
     }
 
-    private static async Task<(string ServerVersion, int ProcessId, int SecretKey)> AuthenticateAsync(Stream stream,
-        CassieConnectionStringBuilder settings, DateStyleTracker dateStyle, CancellationToken cancellationToken)
+    private static async Task<(string ServerVersion, int ProcessId, int SecretKey)> AuthenticateAsync(
+        Stream stream,
+        CassieConnectionStringBuilder settings,
+        DateStyleTracker dateStyle,
+        CancellationToken cancellationToken
+    )
     {
         var authenticated = false;
         var serverVersion = string.Empty;
         var processId = 0;
         var secretKey = 0;
+
         while (true)
         {
             var (tag, payload) = await PgFraming.ReadBackendFrameAsync(stream, cancellationToken).ConfigureAwait(false);
+
             switch (tag)
             {
                 case BackendMessage.Authentication:
@@ -105,8 +117,12 @@ internal static class PgSessionConnector
     }
 
     /// <summary>Answers an authentication request; returns true once the server reports success.</summary>
-    private static async Task<bool> HandleAuthenticationAsync(Stream stream, CassieConnectionStringBuilder settings,
-        byte[] payload, CancellationToken cancellationToken)
+    private static async Task<bool> HandleAuthenticationAsync(
+        Stream stream,
+        CassieConnectionStringBuilder settings,
+        byte[] payload,
+        CancellationToken cancellationToken
+    )
     {
         if (payload.Length != 4)
         {
@@ -114,10 +130,12 @@ internal static class PgSessionConnector
         }
 
         var method = BinaryPrimitives.ReadInt32BigEndian(payload);
+
         if (method == AuthenticationOk)
         {
             return true;
         }
+
 
         if (method != AuthenticationCleartextPassword)
         {
@@ -126,6 +144,7 @@ internal static class PgSessionConnector
 
         var passwordPayload = new byte[Encoding.UTF8.GetByteCount(settings.Password) + 1];
         _ = Encoding.UTF8.GetBytes(settings.Password, passwordPayload);
+
         try
         {
             await PgFraming
@@ -136,6 +155,7 @@ internal static class PgSessionConnector
         {
             CryptographicOperations.ZeroMemory(passwordPayload);
         }
+
 
         return false;
     }

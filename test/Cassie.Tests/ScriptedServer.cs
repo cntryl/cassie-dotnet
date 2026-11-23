@@ -17,8 +17,11 @@ internal sealed class ScriptedServer : IDisposable
     private int _cancelRequests;
     private int _terminated;
 
-    internal ScriptedServer(Func<ScriptedSession, Task> handler, bool handlesVectorCatalog = true,
-        Func<Task>? acknowledgeCancel = null)
+    internal ScriptedServer(
+        Func<ScriptedSession, Task> handler,
+        bool handlesVectorCatalog = true,
+        Func<Task>? acknowledgeCancel = null
+    )
     {
         _handler = handler;
         HandlesVectorCatalog = handlesVectorCatalog;
@@ -100,16 +103,20 @@ internal sealed class ScriptedServer : IDisposable
             {
                 ScriptedSession session = new(this, client);
                 var regular = await session.StartupAsync();
+
                 if (!regular)
                 {
                     _ = Interlocked.Increment(ref _cancelRequests);
+
                     if (_acknowledgeCancel is not null)
                     {
                         await _acknowledgeCancel();
                     }
 
+
                     return;
                 }
+
 
                 await _handler(session);
             }
@@ -134,10 +141,12 @@ internal sealed class ScriptedSession(ScriptedServer server, TcpClient client)
         var length = BinaryPrimitives.ReadInt32BigEndian(prefix);
         var code = BinaryPrimitives.ReadInt32BigEndian(prefix.AsSpan(4));
         await Stream.ReadExactlyAsync(new byte[length - prefix.Length]);
+
         if (code == ScriptedServer.CancelCode)
         {
             return false;
         }
+
 
         await WriteAsync((byte)'R', [0, 0, 0, 0]);
         var key = new byte[8];
@@ -157,11 +166,13 @@ internal sealed class ScriptedSession(ScriptedServer server, TcpClient client)
         while (true)
         {
             var frame = await ReadFrameCoreAsync();
+
             if (!server.HandlesVectorCatalog || frame.Tag != (byte)'Q' ||
                 Encoding.UTF8.GetString(frame.Payload.AsSpan(0, frame.Payload.Length - 1)) != CassieConnection.VectorCatalogQuery)
             {
                 return frame;
             }
+
 
             await WriteIntRowDescriptionAsync("objid");
             await WriteCommandCompleteAsync("SELECT 0");
@@ -175,10 +186,12 @@ internal sealed class ScriptedSession(ScriptedServer server, TcpClient client)
         await Stream.ReadExactlyAsync(header);
         var payload = new byte[BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(1)) - 4];
         await Stream.ReadExactlyAsync(payload);
+
         if (header[0] == (byte)'X')
         {
             server.CountTerminate();
         }
+
 
         return (header[0], payload);
     }
@@ -227,10 +240,12 @@ internal sealed class ScriptedSession(ScriptedServer server, TcpClient client)
         while (true)
         {
             var (tag, payload) = await ReadFrameAsync();
+
             if (tag == (byte)'X')
             {
                 return;
             }
+
 
             if (tag == (byte)'Q')
             {
@@ -246,6 +261,7 @@ internal sealed class ScriptedSession(ScriptedServer server, TcpClient client)
         while (true)
         {
             var (tag, _) = await ReadFrameAsync();
+
             if (tag == (byte)'X')
             {
                 return;

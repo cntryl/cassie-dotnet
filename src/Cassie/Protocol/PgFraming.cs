@@ -16,23 +16,31 @@ internal static class PgFraming
     ///     Reads one backend frame. Completes synchronously, without touching the transport, when the
     ///     whole frame is already buffered.
     /// </summary>
-    public static ValueTask<(byte Tag, byte[] Payload)> ReadBackendFrameAsync(Stream stream,
-        CancellationToken cancellationToken)
+    public static ValueTask<(byte Tag, byte[] Payload)> ReadBackendFrameAsync(
+        Stream stream,
+        CancellationToken cancellationToken
+    )
     {
         return ReadBackendFrameAsync(stream, null, cancellationToken);
     }
 
-    public static ValueTask<(byte Tag, byte[] Payload)> ReadBackendFrameAsync(Stream stream,
-        RowPayloadBuffer? rowBuffer, CancellationToken cancellationToken)
+    public static ValueTask<(byte Tag, byte[] Payload)> ReadBackendFrameAsync(
+        Stream stream,
+        RowPayloadBuffer? rowBuffer,
+        CancellationToken cancellationToken
+    )
     {
         ArgumentNullException.ThrowIfNull(stream);
+
         if (stream is ReadBufferedStream buffered)
         {
             var available = buffered.Buffered;
+
             if (available.Length >= HeaderLength)
             {
                 var tag = available[0];
                 var payloadLength = ReadPayloadLength(available[1..]);
+
                 if (available.Length - HeaderLength >= payloadLength)
                 {
                     var payload = GetPayloadBuffer(tag, payloadLength, rowBuffer);
@@ -43,11 +51,15 @@ internal static class PgFraming
             }
         }
 
+
         return ReadBackendFrameCoreAsync(stream, rowBuffer, cancellationToken);
     }
 
-    private static async ValueTask<(byte Tag, byte[] Payload)> ReadBackendFrameCoreAsync(Stream stream,
-        RowPayloadBuffer? rowBuffer, CancellationToken cancellationToken)
+    private static async ValueTask<(byte Tag, byte[] Payload)> ReadBackendFrameCoreAsync(
+        Stream stream,
+        RowPayloadBuffer? rowBuffer,
+        CancellationToken cancellationToken
+    )
     {
         var header = new byte[HeaderLength];
         await stream.ReadExactlyAsync(header, cancellationToken).ConfigureAwait(false);
@@ -74,8 +86,12 @@ internal static class PgFraming
     }
 
     /// <summary>Writes one frame and zeroes any pooled buffer afterwards because payloads can carry credentials.</summary>
-    public static async Task WriteFrontendFrameAsync(Stream stream, byte tag, byte[] payload,
-        CancellationToken cancellationToken)
+    public static async Task WriteFrontendFrameAsync(
+        Stream stream,
+        byte tag,
+        byte[] payload,
+        CancellationToken cancellationToken
+    )
     {
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(payload);
@@ -84,6 +100,7 @@ internal static class PgFraming
         var frame = rentedFrame ?? new byte[frameLength];
         WriteHeader(frame, tag, payload.Length);
         payload.CopyTo(frame, 5);
+
         try
         {
             await stream.WriteAsync(frame.AsMemory(0, frameLength), cancellationToken).ConfigureAwait(false);
@@ -110,6 +127,7 @@ internal static class PgFraming
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(batch);
         var buffer = batch.GetBuffer();
+
         try
         {
             await stream.WriteAsync(buffer.AsMemory(0, (int)batch.Length), cancellationToken).ConfigureAwait(false);

@@ -33,6 +33,7 @@ internal sealed class LiveSession : IAsyncDisposable
         }
 
         await Connection.DisposeAsync();
+
         if (_createdObjects.Count > 0)
         {
             await using CassieConnection cleanup = new() { ConnectionString = ConnectionString };
@@ -124,8 +125,10 @@ internal sealed class LiveSession : IAsyncDisposable
     }
 
     /// <summary>Executes the command and advances to the first row, failing the test when there is none.</summary>
-    public static async Task<DbDataReader> ReadFirstRowAsync(CassieCommand command,
-        CommandBehavior behavior = CommandBehavior.Default)
+    public static async Task<DbDataReader> ReadFirstRowAsync(
+        CassieCommand command,
+        CommandBehavior behavior = CommandBehavior.Default
+    )
     {
         ArgumentNullException.ThrowIfNull(command);
         var reader = await command.ExecuteReaderAsync(behavior, TestContext.Current.CancellationToken);
@@ -136,6 +139,7 @@ internal sealed class LiveSession : IAsyncDisposable
     private async Task DropCatalogAsync(CassieConnection cleanup)
     {
         List<CassieException> failures = [];
+
         for (var index = _createdObjects.Count - 1; index >= 0; index--)
         {
             using var drop = _createdObjects[index] switch
@@ -151,6 +155,7 @@ internal sealed class LiveSession : IAsyncDisposable
                 _ => throw new InvalidOperationException("The live session registered an unknown schema object.")
             };
             drop.Connection = cleanup;
+
             try
             {
                 _ = await drop.ExecuteNonQueryAsync(CancellationToken.None);
@@ -160,6 +165,7 @@ internal sealed class LiveSession : IAsyncDisposable
                 failures.Add(exception);
             }
         }
+
 
         if (failures.Count > 0)
         {

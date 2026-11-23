@@ -15,10 +15,12 @@ internal readonly struct CommandDeadline : IDisposable
     {
         _caller = caller;
         _budget = budget;
+
         if (budget.HasTimeout)
         {
             _timeout = caller.CanBeCanceled ? CancellationTokenSource.CreateLinkedTokenSource(caller) : new();
             var remaining = budget.Remaining;
+
             if (remaining == TimeSpan.Zero)
             {
                 _timeout.Cancel();
@@ -40,6 +42,7 @@ internal readonly struct CommandDeadline : IDisposable
     public void ThrowIfExpired()
     {
         _caller.ThrowIfCancellationRequested();
+
         if (TimedOut)
         {
             throw new TimeoutException("The command exceeded CommandTimeout.");

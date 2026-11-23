@@ -78,8 +78,13 @@ public sealed class ReaderFieldValueTests
     [InlineData("nullable-decimal", Numeric, 0, "1.5", "ex:InvalidCastException")]
     [InlineData("nullable-int", Int4, 0, "1", "ok:1")]
     [InlineData("nullable-int", Int4, 0, NullField, "ex:InvalidCastException")]
-    public async Task ShouldReturnSameOutcomeGivenWireFieldWhenGenericFieldValueIsRequested(string requested,
-        int typeOid, short format, string payload, string expected)
+    public async Task ShouldReturnSameOutcomeGivenWireFieldWhenGenericFieldValueIsRequested(
+        string requested,
+        int typeOid,
+        short format,
+        string payload,
+        string expected
+    )
     {
         // Arrange
         var field = payload == NullField ? null :
@@ -188,8 +193,11 @@ public sealed class ReaderFieldValueTests
         return value.Kind + "/" + value;
     }
 
-    private static async Task<CassieDataReader> OpenAsync((int TypeOid, short Format)[] columns, byte[]?[] fields,
-        CommandBehavior behavior = CommandBehavior.Default)
+    private static async Task<CassieDataReader> OpenAsync(
+        (int TypeOid, short Format)[] columns,
+        byte[]?[] fields,
+        CommandBehavior behavior = CommandBehavior.Default
+    )
     {
         FakeReaderSession session = new();
         session.Enqueue((byte)'T', RowDescription(columns));
@@ -206,6 +214,7 @@ public sealed class ReaderFieldValueTests
     {
         using MemoryStream payload = new();
         WriteInt16(payload, (short)columns.Length);
+
         for (var index = 0; index < columns.Length; index++)
         {
             payload.Write(Encoding.UTF8.GetBytes($"c{index}\0"));
@@ -217,6 +226,7 @@ public sealed class ReaderFieldValueTests
             WriteInt16(payload, columns[index].Format);
         }
 
+
         return payload.ToArray();
     }
 
@@ -224,14 +234,17 @@ public sealed class ReaderFieldValueTests
     {
         using MemoryStream payload = new();
         WriteInt16(payload, (short)fields.Length);
+
         foreach (var field in fields)
         {
             WriteInt32(payload, field?.Length ?? -1);
+
             if (field is not null)
             {
                 payload.Write(field);
             }
         }
+
 
         return payload.ToArray();
     }

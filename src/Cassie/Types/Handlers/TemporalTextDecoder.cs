@@ -12,10 +12,12 @@ internal static class TemporalTextDecoder
     internal static object DecodeTextDate(string value, CassieDateStyle? dateStyle)
     {
         var trimmed = value.Trim();
+
         if (TryDecodeTemporalInfinity(trimmed, CassieTemporalKind.Date, out var infinity))
         {
             return infinity;
         }
+
 
         var style = dateStyle ?? CassieDateStyle.Default;
         return style.TryParseDate(trimmed, out var date)
@@ -37,10 +39,12 @@ internal static class TemporalTextDecoder
     internal static object DecodeTextTimestamp(string value, CassieTemporalKind kind, CassieDateStyle? dateStyle)
     {
         var trimmed = value.Trim();
+
         if (TryDecodeTemporalInfinity(trimmed, kind, out var infinity))
         {
             return infinity;
         }
+
 
         var style = dateStyle ?? CassieDateStyle.Default;
         return TryParseTextTimestamp(trimmed, style, out var timestamp)
@@ -54,10 +58,12 @@ internal static class TemporalTextDecoder
     internal static object DecodeTextTimestampTz(string value, CassieDateStyle? dateStyle)
     {
         var trimmed = value.Trim();
+
         if (TryDecodeTemporalInfinity(trimmed, CassieTemporalKind.TimestampWithTimeZone, out var infinity))
         {
             return infinity;
         }
+
 
         var style = dateStyle ?? CassieDateStyle.Default;
         return TryParseTextTimestampWithTimeZone(trimmed, style, out var timestamp)
@@ -78,6 +84,7 @@ internal static class TemporalTextDecoder
         }
 
         var separator = value.IndexOf(' ', StringComparison.Ordinal);
+
         if (separator <= 0 || !dateStyle.TryParseDate(value[..separator], out var date)
                            || !TimeOnly.TryParse(value[(separator + 1)..], CultureInfo.InvariantCulture,
                                DateTimeStyles.None, out var time))
@@ -86,18 +93,24 @@ internal static class TemporalTextDecoder
             return false;
         }
 
+
         timestamp = date.ToDateTime(time, DateTimeKind.Unspecified);
         return true;
     }
 
-    private static bool TryParseTextTimestampWithTimeZone(string value, CassieDateStyle dateStyle,
-        out DateTimeOffset timestamp)
+    private static bool TryParseTextTimestampWithTimeZone(
+        string value,
+        CassieDateStyle dateStyle,
+        out DateTimeOffset timestamp
+    )
     {
         var timestampText = value;
         int offsetSeconds;
+
         if (dateStyle.Output == CassieDateOutput.Postgres)
         {
             var zoneSeparator = timestampText.LastIndexOf(' ', StringComparison.Ordinal);
+
             if (zoneSeparator <= 0 ||
                 !TryParseTextOffsetSeconds(timestampText.AsSpan(zoneSeparator + 1), out offsetSeconds))
             {
@@ -105,7 +118,9 @@ internal static class TemporalTextDecoder
                 return false;
             }
 
+
             timestampText = timestampText[..zoneSeparator];
+
             if (!DateTime.TryParseExact(timestampText, dateStyle.TimestampFormats(), CultureInfo.InvariantCulture,
                     DateTimeStyles.None, out var postgresTimestamp))
             {
@@ -113,18 +128,23 @@ internal static class TemporalTextDecoder
                 return false;
             }
 
+
             return TryCreateDateTimeOffset(postgresTimestamp, offsetSeconds, out timestamp);
         }
 
+
         var dateSeparator = timestampText.IndexOf(' ', StringComparison.Ordinal);
+
         if (dateSeparator <= 0 || !dateStyle.TryParseDate(timestampText[..dateSeparator], out var date))
         {
             timestamp = default;
             return false;
         }
 
+
         var clockAndOffset = timestampText.AsSpan(dateSeparator + 1);
         var offsetStart = -1;
+
         for (var index = 1; index < clockAndOffset.Length; index++)
         {
             if (clockAndOffset[index] is '+' or '-')
@@ -132,6 +152,7 @@ internal static class TemporalTextDecoder
                 offsetStart = index;
             }
         }
+
 
         if (offsetStart <= 0 || !TryParseTextOffsetSeconds(clockAndOffset[offsetStart..], out offsetSeconds)
                              || !TimeOnly.TryParse(clockAndOffset[..offsetStart], CultureInfo.InvariantCulture,
@@ -173,17 +194,21 @@ internal static class TemporalTextDecoder
         }
 
         var timeStart = value.IndexOf(' ', StringComparison.Ordinal);
+
         if (timeStart < 0)
         {
             return false;
         }
 
+
         var timeAndZone = value.AsSpan(timeStart + 1);
         var zoneStart = timeAndZone.IndexOf(' ');
+
         if (zoneStart < 0)
         {
             return false;
         }
+
 
         var zone = timeAndZone[(zoneStart + 1)..].TrimStart();
         return !zone.IsEmpty && char.IsLetter(zone[0]);
@@ -201,11 +226,13 @@ internal static class TemporalTextDecoder
         try
         {
             var parsed = ParseTextOffsetSeconds(value);
+
             if (parsed is < int.MinValue or > int.MaxValue)
             {
                 offsetSeconds = 0;
                 return false;
             }
+
 
             offsetSeconds = (int)parsed;
             return true;
@@ -227,18 +254,22 @@ internal static class TemporalTextDecoder
         var trimmed = value.Trim();
         var zoneStart = Math.Max(trimmed.LastIndexOf('+', StringComparison.Ordinal),
             trimmed.LastIndexOf('-', StringComparison.Ordinal));
+
         if (zoneStart <= 0)
         {
             throw new FormatException("Cassie returned a time-with-time-zone value without an offset.");
         }
 
+
         var offsetSeconds = ParseTextOffsetSeconds(trimmed.AsSpan(zoneStart));
         var timeText = trimmed[..zoneStart];
         var isTwentyFour = IsTwentyFourHourTime(timeText);
+
         if (isTwentyFour)
         {
             return CassieTemporalValue.FromTimeWithTimeZoneMicroseconds(86_400_000_000, checked((int)offsetSeconds));
         }
+
 
         var time = TimeOnly.Parse(timeText, CultureInfo.InvariantCulture);
         return new CassieTimeWithTimeZone(time, checked((int)offsetSeconds));
@@ -255,22 +286,27 @@ internal static class TemporalTextDecoder
         var components = value[1..];
         var firstColon = components.IndexOf(':');
         var hoursText = firstColon < 0 ? components : components[..firstColon];
+
         if (!int.TryParse(hoursText, NumberStyles.None, CultureInfo.InvariantCulture, out var hours))
         {
             throw new FormatException("Cassie returned an invalid time-zone offset.");
         }
 
+
         var minutes = 0;
         var seconds = 0;
+
         if (firstColon >= 0)
         {
             var remaining = components[(firstColon + 1)..];
             var secondColon = remaining.IndexOf(':');
             var minutesText = secondColon < 0 ? remaining : remaining[..secondColon];
+
             if (!int.TryParse(minutesText, NumberStyles.None, CultureInfo.InvariantCulture, out minutes))
             {
                 throw new FormatException("Cassie returned an invalid time-zone offset.");
             }
+
 
             if (secondColon >= 0 && !int.TryParse(remaining[(secondColon + 1)..], NumberStyles.None,
                     CultureInfo.InvariantCulture, out seconds))
@@ -279,11 +315,15 @@ internal static class TemporalTextDecoder
             }
         }
 
+
         return checked(sign * (((long)hours * 3600) + ((long)minutes * 60) + seconds));
     }
 
-    private static bool TryDecodeTemporalInfinity(string value, CassieTemporalKind kind,
-        out CassieTemporalValue temporal)
+    private static bool TryDecodeTemporalInfinity(
+        string value,
+        CassieTemporalKind kind,
+        out CassieTemporalValue temporal
+    )
     {
         long? sentinel = value switch
         {
@@ -293,12 +333,14 @@ internal static class TemporalTextDecoder
             "-infinity" or "-Infinity" => kind == CassieTemporalKind.Date ? int.MinValue : long.MinValue,
             _ => null
         };
+
         if (sentinel is not long rawValue || kind is not (CassieTemporalKind.Date or CassieTemporalKind.Timestamp
                 or CassieTemporalKind.TimestampWithTimeZone))
         {
             temporal = default;
             return false;
         }
+
 
         temporal = kind switch
         {
@@ -317,14 +359,17 @@ internal static class TemporalTextDecoder
         }
 
         var consecutiveDigits = 0;
+
         foreach (var character in value)
         {
             consecutiveDigits = char.IsAsciiDigit(character) ? consecutiveDigits + 1 : 0;
+
             if (consecutiveDigits >= 5)
             {
                 return true;
             }
         }
+
 
         return false;
     }
@@ -337,10 +382,12 @@ internal static class TemporalTextDecoder
         }
 
         var suffix = value.AsSpan("24:00:00".Length);
+
         if (suffix.IsEmpty)
         {
             return true;
         }
+
 
         if (suffix[0] != '.')
         {

@@ -28,6 +28,7 @@ public sealed class LiveArrayContractTests : IAsyncLifetime
         var array = Assert.IsType<CassieArray>(candidate);
         Assert.Equal(elementTypeOid, array.ElementTypeOid);
         Assert.Equal(expected.Length, array.Count);
+
         for (var index = 0; index < expected.Length; index++)
         {
             Assert.Equal(expected[index], array[index]);

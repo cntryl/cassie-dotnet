@@ -16,17 +16,24 @@ public sealed partial class CassieConnection
         return ExecuteQueryCoreAsync(sql, default, CommandBehavior.Default, null, true, cancellationToken);
     }
 
-    internal async Task<CassieDataReader> ExecuteQueryCoreAsync(string sql, CommandBudget budget,
-        CommandBehavior behavior, CassieDiagnostics.OperationScope? operationScope, bool refreshDateStyle,
-        CancellationToken cancellationToken)
+    internal async Task<CassieDataReader> ExecuteQueryCoreAsync(
+        string sql,
+        CommandBudget budget,
+        CommandBehavior behavior,
+        CassieDiagnostics.OperationScope? operationScope,
+        bool refreshDateStyle,
+        CancellationToken cancellationToken
+    )
     {
         var session = RequireSession("The connection is not open.");
         ThrowIfReaderActive();
         var query = Encoding.UTF8.GetBytes(sql + "\0");
+
         if (refreshDateStyle)
         {
             await RefreshDateStyleIfNeededAsync(budget, cancellationToken).ConfigureAwait(false);
         }
+
 
         session.DateStyle.ObserveSql(sql);
         return await RunReaderAsync(
@@ -35,16 +42,23 @@ public sealed partial class CassieConnection
             budget, cancellationToken).ConfigureAwait(false);
     }
 
-    internal async Task<CassieDataReader> ExecuteParameterizedQueryAsync(CassiePreparedCommand prepared,
-        CommandBudget budget, CancellationToken cancellationToken, CommandBehavior behavior = CommandBehavior.Default,
-        bool binaryResults = false, string? statementName = null,
-        CassieDiagnostics.OperationScope? operationScope = null, EncodedParameters? encodedParameters = null)
+    internal async Task<CassieDataReader> ExecuteParameterizedQueryAsync(
+        CassiePreparedCommand prepared,
+        CommandBudget budget,
+        CancellationToken cancellationToken,
+        CommandBehavior behavior = CommandBehavior.Default,
+        bool binaryResults = false,
+        string? statementName = null,
+        CassieDiagnostics.OperationScope? operationScope = null,
+        EncodedParameters? encodedParameters = null
+    )
     {
         ValidateSqlText(prepared.Sql);
         var session = RequireSession("The connection is not open.");
         ThrowIfReaderActive();
         var schemaOnly = (behavior & CommandBehavior.SchemaOnly) != 0;
         using MemoryStream batch = new();
+
         try
         {
             // Local validation must finish before a refresh or execution touches the session.
@@ -83,6 +97,7 @@ public sealed partial class CassieConnection
     internal async Task ExecuteControlQueryAsync(string sql, CancellationToken cancellationToken)
     {
         var reader = await ExecuteQueryAsync(sql, cancellationToken).ConfigureAwait(false);
+
         try
         {
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -108,8 +123,12 @@ public sealed partial class CassieConnection
     ///     Sends one request and returns a reader positioned on its first result. The gate is held from the first
     ///     byte written. An interrupted write discards the session; a dispatched request can recover at ReadyForQuery.
     /// </summary>
-    private async Task<CassieDataReader> RunReaderAsync(Func<CancellationToken, Task> sendRequest,
-        Func<CassieDataReader> createReader, CommandBudget budget, CancellationToken cancellationToken)
+    private async Task<CassieDataReader> RunReaderAsync(
+        Func<CancellationToken, Task> sendRequest,
+        Func<CassieDataReader> createReader,
+        CommandBudget budget,
+        CancellationToken cancellationToken
+    )
     {
         using var deadline = new CommandDeadline(budget, cancellationToken);
         deadline.ThrowIfExpired();
@@ -117,6 +136,7 @@ public sealed partial class CassieConnection
         var serial = _gate.Serial;
         CassieDataReader? reader = null;
         var initialized = false;
+
         try
         {
             try

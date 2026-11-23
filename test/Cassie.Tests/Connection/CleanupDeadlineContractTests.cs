@@ -49,6 +49,7 @@ public sealed class CleanupDeadlineContractTests
         connection.CleanupTimeProvider = clock;
         // Act
         var closing = synchronous ? Task.Run(connection.Close, token) : connection.CloseAsync();
+
         try
         {
             _ = await rollback.Task.WaitAsync(TestTimeout, token);
@@ -73,6 +74,7 @@ public sealed class CleanupDeadlineContractTests
         finally
         {
             _ = resumeRollback.TrySetResult();
+
             if (rollback.Task.IsCompletedSuccessfully)
             {
                 (await rollback.Task).Close();
@@ -147,6 +149,7 @@ public sealed class CleanupDeadlineContractTests
         var session = await active.Task.WaitAsync(TestTimeout, token);
         // Act
         var closing = synchronous ? Task.Run(reader.Dispose, token) : reader.DisposeAsync().AsTask();
+
         try
         {
             await clock.TimerCreated.WaitAsync(TestTimeout, token);
@@ -182,6 +185,7 @@ public sealed class CleanupDeadlineContractTests
             await session.WriteAsync((byte)'t', [0, 0]);
             await session.WriteAsync((byte)'n', []);
             await session.WriteReadyAsync();
+
             if (deferred)
             {
                 await ExpectQueryAsync(session, "SELECT 1");
@@ -189,6 +193,7 @@ public sealed class CleanupDeadlineContractTests
                 await session.WriteCommandCompleteAsync("SELECT 0");
                 await session.WriteReadyAsync();
             }
+
 
             Assert.Equal((byte)'C', (await session.ReadFrameAsync()).Tag);
             Assert.Equal((byte)'S', (await session.ReadFrameAsync()).Tag);
@@ -206,6 +211,7 @@ public sealed class CleanupDeadlineContractTests
         await prepared.PrepareAsync(token);
         // Act
         Task closing;
+
         if (deferred)
         {
             using var query = connection.CreateCommand();
@@ -219,13 +225,16 @@ public sealed class CleanupDeadlineContractTests
             closing = prepared.DisposeAsync().AsTask();
         }
 
+
         var session = await waitingForAck.Task.WaitAsync(TestTimeout, token);
+
         try
         {
             clock.Advance(TimeSpan.FromSeconds(5));
 
             // Assert
             var failure = await Record.ExceptionAsync(() => closing).AsTask().WaitAsync(TestTimeout, token);
+
             if (deferred)
             {
                 _ = Assert.IsType<TimeoutException>(failure);
@@ -234,6 +243,7 @@ public sealed class CleanupDeadlineContractTests
             {
                 Assert.Null(failure);
             }
+
             Assert.Equal(ConnectionState.Closed, connection.State);
             Assert.Equal([TimeSpan.FromSeconds(5)], clock.InitialDueTimes);
         }

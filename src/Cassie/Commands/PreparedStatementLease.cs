@@ -20,8 +20,12 @@ internal sealed class PreparedStatementLease
         IsRequested = true;
     }
 
-    public async Task<string> EnsurePreparedAsync(CassieConnection connection, CassiePreparedCommand prepared,
-        CommandBudget budget, CancellationToken cancellationToken)
+    public async Task<string> EnsurePreparedAsync(
+        CassieConnection connection,
+        CassiePreparedCommand prepared,
+        CommandBudget budget,
+        CancellationToken cancellationToken
+    )
     {
         if (Matches(connection, prepared))
         {
@@ -32,6 +36,7 @@ internal sealed class PreparedStatementLease
         {
             using var deadline = new CommandDeadline(budget, cancellationToken);
             deadline.ThrowIfExpired();
+
             try
             {
                 await ReleaseAsync(deadline.Token).ConfigureAwait(false);

@@ -66,16 +66,21 @@ public sealed partial class CassieConnection
     }
 
     /// <inheritdoc />
-    public override Task<DataTable> GetSchemaAsync(string collectionName, string?[]? restrictionValues,
-        CancellationToken cancellationToken)
+    public override Task<DataTable> GetSchemaAsync(
+        string collectionName,
+        string?[]? restrictionValues,
+        CancellationToken cancellationToken
+    )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(collectionName);
         cancellationToken.ThrowIfCancellationRequested();
         var collection = collectionName.Trim();
+
         if (collection.Equals("MetaDataCollections", StringComparison.OrdinalIgnoreCase))
         {
             return Task.FromResult(GetMetaDataCollections());
         }
+
 
         if (collection.Equals("Restrictions", StringComparison.OrdinalIgnoreCase))
         {
@@ -102,10 +107,12 @@ public sealed partial class CassieConnection
         var table = CreateSchemaTable("MetaDataCollections");
         AddStringColumns(table, "CollectionName");
         AddIntColumns(table, "NumberOfRestrictions", "NumberOfIdentifierParts");
+
         foreach (var (name, restrictions, identifierParts) in SchemaCollections)
         {
             _ = table.Rows.Add(name, restrictions, identifierParts);
         }
+
 
         return table;
     }
@@ -127,10 +134,12 @@ public sealed partial class CassieConnection
     {
         var table = CreateSchemaTable("Tables");
         AddStringColumns(table, "TABLE_CATALOG", "TABLE_SCHEMA", "TABLE_NAME", "TABLE_TYPE");
+
         if (!MatchesCurrentCatalog(restrictions[0]))
         {
             return table;
         }
+
 
         using DbCommand command = CreateCommand();
         command.CommandText = BuildSchemaQuery(command,
@@ -140,10 +149,12 @@ public sealed partial class CassieConnection
             1,
             "table_schema, table_name");
         using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             _ = table.Rows.Add(GetCurrentCatalog(), reader.GetString(0), reader.GetString(1), reader.GetString(2));
         }
+
 
         _ = await reader.NextResultAsync(cancellationToken).ConfigureAwait(false);
         return table;
@@ -160,10 +171,12 @@ public sealed partial class CassieConnection
         AddStringColumns(table, "COLUMN_DEFAULT", "IS_NULLABLE", "DATA_TYPE");
         AddIntColumns(table, "CHARACTER_MAXIMUM_LENGTH", "NUMERIC_PRECISION", "NUMERIC_SCALE", "DATETIME_PRECISION");
         AddStringColumns(table, "UDT_NAME");
+
         if (!MatchesCurrentCatalog(restrictions[0]))
         {
             return table;
         }
+
 
         using DbCommand command = CreateCommand();
         command.CommandText = BuildSchemaQuery(command,
@@ -173,6 +186,7 @@ public sealed partial class CassieConnection
             1,
             "table_schema, table_name, ordinal_position");
         using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             object?[] row =
@@ -194,22 +208,32 @@ public sealed partial class CassieConnection
             _ = table.Rows.Add(row);
         }
 
+
         _ = await reader.NextResultAsync(cancellationToken).ConfigureAwait(false);
         return table;
     }
 
-    private string BuildSchemaQuery(DbCommand command, string select, string[] restrictionColumns,
-        string?[] restrictions, int startRestriction, string orderBy)
+    private string BuildSchemaQuery(
+        DbCommand command,
+        string select,
+        string[] restrictionColumns,
+        string?[] restrictions,
+        int startRestriction,
+        string orderBy
+    )
     {
         StringBuilder query = new(select);
         var parameterOrdinal = 0;
+
         for (var restrictionIndex = startRestriction; restrictionIndex < restrictions.Length; restrictionIndex++)
         {
             var value = restrictions[restrictionIndex];
+
             if (string.IsNullOrEmpty(value))
             {
                 continue;
             }
+
 
             _ = query.Append(parameterOrdinal == 0 ? " WHERE " : " AND ")
                 .Append(restrictionColumns[restrictionIndex - startRestriction])
@@ -223,6 +247,7 @@ public sealed partial class CassieConnection
             });
             parameterOrdinal++;
         }
+
 
         _ = query.Append(" ORDER BY ").Append(orderBy);
         return query.ToString();
@@ -244,12 +269,14 @@ public sealed partial class CassieConnection
     {
         var restrictionCount = SchemaCollections
             .First(item => item.Name.Equals(collectionName, StringComparison.OrdinalIgnoreCase)).Restrictions;
+
         if (restrictions is not null && restrictions.Length > restrictionCount)
         {
             throw new ArgumentException(
                 $"Schema collection '{collectionName}' accepts at most {restrictionCount} restrictions.",
                 nameof(restrictions));
         }
+
 
         var normalized = new string?[restrictionCount];
         restrictions?.CopyTo(normalized, 0);

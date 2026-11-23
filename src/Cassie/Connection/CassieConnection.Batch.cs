@@ -34,16 +34,23 @@ public sealed partial class CassieConnection
     ///     local validation failures (including parameter encoding, done by the caller before this method) leave the
     ///     connection and its transaction untouched.
     /// </summary>
-    internal async Task<CassieDataReader> ExecuteBatchAsync(IReadOnlyList<CassiePreparedCommand> commands,
-        IReadOnlyList<EncodedParameters> encodedParameters, IReadOnlyList<string?> statementNames, CommandBudget budget,
-        CommandBehavior behavior, CassieDiagnostics.OperationScope? operationScope,
-        Action<CommandTag?> statementCompleted, Action<CassieException> statementFailed,
-        CancellationToken cancellationToken)
+    internal async Task<CassieDataReader> ExecuteBatchAsync(
+        IReadOnlyList<CassiePreparedCommand> commands,
+        IReadOnlyList<EncodedParameters> encodedParameters,
+        IReadOnlyList<string?> statementNames,
+        CommandBudget budget,
+        CommandBehavior behavior,
+        CassieDiagnostics.OperationScope? operationScope,
+        Action<CommandTag?> statementCompleted,
+        Action<CassieException> statementFailed,
+        CancellationToken cancellationToken
+    )
     {
         var session = RequireSession("The connection is not open.");
         ThrowIfReaderActive();
 
         using MemoryStream request = new();
+
         try
         {
             for (var index = 0; index < commands.Count; index++)
@@ -54,10 +61,12 @@ public sealed partial class CassieConnection
 
             PgWriter.AppendFrame(request, FrontendMessage.Sync, []);
             await RefreshDateStyleIfNeededAsync(budget, cancellationToken).ConfigureAwait(false);
+
             foreach (var prepared in commands)
             {
                 session.DateStyle.ObserveSql(prepared.Sql);
             }
+
 
             return await RunReaderAsync(
                 token => session.WriteBatchAsync(request, token),

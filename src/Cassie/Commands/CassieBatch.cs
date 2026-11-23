@@ -217,9 +217,11 @@ public sealed class CassieBatch : DbBatch
     {
         cancellationToken.ThrowIfCancellationRequested();
         var (commands, prepared) = ValidateForPrepare();
+
         if (DbConnection is CassieConnection connection)
         {
             var budget = connection.StartCommandBudget(Timeout, cancellationToken);
+
             for (var index = 0; index < commands.Length; index++)
             {
                 prepared[index] = await connection.ResolveVectorTypesAsync(prepared[index], false, budget, cancellationToken)
@@ -237,6 +239,7 @@ public sealed class CassieBatch : DbBatch
         if (!_disposed)
         {
             _disposed = true;
+
             foreach (var command in BatchCommands.Items)
             {
                 command.PreparedStatement.Release();
@@ -252,6 +255,7 @@ public sealed class CassieBatch : DbBatch
         if (!_disposed)
         {
             _disposed = true;
+
             foreach (var command in BatchCommands.Items)
             {
                 await command.PreparedStatement.ReleaseAsync(CancellationToken.None).ConfigureAwait(false);
@@ -268,8 +272,10 @@ public sealed class CassieBatch : DbBatch
     }
 
     /// <inheritdoc />
-    protected override async Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior,
-        CancellationToken cancellationToken)
+    protected override async Task<DbDataReader> ExecuteDbDataReaderAsync(
+        CommandBehavior behavior,
+        CancellationToken cancellationToken
+    )
     {
         return await ExecuteBatchReaderAsync(null, behavior, cancellationToken).ConfigureAwait(false);
     }
@@ -294,6 +300,7 @@ public sealed class CassieBatch : DbBatch
     private (CassieBatchCommand[] Commands, CassiePreparedCommand[] Prepared) ValidateForPrepare()
     {
         var commands = SnapshotCommands();
+
         if (DbConnection is CassieConnection connection)
         {
             RequireOpen(connection);
@@ -303,12 +310,15 @@ public sealed class CassieBatch : DbBatch
             throw new InvalidOperationException("The batch requires an open Cassie connection.");
         }
 
+
         var preparedCommands = PrepareAll(commands);
+
         foreach (var prepared in preparedCommands)
         {
             CassieConnection.ValidateSqlText(prepared.Sql);
             _ = ParameterizedQueryBatch.EncodeParameters(prepared);
         }
+
 
         return (commands, preparedCommands);
     }
@@ -317,10 +327,12 @@ public sealed class CassieBatch : DbBatch
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         CassieBatchCommand[] commands = [.. BatchCommands.Items];
+
         if (commands.Length == 0)
         {
             throw new InvalidOperationException("A batch must contain at least one command.");
         }
+
 
         foreach (var command in commands)
         {
@@ -349,8 +361,10 @@ public sealed class CassieBatch : DbBatch
     }
 
     /// <summary>Uses the assigned connection, or opens one from the data source that the returned reader closes.</summary>
-    private async Task<(CassieConnection Connection, bool Owned)> AcquireConnectionAsync(CassieConnection? preOpened,
-        CancellationToken cancellationToken)
+    private async Task<(CassieConnection Connection, bool Owned)> AcquireConnectionAsync(
+        CassieConnection? preOpened,
+        CancellationToken cancellationToken
+    )
     {
         if (preOpened is not null)
         {
@@ -370,8 +384,11 @@ public sealed class CassieBatch : DbBatch
                 : (await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false), true);
     }
 
-    private async Task<CassieDataReader> ExecuteBatchReaderAsync(CassieConnection? preOpened, CommandBehavior behavior,
-        CancellationToken cancellationToken)
+    private async Task<CassieDataReader> ExecuteBatchReaderAsync(
+        CassieConnection? preOpened,
+        CommandBehavior behavior,
+        CancellationToken cancellationToken
+    )
     {
         // Every attempt starts from zero, including one rejected before anything is sent.
         foreach (var command in BatchCommands.Items)
@@ -387,16 +404,19 @@ public sealed class CassieBatch : DbBatch
         var operationScope = CassieDiagnostics.StartOperation("batch");
         var connection = preOpened;
         var owned = preOpened is not null;
+
         try
         {
             var commands = SnapshotCommands();
 
             // Local validation comes first, so a bad parameter never opens a connection or touches a transaction.
             var prepared = PrepareAll(commands);
+
             foreach (var command in prepared)
             {
                 CassieConnection.ValidateSqlText(command.Sql);
             }
+
 
             EncodedParameters[] encoded =
                 [.. prepared.Select(static command => ParameterizedQueryBatch.EncodeParameters(command))];
@@ -411,6 +431,7 @@ public sealed class CassieBatch : DbBatch
 
             // Prepared statements belong to the caller's session; an owned connection is new for each execution.
             var statementNames = new string?[commands.Length];
+
             if (!owned)
             {
                 for (var index = 0; index < commands.Length; index++)
@@ -423,6 +444,7 @@ public sealed class CassieBatch : DbBatch
                     }
                 }
             }
+
 
             var completed = 0;
             var reader = await connection.ExecuteBatchAsync(
@@ -459,10 +481,12 @@ public sealed class CassieBatch : DbBatch
         catch (Exception exception)
         {
             operationScope?.Fail(exception, connection?.Logger);
+
             if (owned && connection is not null)
             {
                 await connection.DisposeAsync().ConfigureAwait(false);
             }
+
 
             throw;
         }

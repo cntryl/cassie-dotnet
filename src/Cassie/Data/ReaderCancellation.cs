@@ -28,6 +28,7 @@ internal sealed class ReaderCancellation : IAsyncDisposable
         _session = session;
         _rowBuffer = rowBuffer;
         Budget = budget;
+
         if (budget.HasTimeout)
         {
             _commandTimer = new Timer(static state => ((ReaderCancellation)state!).CancelForTimeout(), this,
@@ -56,6 +57,7 @@ internal sealed class ReaderCancellation : IAsyncDisposable
         lock (_cancelRequestLock)
         {
             _writing = false;
+
             if (!dispatched)
             {
                 _complete = true;
@@ -93,8 +95,10 @@ internal sealed class ReaderCancellation : IAsyncDisposable
             inner);
     }
 
-    public ValueTask<(byte Tag, byte[] Payload)> ReadFrameAsync(CancellationToken cancellationToken,
-        bool allowAbortOnCancellation = false)
+    public ValueTask<(byte Tag, byte[] Payload)> ReadFrameAsync(
+        CancellationToken cancellationToken,
+        bool allowAbortOnCancellation = false
+    )
     {
         if (allowAbortOnCancellation || !cancellationToken.CanBeCanceled)
         {
@@ -115,7 +119,9 @@ internal sealed class ReaderCancellation : IAsyncDisposable
     }
 
     private async ValueTask<(byte Tag, byte[] Payload)> ReadQueryFrameWithCancellationAsync(
-        ValueTask<(byte Tag, byte[] Payload)>? pending, CancellationToken cancellationToken)
+        ValueTask<(byte Tag, byte[] Payload)>? pending,
+        CancellationToken cancellationToken
+    )
     {
         using CancellationTokenSource abortDelay = new();
         using var cancellationRegistration = cancellationToken.UnsafeRegister(static state =>
@@ -136,11 +142,13 @@ internal sealed class ReaderCancellation : IAsyncDisposable
                                           exception is IOException or SocketException or ObjectDisposedException)
         {
             _session.AbortTransport();
+
             if (_timedOut && !cancellationToken.IsCancellationRequested)
             {
                 throw new TimeoutException(
                     "The command exceeded CommandTimeout and its cancellation could not be confirmed.", exception);
             }
+
 
             throw new OperationCanceledException("The query was canceled.", exception, cancellationToken);
         }
@@ -190,6 +198,7 @@ internal sealed class ReaderCancellation : IAsyncDisposable
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken).ConfigureAwait(false);
+
             if (!_complete)
             {
                 _session.AbortTransport();

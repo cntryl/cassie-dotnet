@@ -251,13 +251,16 @@ public sealed class TlsContractTests
                     Stream stream = client.GetStream();
                     var request = new byte[8];
                     await stream.ReadExactlyAsync(request);
+
                     if (BinaryPrimitives.ReadInt32BigEndian(request.AsSpan(4)) != SslRequestCode)
                     {
                         return;
                     }
 
+
                     await stream.WriteAsync(new[] { _acceptTls ? (byte)'S' : (byte)'N' });
                     var encrypted = false;
+
                     if (_acceptTls)
                     {
                         SslStream tls = new(stream, false);
@@ -265,6 +268,7 @@ public sealed class TlsContractTests
                         stream = tls;
                         encrypted = true;
                     }
+
 
                     await using (stream)
                     {
@@ -291,15 +295,18 @@ public sealed class TlsContractTests
         private static async Task ServeQueriesAsync(Stream stream)
         {
             var header = new byte[5];
+
             while (true)
             {
                 await stream.ReadExactlyAsync(header);
                 var payload = new byte[BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(1)) - 4];
                 await stream.ReadExactlyAsync(payload);
+
                 if (header[0] == (byte)'X')
                 {
                     return;
                 }
+
 
                 if (header[0] == (byte)'Q')
                 {

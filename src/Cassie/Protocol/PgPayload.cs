@@ -34,10 +34,12 @@ internal static class PgPayload
     {
         ArgumentNullException.ThrowIfNull(bytes);
         var end = Array.IndexOf(bytes, (byte)0, offset);
+
         if (end < 0)
         {
             throw new IOException("Invalid null-terminated pgwire value.");
         }
+
 
         var value = Encoding.UTF8.GetString(bytes, offset, end - offset);
         offset = end + 1;

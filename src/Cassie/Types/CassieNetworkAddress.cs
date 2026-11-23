@@ -13,10 +13,12 @@ public readonly record struct CassieNetworkAddress
         var width = address.AddressFamily == AddressFamily.InterNetwork ? 32
             : address.AddressFamily == AddressFamily.InterNetworkV6 ? 128
             : throw new ArgumentException("Only IPv4 and IPv6 addresses are supported.", nameof(address));
+
         if ((uint)prefixLength > (uint)width)
         {
             throw new ArgumentOutOfRangeException(nameof(prefixLength));
         }
+
 
         Address = address;
         PrefixLength = prefixLength;

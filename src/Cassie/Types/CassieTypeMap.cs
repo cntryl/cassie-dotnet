@@ -105,6 +105,7 @@ internal static class CassieTypeMap
     internal static int GetParameterOid(DbParameter parameter)
     {
         ArgumentNullException.ThrowIfNull(parameter);
+
         if (parameter is CassieParameter cassieParameter)
         {
             if (cassieParameter.PostgresTypeOid < 0)
@@ -123,11 +124,14 @@ internal static class CassieTypeMap
             }
         }
 
+
         var value = parameter.Value;
+
         if (value is Array parameterArray and not byte[])
         {
             return GetArrayParameterOid(parameterArray);
         }
+
 
         if (value is CassieArray cassieArray)
         {
@@ -160,12 +164,15 @@ internal static class CassieTypeMap
     internal static int GetArrayParameterOid(Array array)
     {
         var elementType = array.GetType().GetElementType();
+
         if (elementType is null)
         {
             return 0;
         }
 
+
         var type = Nullable.GetUnderlyingType(elementType) ?? elementType;
+
         if (type == typeof(CassieNetworkAddress) || type == typeof(PhysicalAddress) ||
             type == typeof(CassieBitString) || type == typeof(CassieTemporalValue))
         {
@@ -173,6 +180,7 @@ internal static class CassieTypeMap
                 : type == typeof(PhysicalAddress) ? "macaddr[] or macaddr8[]"
                 : type == typeof(CassieBitString) ? "bit[] or varbit[]" : "temporal arrays");
         }
+
 
         var scalarOid = ParameterTypes.GetValueOrDefault(type);
         return GetArrayOid(scalarOid)
@@ -183,6 +191,7 @@ internal static class CassieTypeMap
     private static int GetArrayVariantOid(Array array, string typeNames)
     {
         int? arrayOid = null;
+
         foreach (var value in array)
         {
             if (value is null or DBNull)
@@ -193,13 +202,16 @@ internal static class CassieTypeMap
             var valueOid = GetArrayOid(GetValueOid(value))
                            ?? throw new NotSupportedException(
                                "The temporal value has no registered PostgreSQL array type.");
+
             if (arrayOid is int priorOid && priorOid != valueOid)
             {
                 throw new ArgumentException($"Array parameters cannot mix values from {typeNames}.", nameof(array));
             }
 
+
             arrayOid = valueOid;
         }
+
 
         return arrayOid ?? throw new NotSupportedException(
             $"The PostgreSQL type for an empty or NULL-only {typeNames} parameter cannot be inferred; set CassieParameter.PostgresTypeOid.");

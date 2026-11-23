@@ -17,8 +17,11 @@ public sealed class CommandTagTests
     [InlineData("DELETE 1 ", true, 0)]
     [InlineData("DELETE 2147483648", true, 0)]
     [InlineData("DELETE 9999999999999999999999", true, 0)]
-    public void ShouldReadUnsignedRowCountGivenCommandTagWhenPayloadIsParsed(string text, bool countsRecords,
-        int rowCount)
+    public void ShouldReadUnsignedRowCountGivenCommandTagWhenPayloadIsParsed(
+        string text,
+        bool countsRecords,
+        int rowCount
+    )
     {
         // Arrange
         var payload = Encoding.UTF8.GetBytes(text + '\0');

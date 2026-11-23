@@ -22,6 +22,7 @@ public sealed class CassieRestClient : IDisposable
         _baseAddress = NormalizeBaseAddress(baseAddress);
         _ownedHandler = new HttpClientHandler
         { UseCookies = true, CookieContainer = new CookieContainer(), CheckCertificateRevocationList = true };
+
         try
         {
             _httpClient = new HttpClient(_ownedHandler, false);
@@ -31,6 +32,7 @@ public sealed class CassieRestClient : IDisposable
             _ownedHandler.Dispose();
             throw;
         }
+
 
         _ownsHttpClient = true;
         Admin = new CassieAdminClient(this);
@@ -60,6 +62,7 @@ public sealed class CassieRestClient : IDisposable
         if (!_disposed)
         {
             _disposed = true;
+
             if (_ownsHttpClient)
             {
                 try
@@ -77,8 +80,11 @@ public sealed class CassieRestClient : IDisposable
     }
 
     /// <summary>Authenticates and receives the server-owned session cookie through the HTTP handler.</summary>
-    public Task<CassieRestSession> LoginAsync(string username, string password,
-        CancellationToken cancellationToken = default)
+    public Task<CassieRestSession> LoginAsync(
+        string username,
+        string password,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(username);
         ArgumentNullException.ThrowIfNull(password);
@@ -110,8 +116,10 @@ public sealed class CassieRestClient : IDisposable
     }
 
     /// <summary>Creates a collection and returns its server-reported name.</summary>
-    public async Task<string> CreateCollectionAsync(CassieCollectionDefinition definition,
-        CancellationToken cancellationToken = default)
+    public async Task<string> CreateCollectionAsync(
+        CassieCollectionDefinition definition,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(definition);
         var response = await SendAsync(HttpMethod.Post, "api/v1/collections",
@@ -121,8 +129,11 @@ public sealed class CassieRestClient : IDisposable
     }
 
     /// <summary>Creates a vector index and returns its server-reported metadata.</summary>
-    public Task<CassieVectorIndexResult> CreateVectorIndexAsync(string collection,
-        CassieVectorIndexDefinition definition, CancellationToken cancellationToken = default)
+    public Task<CassieVectorIndexResult> CreateVectorIndexAsync(
+        string collection,
+        CassieVectorIndexDefinition definition,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(definition);
         return SendAsync(HttpMethod.Post, CollectionPath(collection) + "/indexes",
@@ -131,8 +142,11 @@ public sealed class CassieRestClient : IDisposable
     }
 
     /// <summary>Inserts a JSON document and returns its server-generated identifier.</summary>
-    public async Task<string> AddDocumentAsync(string collection, JsonObject document,
-        CancellationToken cancellationToken = default)
+    public async Task<string> AddDocumentAsync(
+        string collection,
+        JsonObject document,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(document);
         var response = await SendAsync(HttpMethod.Post, CollectionPath(collection) + "/documents",
@@ -142,16 +156,22 @@ public sealed class CassieRestClient : IDisposable
     }
 
     /// <summary>Retrieves a JSON document by its identifier.</summary>
-    public Task<JsonObject> GetDocumentAsync(string collection, string id,
-        CancellationToken cancellationToken = default)
+    public Task<JsonObject> GetDocumentAsync(
+        string collection,
+        string id,
+        CancellationToken cancellationToken = default
+    )
     {
         return SendAsync(HttpMethod.Get, DocumentPath(collection, id), null, CassieRestJsonContext.Default.JsonObject,
             cancellationToken);
     }
 
     /// <summary>Deletes a document and returns the server's deletion acknowledgement.</summary>
-    public async Task<bool> DeleteDocumentAsync(string collection, string id,
-        CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteDocumentAsync(
+        string collection,
+        string id,
+        CancellationToken cancellationToken = default
+    )
     {
         var response = await SendAsync(HttpMethod.Delete, DocumentPath(collection, id), null,
             CassieRestJsonContext.Default.RestDeleteResponse, cancellationToken).ConfigureAwait(false);
@@ -159,8 +179,11 @@ public sealed class CassieRestClient : IDisposable
     }
 
     /// <summary>Searches using the index's embedding provider and preserves the returned column metadata and JSON values.</summary>
-    public Task<CassieRestQueryResult> SearchAsync(string collection, CassieVectorSearchRequest request,
-        CancellationToken cancellationToken = default)
+    public Task<CassieRestQueryResult> SearchAsync(
+        string collection,
+        CassieVectorSearchRequest request,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(request);
         return SendAsync(HttpMethod.Post, CollectionPath(collection) + "/search",
@@ -173,8 +196,13 @@ public sealed class CassieRestClient : IDisposable
         return JsonContent.Create(value, typeInfo);
     }
 
-    internal async Task<T> SendAsync<T>(HttpMethod method, string path, HttpContent? content, JsonTypeInfo<T> typeInfo,
-        CancellationToken cancellationToken)
+    internal async Task<T> SendAsync<T>(
+        HttpMethod method,
+        string path,
+        HttpContent? content,
+        JsonTypeInfo<T> typeInfo,
+        CancellationToken cancellationToken
+    )
     {
         using HttpRequestMessage request = new(method, new Uri(_baseAddress, path)) { Content = content };
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -183,8 +211,11 @@ public sealed class CassieRestClient : IDisposable
         return await SendRequestAsync(request, typeInfo, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<T> SendRequestAsync<T>(HttpRequestMessage request, JsonTypeInfo<T> typeInfo,
-        CancellationToken cancellationToken)
+    private async Task<T> SendRequestAsync<T>(
+        HttpRequestMessage request,
+        JsonTypeInfo<T> typeInfo,
+        CancellationToken cancellationToken
+    )
     {
         var timeout = _httpClient.Timeout;
         using var deadline = timeout == Timeout.InfiniteTimeSpan
@@ -192,6 +223,7 @@ public sealed class CassieRestClient : IDisposable
             : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline?.CancelAfter(timeout);
         var token = deadline?.Token ?? cancellationToken;
+
         try
         {
             using var response = await _httpClient
@@ -214,8 +246,12 @@ public sealed class CassieRestClient : IDisposable
         }
     }
 
-    private static async Task<T?> ReadSuccessAsync<T>(HttpContent content, JsonTypeInfo<T> typeInfo, long limit,
-        CancellationToken cancellationToken)
+    private static async Task<T?> ReadSuccessAsync<T>(
+        HttpContent content,
+        JsonTypeInfo<T> typeInfo,
+        long limit,
+        CancellationToken cancellationToken
+    )
     {
         if (content.Headers.ContentLength > limit)
         {
@@ -225,9 +261,11 @@ public sealed class CassieRestClient : IDisposable
         var contentStream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var bounded = new BoundedRestResponseStream(contentStream, limit);
         var charset = content.Headers.ContentType?.CharSet;
+
         if (charset is not null)
         {
             Encoding encoding;
+
             try
             {
                 encoding = Encoding.GetEncoding(charset.Trim('"'));
@@ -236,6 +274,7 @@ public sealed class CassieRestClient : IDisposable
             {
                 throw new InvalidOperationException("The REST response declares an invalid charset.", exception);
             }
+
 
             if (encoding.CodePage != Encoding.UTF8.CodePage)
             {
@@ -248,11 +287,15 @@ public sealed class CassieRestClient : IDisposable
             }
         }
 
+
         return await JsonSerializer.DeserializeAsync(bounded, typeInfo, cancellationToken).ConfigureAwait(false);
     }
 
-    private static async Task<string> ReadErrorAsync(HttpResponseMessage response, long limit,
-        CancellationToken cancellationToken)
+    private static async Task<string> ReadErrorAsync(
+        HttpResponseMessage response,
+        long limit,
+        CancellationToken cancellationToken
+    )
     {
         try
         {
@@ -260,6 +303,7 @@ public sealed class CassieRestClient : IDisposable
             var error = await response.Content
                 .ReadFromJsonAsync(CassieRestJsonContext.Default.RestErrorResponse, cancellationToken)
                 .ConfigureAwait(false);
+
             if (!string.IsNullOrWhiteSpace(error?.Error))
             {
                 return error.Error;

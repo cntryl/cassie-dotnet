@@ -34,6 +34,7 @@ public sealed class PreparedCommandLifecycleTests
         var disposeCall = Task.Run(command.DisposeAsync);
         _ = await closeReceived.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
         ValueTask disposal;
+
         try
         {
             disposal = await disposeCall.WaitAsync(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
@@ -48,6 +49,7 @@ public sealed class PreparedCommandLifecycleTests
         }
 
         // Observe the pending disposal before the server is allowed to answer.
+
         var disposalCompletedBeforeServerResponse = disposal.IsCompleted;
         _ = releaseClose.TrySetResult(true);
         await disposal;
@@ -58,8 +60,11 @@ public sealed class PreparedCommandLifecycleTests
         await peer;
     }
 
-    private static async Task ServePreparedCommandAsync(TcpListener listener, TaskCompletionSource<bool> closeReceived,
-        TaskCompletionSource<bool> releaseClose)
+    private static async Task ServePreparedCommandAsync(
+        TcpListener listener,
+        TaskCompletionSource<bool> closeReceived,
+        TaskCompletionSource<bool> releaseClose
+    )
     {
         using var client = await listener.AcceptTcpClientAsync();
         var stream = client.GetStream();
@@ -132,10 +137,12 @@ public sealed class PreparedCommandLifecycleTests
     private static string ReadCString(byte[] payload, ref int offset)
     {
         var end = Array.IndexOf(payload, (byte)0, offset);
+
         if (end < 0)
         {
             throw new IOException("The pgwire frame contains an unterminated string.");
         }
+
 
         var value = Encoding.UTF8.GetString(payload, offset, end - offset);
         offset = end + 1;

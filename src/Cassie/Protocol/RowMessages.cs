@@ -10,12 +10,15 @@ internal static class RowMessages
         ArgumentNullException.ThrowIfNull(payload);
         var offset = 0;
         var count = PgPayload.ReadInt16(payload, ref offset);
+
         if (count < 0)
         {
             throw new IOException("RowDescription contained an invalid negative column count.");
         }
 
+
         var fields = new FieldDescription[count];
+
         for (var i = 0; i < count; i++)
         {
             var name = PgPayload.ReadCString(payload, ref offset);
@@ -25,13 +28,16 @@ internal static class RowMessages
             var typeSize = PgPayload.ReadInt16(payload, ref offset);
             var typeModifier = PgPayload.ReadInt32(payload, ref offset);
             var format = PgPayload.ReadInt16(payload, ref offset);
+
             if (format is not (0 or 1))
             {
                 throw new IOException($"RowDescription column '{name}' used unsupported format code {format}.");
             }
 
+
             fields[i] = new FieldDescription(name, tableOid, attributeNumber, typeOid, typeSize, typeModifier, format);
         }
+
 
         return offset == payload.Length
             ? fields
@@ -46,25 +52,31 @@ internal static class RowMessages
     {
         var offset = 0;
         var count = PgPayload.ReadInt16(payload, ref offset);
+
         if (count != fieldOffsets.Length || count != fieldLengths.Length)
         {
             throw new IOException("DataRow column count did not match RowDescription.");
         }
 
+
         for (var i = 0; i < count; i++)
         {
             var length = PgPayload.ReadInt32(payload, ref offset);
+
             if (length < -1)
             {
                 throw new IOException("DataRow contained an invalid negative field length.");
             }
 
+
             fieldOffsets[i] = offset;
             fieldLengths[i] = length;
+
             if (length == -1)
             {
                 continue;
             }
+
 
             if (offset > payload.Length - length)
             {

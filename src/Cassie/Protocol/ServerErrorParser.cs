@@ -10,11 +10,13 @@ internal static class ServerErrorParser
         ArgumentNullException.ThrowIfNull(payload);
         Dictionary<byte, string> fields = [];
         var offset = 0;
+
         while (offset < payload.Length && payload[offset] != 0)
         {
             var field = payload[offset++];
             fields[field] = PgPayload.ReadCString(payload, ref offset);
         }
+
 
         return new CassieException(
             fields.GetValueOrDefault((byte)'M') ?? FallbackMessage,

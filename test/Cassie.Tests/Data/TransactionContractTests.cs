@@ -144,6 +144,7 @@ public sealed class TransactionContractTests
         var disposeCall = Task.Run(transaction.DisposeAsync);
         _ = await rollbackReceived.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
         ValueTask disposal;
+
         try
         {
             disposal = await disposeCall.WaitAsync(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
@@ -154,6 +155,7 @@ public sealed class TransactionContractTests
             _ = await disposeCall.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
             throw;
         }
+
 
         _ = releaseRollback.TrySetResult(true);
         var disposalCompletedBeforeServerResponse = disposal.IsCompleted;
@@ -179,6 +181,7 @@ public sealed class TransactionContractTests
             "BEGIN ISOLATION LEVEL READ COMMITTED", "SELECT 1", "SAVEPOINT \"safe name\"",
             "ROLLBACK TO SAVEPOINT \"safe name\"", "RELEASE SAVEPOINT \"safe name\"", "COMMIT"
         ];
+
         foreach (var sql in expected)
         {
             var query = await ReadFrontendFrameAsync(stream);
@@ -219,6 +222,7 @@ public sealed class TransactionContractTests
         _ = beginReceived.TrySetResult(true);
 
         var buffer = new byte[1];
+
         try
         {
             var received = await stream.ReadAsync(buffer).AsTask().WaitAsync(TimeSpan.FromMilliseconds(250));
@@ -236,8 +240,11 @@ public sealed class TransactionContractTests
         }
     }
 
-    private static async Task ServeDelayedRollbackAsync(TcpListener listener,
-        TaskCompletionSource<bool> rollbackReceived, TaskCompletionSource<bool> releaseRollback)
+    private static async Task ServeDelayedRollbackAsync(
+        TcpListener listener,
+        TaskCompletionSource<bool> rollbackReceived,
+        TaskCompletionSource<bool> releaseRollback
+    )
     {
         using var client = await listener.AcceptTcpClientAsync();
         var stream = client.GetStream();

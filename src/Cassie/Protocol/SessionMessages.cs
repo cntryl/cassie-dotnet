@@ -39,11 +39,13 @@ internal static class SessionMessages
         PgWriter.WriteCString(body, "UTF8");
         PgWriter.WriteCString(body, "application_name");
         PgWriter.WriteCString(body, applicationName);
+
         if (options.Length > 0)
         {
             PgWriter.WriteCString(body, "options");
             PgWriter.WriteCString(body, options);
         }
+
 
         body.WriteByte(0);
         var packet = new byte[checked((int)body.Length + sizeof(int))];

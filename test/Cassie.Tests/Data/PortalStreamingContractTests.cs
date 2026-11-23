@@ -34,10 +34,12 @@ public sealed class PortalStreamingContractTests
         // Act
         await using var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
         List<int> values = [];
+
         while (await reader.ReadAsync(TestContext.Current.CancellationToken))
         {
             values.Add(reader.GetInt32(0));
         }
+
 
         var hasNextResult = await reader.NextResultAsync(TestContext.Current.CancellationToken);
         await connection.CloseAsync();
@@ -155,13 +157,16 @@ public sealed class PortalStreamingContractTests
         await WriteFrameAsync(stream, (byte)'D', DataRow(2));
 
         var resumedPortal = false;
+
         if (initialBoundaryTag == (byte)'H')
         {
             await WriteFrameAsync(stream, (byte)'s', []);
             using CancellationTokenSource continuationTimeout = new(TimeSpan.FromSeconds(2));
+
             try
             {
                 var (continuationTag, continuationPayload) = await ReadFrameAsync(stream, continuationTimeout.Token);
+
                 if (continuationTag == (byte)'E')
                 {
                     var continuationOffset = 0;
@@ -176,6 +181,7 @@ public sealed class PortalStreamingContractTests
             }
         }
 
+
         await WriteFrameAsync(stream, (byte)'D', DataRow(3));
         await WriteFrameAsync(stream, (byte)'C', CString("SELECT 3"));
         var finalBoundaryTag = initialBoundaryTag == (byte)'S'
@@ -187,8 +193,10 @@ public sealed class PortalStreamingContractTests
         return new PortalTrace(initialFetchRows, initialBoundaryTag, resumedPortal, finalBoundaryTag);
     }
 
-    private static async Task ServeCancelablePagedQueryAsync(TcpListener listener,
-        TaskCompletionSource<bool> resumeReceived)
+    private static async Task ServeCancelablePagedQueryAsync(
+        TcpListener listener,
+        TaskCompletionSource<bool> resumeReceived
+    )
     {
         using var client = await listener.AcceptTcpClientAsync();
         var stream = client.GetStream();
@@ -255,8 +263,10 @@ public sealed class PortalStreamingContractTests
         await stream.ReadExactlyAsync(new byte[messageLength - sizeof(int)]);
     }
 
-    private static async Task<(byte Tag, byte[] Payload)> ReadFrameAsync(NetworkStream stream,
-        CancellationToken cancellationToken = default)
+    private static async Task<(byte Tag, byte[] Payload)> ReadFrameAsync(
+        NetworkStream stream,
+        CancellationToken cancellationToken = default
+    )
     {
         var header = new byte[sizeof(byte) + sizeof(int)];
         await stream.ReadExactlyAsync(header, cancellationToken);
@@ -335,10 +345,12 @@ public sealed class PortalStreamingContractTests
     private static string ReadCString(byte[] payload, ref int offset)
     {
         var end = Array.IndexOf(payload, (byte)0, offset);
+
         if (end < 0)
         {
             throw new IOException("The pgwire frame contains an unterminated string.");
         }
+
 
         var value = Encoding.UTF8.GetString(payload, offset, end - offset);
         offset = end + 1;

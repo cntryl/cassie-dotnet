@@ -157,6 +157,7 @@ public sealed class LiveRestContractTests
 
         // Act
         CassieQueryCancellation cancelled;
+
         while (true)
         {
             try
@@ -170,6 +171,7 @@ public sealed class LiveRestContractTests
                 await Task.Delay(TimeSpan.FromMilliseconds(20), timeout.Token);
             }
         }
+
 
         var error = await Assert.ThrowsAsync<CassieRestException>(() => pending);
 
