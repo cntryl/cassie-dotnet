@@ -20,7 +20,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Cntryl.Conventions.Analyzers" Version="1.0.4" PrivateAssets="all"/>
-    <PackageReference Include="Cntryl.Conventions.CodeFixes" Version="1.0.4" PrivateAssets="all"/>
+    <PackageReference Include="Cntryl.Conventions.Analyzers" Version="1.0.5" PrivateAssets="all"/>
+    <PackageReference Include="Cntryl.Conventions.CodeFixes" Version="1.0.5" PrivateAssets="all"/>
   </ItemGroup>
 </Project>
