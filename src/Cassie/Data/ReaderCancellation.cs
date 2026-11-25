@@ -8,7 +8,7 @@ namespace Cntryl.Cassie.Data;
 internal sealed class ReaderCancellation : IAsyncDisposable
 {
     private readonly Lock _cancelRequestLock = new();
-    private readonly Timer? _commandTimer;
+    private readonly ITimer? _commandTimer;
     private readonly IReaderSession _session;
     private readonly RowPayloadBuffer? _rowBuffer;
     private Task<bool>? _cancelRequestTask;
@@ -19,7 +19,8 @@ internal sealed class ReaderCancellation : IAsyncDisposable
 
     public CommandBudget Budget { get; }
 
-    public ReaderCancellation(IReaderSession session, int commandTimeout) : this(session, new CommandBudget(commandTimeout))
+    public ReaderCancellation(IReaderSession session, int commandTimeout)
+        : this(session, new CommandBudget(commandTimeout, TimeProvider.System))
     {
     }
 
@@ -29,10 +30,12 @@ internal sealed class ReaderCancellation : IAsyncDisposable
         _rowBuffer = rowBuffer;
         Budget = budget;
 
-        if (budget.HasTimeout)
+        var remaining = budget.Remaining;
+
+        if (remaining != Timeout.InfiniteTimeSpan)
         {
-            _commandTimer = new Timer(static state => ((ReaderCancellation)state!).CancelForTimeout(), this,
-                budget.Remaining, Timeout.InfiniteTimeSpan);
+            _commandTimer = budget.Clock.CreateTimer(static state => ((ReaderCancellation)state!).CancelForTimeout(),
+                this, remaining, Timeout.InfiniteTimeSpan);
         }
     }
 
@@ -197,7 +200,7 @@ internal sealed class ReaderCancellation : IAsyncDisposable
     {
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromSeconds(5), Budget.Clock, cancellationToken).ConfigureAwait(false);
 
             if (!_complete)
             {

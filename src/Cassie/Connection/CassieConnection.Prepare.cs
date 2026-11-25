@@ -111,7 +111,7 @@ public sealed partial class CassieConnection
         CancellationToken cancellationToken
     )
     {
-        using var ownedDeadline = drainDeadline is null ? new CleanupDeadline(session, CleanupTimeProvider) : null;
+        using var ownedDeadline = drainDeadline is null ? new CleanupDeadline(session, Clock) : null;
         var deadline = drainDeadline ?? ownedDeadline!;
         CassieException? firstError = null;
 

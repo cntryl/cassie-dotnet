@@ -55,27 +55,55 @@ public sealed class PoolLifecycleContractTests
         CassieConnection.ClearAllPools();
     }
 
-    [Fact]
-    public async Task ShouldDiscardIdleSessionGivenIdleLifetimeElapsedWhenPooledConnectionOpens()
+    [Theory]
+    [InlineData("Connection Idle Lifetime=1")]
+    [InlineData("Connection Lifetime=1")]
+    public async Task ShouldDiscardIdleSessionGivenLifetimeElapsedWhenConnectionClockAdvances(string lifetime)
     {
         // Arrange
         CassieConnection.ClearAllPools();
+        using var clock = new DeadlineClock();
         using ScriptedServer server = new(session => session.ServeQueriesAsync(session.WriteCommandCompleteAsync));
-        var connectionString = server.ConnectionString("Pooling=true;Maximum Pool Size=2;Connection Idle Lifetime=1");
-        await using (CassieConnection first = new() { ConnectionString = connectionString })
+        var connectionString = server.ConnectionString($"Pooling=true;Maximum Pool Size=2;{lifetime}");
+        await using var source = new CassieDataSource(connectionString, clock);
+        await using (var first = await source.OpenConnectionAsync(TestContext.Current.CancellationToken))
         {
-            await first.OpenAsync(TestContext.Current.CancellationToken);
+            await first.CloseAsync();
         }
 
-        await Task.Delay(1300, TestContext.Current.CancellationToken);
+        clock.Advance(TimeSpan.FromSeconds(2));
 
         // Act
-        await using CassieConnection second = new() { ConnectionString = connectionString };
-        await second.OpenAsync(TestContext.Current.CancellationToken);
+        await using var second = await source.OpenConnectionAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, server.Accepted);
+        CassieConnection.ClearPool(second);
+    }
+
+    [Fact]
+    public async Task ShouldKeepSeparatePoolsGivenMatchingSettingsWhenClockInstancesDiffer()
+    {
+        // Arrange
         CassieConnection.ClearAllPools();
+        using var firstClock = new DeadlineClock();
+        using var secondClock = new DeadlineClock();
+        using ScriptedServer server = new(session => session.ServeQueriesAsync(session.WriteCommandCompleteAsync));
+        var connectionString = server.ConnectionString("Pooling=true;Maximum Pool Size=1");
+        await using var firstSource = new CassieDataSource(connectionString, firstClock);
+        await using var secondSource = new CassieDataSource(connectionString, secondClock);
+        await using var first = await firstSource.OpenConnectionAsync(TestContext.Current.CancellationToken);
+        await first.CloseAsync();
+
+        // Act
+        await using var second = await secondSource.OpenConnectionAsync(TestContext.Current.CancellationToken);
+        await second.CloseAsync();
+        await using var reopened = await firstSource.OpenConnectionAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(2, server.Accepted);
+        CassieConnection.ClearPool(first);
+        CassieConnection.ClearPool(second);
     }
 
     [Fact]

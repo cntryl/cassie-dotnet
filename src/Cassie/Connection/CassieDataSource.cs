@@ -9,12 +9,19 @@ namespace Cntryl.Cassie.Connection;
 public sealed class CassieDataSource : DbDataSource
 {
     private readonly Lazy<int> _defaultCommandTimeout;
+    private readonly TimeProvider _clock;
     private int _disposed;
 
     /// <summary>Creates a data source without opening a connection.</summary>
-    public CassieDataSource(string connectionString)
+    public CassieDataSource(string connectionString) : this(connectionString, TimeProvider.System)
+    {
+    }
+
+    /// <summary>Creates a data source that shares the supplied clock with its connections.</summary>
+    public CassieDataSource(string connectionString, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(connectionString);
+        _clock = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         ConnectionString = connectionString;
         _defaultCommandTimeout = new Lazy<int>(() => CassieConnection.CommandTimeoutFrom(connectionString));
     }
@@ -55,7 +62,7 @@ public sealed class CassieDataSource : DbDataSource
     protected override DbConnection CreateDbConnection()
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        return new CassieConnection { ConnectionString = ConnectionString, LoggerFactory = LoggerFactory };
+        return new CassieConnection(_clock) { ConnectionString = ConnectionString, LoggerFactory = LoggerFactory };
     }
 
     /// <inheritdoc />

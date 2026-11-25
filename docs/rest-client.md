@@ -19,6 +19,9 @@ The URI constructor owns its HTTP client, handler, and per-client cookie contain
 
 The `CassieRestClient(HttpClient)` constructor borrows the supplied client. It requires an absolute HTTP(S) `BaseAddress`; the caller configures cookie handling and owns disposal. The wrapper preserves the supplied client's base address, default headers, timeout, and lifetime. Keep cookie containers separate for unrelated authentication sessions. Both constructors preserve a reverse-proxy base path and normalize its trailing slash internally.
 
+Either constructor accepts a `TimeProvider` for Cassie's deadline across response headers and body.
+The default is `TimeProvider.System`. A borrowed HTTP client keeps its own transport timeout for headers.
+
 Authentication uses the opaque `cassie_session` cookie. `LoginAsync` posts username/password and returns user/role metadata; the cookie handler retains the session. `GetSessionAsync` reads that metadata and `LogoutAsync` revokes the server session. Basic and bearer credentials are outside this contract. `Dispose` releases owned HTTP resources; server logout remains explicit.
 
 ## Operations and routes

@@ -11,11 +11,12 @@ internal static class QueryCanceler
     public static async Task<bool> SendAsync(
         CassieConnectionStringBuilder settings,
         int backendProcessId,
-        int backendSecretKey
+        int backendSecretKey,
+        TimeProvider clock
     )
     {
         ArgumentNullException.ThrowIfNull(settings);
-        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(Math.Clamp(settings.Timeout, 1, 5)));
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(Math.Clamp(settings.Timeout, 1, 5)), clock);
         return await SendAsync(settings, backendProcessId, backendSecretKey, timeout.Token)
             .ConfigureAwait(false);
     }

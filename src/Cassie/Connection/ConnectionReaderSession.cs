@@ -78,7 +78,7 @@ internal sealed class ConnectionReaderSession(CassieConnection connection, PgSes
 
     public CleanupDeadline? StartCleanupDeadline()
     {
-        return OwnsOperation ? new CleanupDeadline(session, connection.CleanupTimeProvider) : null;
+        return OwnsOperation ? new CleanupDeadline(session, connection.Clock) : null;
     }
 
     public Task ReaderClosedAsync(CleanupDeadline? drainDeadline)

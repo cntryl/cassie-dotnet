@@ -11,9 +11,6 @@ public sealed partial class CassieConnection
     private const int CopyBufferSize = 64 * 1024;
     private static readonly TimeSpan CopyRecoveryTimeout = TimeSpan.FromSeconds(5);
 
-    // Each connection supplies its clock so recovery tests can advance the fixed deadline without sleeping.
-    internal TimeProvider CopyRecoveryTimeProvider { get; set; } = TimeProvider.System;
-
     internal async Task<int> ExecuteCopyToAsync(
         string sql,
         Stream destination,
@@ -24,8 +21,8 @@ public sealed partial class CassieConnection
         ValidateSqlText(sql);
         var session = RequireSession("The connection is not open.");
         ThrowIfReaderActive();
+        using CommandDeadline deadline = new(new CommandBudget(commandTimeout, Clock), cancellationToken);
         _gate.Begin();
-        using CommandDeadline deadline = new(commandTimeout, cancellationToken);
         var writingFrame = false;
 
         try
@@ -70,8 +67,8 @@ public sealed partial class CassieConnection
         ValidateSqlText(sql);
         var session = RequireSession("The connection is not open.");
         ThrowIfReaderActive();
+        using CommandDeadline deadline = new(new CommandBudget(commandTimeout, Clock), cancellationToken);
         _gate.Begin();
-        using CommandDeadline deadline = new(commandTimeout, cancellationToken);
         var copyMode = false;
         var writingFrame = false;
         byte[]? buffer = null;
@@ -196,7 +193,7 @@ public sealed partial class CassieConnection
     /// <summary>Runs a recovery exchange; if it fails the session is discarded because the stream position is unknown.</summary>
     private async Task RecoverCopyAsync(Func<CancellationToken, Task> recovery)
     {
-        using CancellationTokenSource timeout = new(CopyRecoveryTimeout, CopyRecoveryTimeProvider);
+        using CancellationTokenSource timeout = new(CopyRecoveryTimeout, Clock);
         // Close the borrowed socket on expiry, including an unresponsive prepared-statement cleanup.
         // The recovery task is still awaited so none of its callbacks can act on a later operation.
         using var abortOnDeadline =

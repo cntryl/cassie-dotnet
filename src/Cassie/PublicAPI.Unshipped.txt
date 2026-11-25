@@ -1,1 +1,5 @@
 #nullable enable
+Cntryl.Cassie.Connection.CassieConnection.CassieConnection(System.TimeProvider! timeProvider) -> void
+Cntryl.Cassie.Connection.CassieDataSource.CassieDataSource(string! connectionString, System.TimeProvider! timeProvider) -> void
+Cntryl.Cassie.Rest.CassieRestClient.CassieRestClient(System.Net.Http.HttpClient! httpClient, System.TimeProvider! timeProvider) -> void
+Cntryl.Cassie.Rest.CassieRestClient.CassieRestClient(System.Uri! baseAddress, System.TimeProvider! timeProvider) -> void

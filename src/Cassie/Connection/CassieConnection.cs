@@ -11,7 +11,8 @@ using Microsoft.Extensions.Logging;
 namespace Cntryl.Cassie.Connection;
 
 /// <summary>Represents an ADO.NET connection to Cassie.</summary>
-public sealed partial class CassieConnection : DbConnection
+/// <param name="timeProvider">The clock used for provider timeouts and pool lifetimes.</param>
+public sealed partial class CassieConnection(TimeProvider timeProvider) : DbConnection
 {
     private const int DefaultFetchSize = 128;
     private readonly Lock _abortGate = new();
@@ -25,6 +26,13 @@ public sealed partial class CassieConnection : DbConnection
     private PgSession? _session;
     private ConnectionState _state;
     private bool _synchronous;
+
+    /// <summary>Creates a closed connection using the system clock.</summary>
+    public CassieConnection() : this(TimeProvider.System)
+    {
+    }
+
+    internal TimeProvider Clock { get; } = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     /// <inheritdoc />
     [AllowNull]
@@ -262,35 +270,29 @@ public sealed partial class CassieConnection : DbConnection
 
         if (settings.Pooling)
         {
-            (poolKey, pool) = CassieConnectionPools.Get(settings);
+            (poolKey, pool) = CassieConnectionPools.Get(settings, Clock);
         }
 
 
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-        if (settings.Timeout > 0)
-        {
-            linked.CancelAfter(TimeSpan.FromSeconds(settings.Timeout));
-        }
-
-
+        var duration = settings.Timeout > 0 ? TimeSpan.FromSeconds(settings.Timeout) : Timeout.InfiniteTimeSpan;
+        using var deadline = new OperationTimeout(duration, Clock, cancellationToken);
         var holdsPoolSlot = false;
 
         try
         {
-            linked.Token.ThrowIfCancellationRequested();
+            deadline.Token.ThrowIfCancellationRequested();
             SetState(ConnectionState.Connecting);
             PgSession? session = null;
 
             if (pool is not null)
             {
-                (session, poolKey, pool) = await RentFromPoolAsync(settings, poolKey!, pool, _synchronous, linked.Token)
+                (session, poolKey, pool) = await RentFromPoolAsync(settings, poolKey!, pool, _synchronous, deadline.Token)
                     .ConfigureAwait(false);
                 holdsPoolSlot = true;
             }
 
 
-            session ??= await PgSessionConnector.ConnectAsync(settings, _synchronous, linked.Token)
+            session ??= await PgSessionConnector.ConnectAsync(settings, _synchronous, Clock, deadline.Token)
                 .ConfigureAwait(false);
             session.SynchronousIO = _synchronous;
             session.DateStyle.BeginLease();
@@ -305,8 +307,7 @@ public sealed partial class CassieConnection : DbConnection
             SetState(ConnectionState.Open);
             CassieLogging.ConnectionOpened(Logger);
         }
-        catch (OperationCanceledException) when (linked.IsCancellationRequested &&
-                                                 !cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (deadline.Elapsed && !cancellationToken.IsCancellationRequested)
         {
             await AbandonOpenAsync(pool, holdsPoolSlot).ConfigureAwait(false);
             throw new TimeoutException($"Opening a Cassie connection exceeded {settings.Timeout} seconds.");
@@ -344,7 +345,7 @@ public sealed partial class CassieConnection : DbConnection
         return settings;
     }
 
-    private static async Task<(PgSession? Session, string PoolKey, CassieConnectionPool Pool)> RentFromPoolAsync(
+    private async Task<(PgSession? Session, string PoolKey, CassieConnectionPool Pool)> RentFromPoolAsync(
         CassieConnectionStringBuilder settings,
         string poolKey,
         CassieConnectionPool pool,
@@ -363,7 +364,7 @@ public sealed partial class CassieConnection : DbConnection
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 // The pool was cleared while this opener waited; join the replacement pool.
-                (poolKey, pool) = CassieConnectionPools.Get(settings);
+                (poolKey, pool) = CassieConnectionPools.Get(settings, Clock);
             }
         }
     }
@@ -456,7 +457,7 @@ public sealed partial class CassieConnection : DbConnection
 
         try
         {
-            using CleanupDeadline deadline = new(session, CleanupTimeProvider);
+            using CleanupDeadline deadline = new(session, Clock);
 
             if (pool is null)
             {
@@ -545,7 +546,7 @@ public sealed partial class CassieConnection : DbConnection
         var key = connection._poolKey ?? (connection._pool is null
             ? CassieConnectionPools.GetKey([with(connection.ConnectionString)])
             : throw new InvalidOperationException("The connection has no pool key."));
-        SynchronousCall.Wait(CassieConnectionPools.ClearAsync(key));
+        SynchronousCall.Wait(CassieConnectionPools.ClearAsync(key, connection.Clock));
     }
 
     /// <summary>Closes idle physical sessions held by every Cassie connection pool.</summary>

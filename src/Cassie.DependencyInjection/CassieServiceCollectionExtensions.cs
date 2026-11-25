@@ -20,7 +20,8 @@ public static class CassieServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(connectionString);
 
-        services.TryAddSingleton(provider => new CassieDataSource(connectionString)
+        services.TryAddSingleton(provider => new CassieDataSource(connectionString,
+            provider.GetService<TimeProvider>() ?? TimeProvider.System)
         {
             LoggerFactory = provider.GetService<ILoggerFactory>()
         });
@@ -43,7 +44,8 @@ public static class CassieServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(baseAddress);
 
-        services.TryAddScoped(_ => new CassieRestClient(baseAddress));
+        services.TryAddScoped(provider => new CassieRestClient(baseAddress,
+            provider.GetService<TimeProvider>() ?? TimeProvider.System));
         TryAddAlias<CassieAdminClient, CassieRestClient>(services, static client => client.Admin);
         return services;
     }

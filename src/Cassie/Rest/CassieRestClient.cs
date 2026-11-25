@@ -11,21 +11,32 @@ namespace Cntryl.Cassie.Rest;
 public sealed class CassieRestClient : IDisposable
 {
     private readonly Uri _baseAddress;
+    private readonly TimeProvider _clock;
     private readonly HttpClient _httpClient;
+    private readonly TimeSpan? _ownedRequestTimeout;
     private readonly HttpClientHandler? _ownedHandler;
     private readonly bool _ownsHttpClient;
     private bool _disposed;
 
     /// <summary>Creates a client with its own HTTP connection pool and session-cookie container.</summary>
-    public CassieRestClient(Uri baseAddress)
+    public CassieRestClient(Uri baseAddress) : this(baseAddress, TimeProvider.System)
+    {
+    }
+
+    /// <summary>Creates an owned HTTP client whose request deadlines use the supplied clock.</summary>
+    public CassieRestClient(Uri baseAddress, TimeProvider timeProvider)
     {
         _baseAddress = NormalizeBaseAddress(baseAddress);
+        _clock = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _ownedHandler = new HttpClientHandler
         { UseCookies = true, CookieContainer = new CookieContainer(), CheckCertificateRevocationList = true };
 
         try
         {
             _httpClient = new HttpClient(_ownedHandler, false);
+            _ownedRequestTimeout = _httpClient.Timeout;
+            // Use the provider's deadline for both headers and body.
+            _httpClient.Timeout = Timeout.InfiniteTimeSpan;
         }
         catch
         {
@@ -43,9 +54,19 @@ public sealed class CassieRestClient : IDisposable
     ///     The caller owns the HTTP client and must configure session-cookie handling for login. Avoid sharing its cookie
     ///     container between unrelated sessions.
     /// </remarks>
-    public CassieRestClient(HttpClient httpClient)
+    public CassieRestClient(HttpClient httpClient) : this(httpClient, TimeProvider.System)
+    {
+    }
+
+    /// <summary>Creates a borrowed HTTP client wrapper whose request deadlines use the supplied clock.</summary>
+    /// <remarks>
+    ///     The caller owns the HTTP client and its cookie container. The client's own transport timeout stays active for
+    ///     the header exchange. Cassie uses the same timeout duration on the supplied clock for the entire request.
+    /// </remarks>
+    public CassieRestClient(HttpClient httpClient, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
+        _clock = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _baseAddress = NormalizeBaseAddress(httpClient.BaseAddress ??
                                             throw new ArgumentException("The HTTP client requires a BaseAddress.",
                                                 nameof(httpClient)));
@@ -217,12 +238,8 @@ public sealed class CassieRestClient : IDisposable
         CancellationToken cancellationToken
     )
     {
-        var timeout = _httpClient.Timeout;
-        using var deadline = timeout == Timeout.InfiniteTimeSpan
-            ? null
-            : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        deadline?.CancelAfter(timeout);
-        var token = deadline?.Token ?? cancellationToken;
+        using var deadline = new OperationTimeout(_ownedRequestTimeout ?? _httpClient.Timeout, _clock, cancellationToken);
+        var token = deadline.Token;
 
         try
         {
@@ -239,7 +256,7 @@ public sealed class CassieRestClient : IDisposable
         {
             throw new OperationCanceledException("The REST request was canceled.", exception, cancellationToken);
         }
-        catch (OperationCanceledException exception) when (deadline?.IsCancellationRequested == true)
+        catch (OperationCanceledException exception) when (deadline.Elapsed)
         {
             throw new TaskCanceledException("The REST request exceeded the configured HttpClient.Timeout.",
                 new TimeoutException("The REST response deadline elapsed.", exception), token);

@@ -3,7 +3,6 @@ using System.Data;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using Cntryl.Cassie.Commands;
 using Cntryl.Cassie.Connection;
 using Cntryl.Cassie.Protocol;
 using Xunit;
@@ -210,11 +209,10 @@ public sealed class CopyRecoveryContractTests
         });
         using DeadlineClock clock = new();
         using CancellationTokenSource caller = new();
-        var connectionString = server.ConnectionString("Pooling=true;Maximum Pool Size=1");
-        await using CassieConnection connection = new()
+        var connectionString = server.ConnectionString("Pooling=true;Maximum Pool Size=1;Command Timeout=0;Timeout=0");
+        await using CassieConnection connection = new(clock)
         {
-            ConnectionString = connectionString,
-            CopyRecoveryTimeProvider = clock
+            ConnectionString = connectionString
         };
         await connection.OpenAsync(TestContext.Current.CancellationToken);
         IOException inputFailure = new("input failed");
@@ -269,7 +267,13 @@ public sealed class CopyRecoveryContractTests
                 await caller.CancelAsync();
             }
 
-            await clock.TimerCreated.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+            if (scenario is "output-timeout" or "output-timeout-then-cancellation")
+            {
+                clock.Advance(TimeSpan.FromSeconds(1));
+            }
+
+            await clock.WaitForTimerAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken)
+                .WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
 
             if (scenario == "output-timeout-then-cancellation")
             {
@@ -316,9 +320,12 @@ public sealed class CopyRecoveryContractTests
         // Assert
 
         AssertOriginalFailure(scenario, failure, inputFailure, caller.Token);
-        Assert.Equal(TimeSpan.FromSeconds(5), Assert.Single(clock.InitialDueTimes));
+        Assert.Equal(
+            scenario is "output-timeout" or "output-timeout-then-cancellation"
+                ? [TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5)]
+                : [TimeSpan.FromSeconds(5)], clock.InitialDueTimes);
         Assert.Equal(ConnectionState.Closed, connection.State);
-        await using CassieConnection replacement = new() { ConnectionString = connectionString };
+        await using CassieConnection replacement = new(clock) { ConnectionString = connectionString };
         await replacement.OpenAsync(TestContext.Current.CancellationToken)
             .WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
         Assert.Equal(2, server.Accepted);
@@ -361,10 +368,9 @@ public sealed class CopyRecoveryContractTests
         });
         using DeadlineClock clock = new();
         using CancellationTokenSource caller = new();
-        await using CassieConnection connection = new()
+        await using CassieConnection connection = new(clock)
         {
-            ConnectionString = server.ConnectionString("Pooling=false"),
-            CopyRecoveryTimeProvider = clock
+            ConnectionString = server.ConnectionString("Pooling=false;Timeout=0;Command Timeout=0")
         };
         await connection.OpenAsync(TestContext.Current.CancellationToken);
         var identity = connection.SessionIdentity;
@@ -389,7 +395,8 @@ public sealed class CopyRecoveryContractTests
         }
 
 
-        await clock.TimerCreated.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+        await clock.WaitForTimerAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken)
+            .WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
 
         if (cancelOutput)
         {
@@ -401,8 +408,8 @@ public sealed class CopyRecoveryContractTests
         sendReady.SetResult();
         var failure = await Record.ExceptionAsync(async () =>
             _ = await copying.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
-        await using CassieCommand next = new()
-        { Connection = connection, CommandText = "UPDATE ledger SET value = 'ok'" };
+        await using var next = connection.CreateCommand();
+        next.CommandText = "UPDATE ledger SET value = 'ok'";
         var affected = await next.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
 
         // Assert
@@ -463,10 +470,9 @@ public sealed class CopyRecoveryContractTests
         var peer = ServeAsync();
         using DeadlineClock clock = new();
         using CancellationTokenSource caller = new();
-        await using CassieConnection connection = new()
+        await using CassieConnection connection = new(clock)
         {
-            ConnectionString = $"Host=127.0.0.1;Port={port};Username=app;SSL Mode=Prefer;Timeout=30;Pooling=false",
-            CopyRecoveryTimeProvider = clock
+            ConnectionString = $"Host=127.0.0.1;Port={port};Username=app;SSL Mode=Prefer;Timeout=0;Pooling=false"
         };
         await connection.OpenAsync(TestContext.Current.CancellationToken);
 

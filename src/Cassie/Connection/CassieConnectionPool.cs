@@ -1,11 +1,14 @@
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Cntryl.Cassie.Connection;
 
 [SuppressMessage("Reliability", "CA1001",
     Justification = "Pool semaphores remain live while any lease can be returned or waiting to rent.")]
-internal sealed class CassieConnectionPool(int maximumPoolSize, TimeSpan idleLifetime, TimeSpan maximumLifetime)
+internal sealed class CassieConnectionPool(
+    int maximumPoolSize,
+    TimeSpan idleLifetime,
+    TimeSpan maximumLifetime,
+    TimeProvider clock)
 {
     private readonly SemaphoreSlim _changed = new(0);
     private readonly Lock _gate = new();
@@ -121,16 +124,16 @@ internal sealed class CassieConnectionPool(int maximumPoolSize, TimeSpan idleLif
 
     private bool IsUnusable(PgSession session)
     {
-        var now = Stopwatch.GetTimestamp();
-        return (idleLifetime > TimeSpan.Zero && Stopwatch.GetElapsedTime(session.ReturnedTimestamp, now) > idleLifetime)
+        var now = clock.GetTimestamp();
+        return (idleLifetime > TimeSpan.Zero && clock.GetElapsedTime(session.ReturnedTimestamp, now) > idleLifetime)
                || (maximumLifetime > TimeSpan.Zero &&
-                   Stopwatch.GetElapsedTime(session.CreatedTimestamp, now) > maximumLifetime)
+                   clock.GetElapsedTime(session.CreatedTimestamp, now) > maximumLifetime)
                || !session.IsTransportAlive();
     }
 
     internal async ValueTask ReturnAsync(PgSession session)
     {
-        session.ReturnedTimestamp = Stopwatch.GetTimestamp();
+        session.ReturnedTimestamp = clock.GetTimestamp();
         lock (_gate)
         {
             if (!_cleared)
