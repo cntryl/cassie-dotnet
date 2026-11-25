@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using Cntryl.Cassie.Rest;
+using Cntryl.Cassie.Tests.Connection;
 using Xunit;
 
 namespace Cntryl.Cassie.Tests.Rest;
@@ -94,6 +95,29 @@ public sealed class CassieRestStreamingTests
         _ = Assert.IsType<TimeoutException>(failure.InnerException);
         Assert.True(stream.ReadStarted);
         Assert.False(stream.CanRead);
+    }
+
+    [Fact]
+    public async Task ShouldTimeOutGivenPendingBodyWhenRestClientClockAdvances()
+    {
+        // Arrange
+        using var clock = new DeadlineClock();
+        using var body = new PendingHttpBodyStream();
+        using ScriptedHttpHandler handler = new((_, _) => Task.FromResult(
+            new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(body) }));
+        using HttpClient http = new(handler) { BaseAddress = ServiceAddress, Timeout = TimeSpan.FromSeconds(120) };
+        using CassieRestClient client = new(http, clock);
+        using var lifetime = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var reading = client.ListCollectionsAsync(lifetime.Token);
+        await body.Reading.WaitAsync(lifetime.Token);
+
+        // Act
+        clock.Advance(TimeSpan.FromSeconds(120));
+        var failure = await Record.ExceptionAsync(() => reading);
+
+        // Assert
+        _ = Assert.IsType<TimeoutException>(Assert.IsType<TaskCanceledException>(failure).InnerException);
+        Assert.True(body.IsDisposed);
     }
 
     private sealed class SlowJsonBody() : MemoryStream("[]"u8.ToArray(), false)

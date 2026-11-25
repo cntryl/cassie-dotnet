@@ -66,7 +66,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
     private int _rowsReadCurrentResult;
 
     internal CassieDataReader(IReaderSession session, int commandTimeout, CommandBehavior behavior)
-        : this(session, new CommandBudget(commandTimeout), behavior)
+        : this(session, new CommandBudget(commandTimeout, TimeProvider.System), behavior)
     {
     }
 
@@ -334,7 +334,7 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
                 return;
             }
 
-            using CancellationTokenSource drainTimeout = new(TimeSpan.FromSeconds(5));
+            using CancellationTokenSource drainTimeout = new(TimeSpan.FromSeconds(5), _cancellation.Budget.Clock);
             await EnsureExtendedSyncSentAsync(true, drainTimeout.Token).ConfigureAwait(false);
             await DrainToReadyAsync(drainTimeout.Token, true).ConfigureAwait(false);
         }
@@ -1454,10 +1454,10 @@ public sealed class CassieDataReader : DbDataReader, IDbColumnSchemaGenerator
         // Sync is needed to recover the session even after the ordinary write budget has expired.
         var useRecoveryBudget = recovering || _cancellation.TimedOut || cancellationToken.IsCancellationRequested;
         using var recoveryTimeout = useRecoveryBudget && !recovering
-            ? new CancellationTokenSource(TimeSpan.FromSeconds(5))
+            ? new CancellationTokenSource(TimeSpan.FromSeconds(5), _cancellation.Budget.Clock)
             : null;
-        using var deadline = new CommandDeadline(useRecoveryBudget ? default : _cancellation.Budget,
-            recoveryTimeout?.Token ?? cancellationToken);
+        var budget = useRecoveryBudget ? new CommandBudget(0, _cancellation.Budget.Clock) : _cancellation.Budget;
+        using var deadline = new CommandDeadline(budget, recoveryTimeout?.Token ?? cancellationToken);
 
         try
         {

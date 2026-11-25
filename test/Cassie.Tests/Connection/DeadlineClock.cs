@@ -1,22 +1,49 @@
+using System.Threading.Channels;
+
 namespace Cntryl.Cassie.Tests.Connection;
 
 /// <summary>A manually advanced clock for provider deadlines.</summary>
 internal sealed class DeadlineClock : TimeProvider, IDisposable
 {
     private readonly Lock _gate = new();
-    private readonly TaskCompletionSource _timerCreated = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly Channel<TimeSpan> _scheduled = Channel.CreateUnbounded<TimeSpan>();
     private readonly List<RecoveryTimer> _timers = [];
     private long _elapsedTicks;
 
-    internal Task TimerCreated => _timerCreated.Task;
     internal List<TimeSpan> InitialDueTimes { get; } = [];
+
+    public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+    public override long GetTimestamp()
+    {
+        lock (_gate)
+        {
+            return _elapsedTicks;
+        }
+    }
+
+    internal async Task WaitForTimerAsync(TimeSpan duration, CancellationToken cancellationToken)
+    {
+        while (await _scheduled.Reader.ReadAsync(cancellationToken) != duration)
+        {
+        }
+    }
 
     public void Dispose()
     {
-        foreach (var timer in _timers)
+        RecoveryTimer[] timers;
+
+        lock (_gate)
+        {
+            timers = [.. _timers];
+        }
+
+        foreach (var timer in timers)
         {
             timer.Dispose();
         }
+
+        _ = _scheduled.Writer.TryComplete();
     }
 
     public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
@@ -29,7 +56,7 @@ internal sealed class DeadlineClock : TimeProvider, IDisposable
             _ = timer.Change(dueTime, period);
         }
 
-        _ = _timerCreated.TrySetResult();
+        _ = _scheduled.Writer.TryWrite(dueTime);
         return timer;
     }
 

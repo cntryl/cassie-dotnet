@@ -9,7 +9,6 @@ public sealed partial class CassieConnection
     private Task<bool>? _pendingQueryCancel;
     private long _cleanupOperation;
     internal long OperationSerial => _gate.Serial;
-    internal TimeProvider CleanupTimeProvider { get; set; } = TimeProvider.System;
 
     internal void HandleParameterStatusMessage(byte[] payload)
     {
@@ -162,7 +161,7 @@ public sealed partial class CassieConnection
 
     private async Task AbortIfStillRunningAsync(long serial)
     {
-        await Task.Delay(CancelWatchdogDelay).ConfigureAwait(false);
+        await Task.Delay(CancelWatchdogDelay, Clock).ConfigureAwait(false);
 
         if (_gate.IsActive && _gate.Serial == serial)
         {
@@ -177,7 +176,7 @@ public sealed partial class CassieConnection
             return _gate.IsActive && _gate.Serial == expectedOperation && _gate.Serial != _cleanupOperation &&
                    _session is { CanCancel: true } session
                 ? _pendingQueryCancel ??= QueryCanceler.SendAsync([with(_connectionString)],
-                    session.BackendProcessId, session.BackendSecretKey)
+                    session.BackendProcessId, session.BackendSecretKey, Clock)
                 : Task.FromResult(false);
         }
     }

@@ -12,7 +12,9 @@ services.AddCassieDataSource(connectionString);
 services.AddCassieRestClient(new Uri("https://cassie.example/"));
 ```
 
-The application supplies `services` and `connectionString`.
+The application supplies `services` and `connectionString`. Cassie uses a
+registered `TimeProvider` for deadlines and pool lifetimes when available.
+The default is `TimeProvider.System`.
 
 | Service                                     | Lifetime  | Behavior                                                                                                     |
 |---------------------------------------------|-----------|--------------------------------------------------------------------------------------------------------------|

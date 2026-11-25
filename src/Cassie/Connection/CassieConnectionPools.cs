@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -7,19 +8,27 @@ namespace Cntryl.Cassie.Connection;
 
 internal static class CassieConnectionPools
 {
-    private static readonly ConcurrentDictionary<string, CassieConnectionPool> Pools = new(StringComparer.Ordinal);
+    // A pool may compare only timestamps from the same clock. Custom clocks and their
+    // pools can be collected when callers no longer hold them.
+    private static readonly ConditionalWeakTable<TimeProvider, ConcurrentDictionary<string, CassieConnectionPool>> Pools = [];
 
     private static readonly ConcurrentDictionary<string, (DateTime Stamp, long Length, string Hash)> TrustFingerprints =
         new(StringComparer.Ordinal);
 
-    internal static (string Key, CassieConnectionPool Pool) Get(CassieConnectionStringBuilder settings)
+    internal static (string Key, CassieConnectionPool Pool) Get(
+        CassieConnectionStringBuilder settings,
+        TimeProvider clock
+    )
     {
         var key = GetKey(settings);
+        var partition = Pools.GetValue(clock, static _ => new ConcurrentDictionary<string, CassieConnectionPool>(
+            StringComparer.Ordinal));
         return (key,
-            Pools.GetOrAdd(key,
-                _ => new CassieConnectionPool(settings.MaxPoolSize,
-                    TimeSpan.FromSeconds(settings.ConnectionIdleLifetime),
-                    TimeSpan.FromSeconds(settings.ConnectionLifetime))));
+            partition.GetOrAdd(key,
+                static (_, configuration) => new CassieConnectionPool(configuration.Settings.MaxPoolSize,
+                    TimeSpan.FromSeconds(configuration.Settings.ConnectionIdleLifetime),
+                    TimeSpan.FromSeconds(configuration.Settings.ConnectionLifetime), configuration.Clock),
+                (Settings: settings, Clock: clock)));
     }
 
     internal static string GetKey(CassieConnectionStringBuilder settings)
@@ -27,9 +36,9 @@ internal static class CassieConnectionPools
         return CreateKey(settings);
     }
 
-    internal static async Task ClearAsync(string key)
+    internal static async Task ClearAsync(string key, TimeProvider clock)
     {
-        if (Pools.TryRemove(key, out var pool))
+        if (Pools.TryGetValue(clock, out var partition) && partition.TryRemove(key, out var pool))
         {
             await pool.ClearAsync().ConfigureAwait(false);
         }
@@ -37,11 +46,14 @@ internal static class CassieConnectionPools
 
     internal static async Task ClearAllAsync()
     {
-        foreach (var pair in Pools)
+        foreach (var (_, partition) in Pools)
         {
-            if (Pools.TryRemove(pair.Key, out var pool))
+            foreach (var pair in partition)
             {
-                await pool.ClearAsync().ConfigureAwait(false);
+                if (partition.TryRemove(pair.Key, out var pool))
+                {
+                    await pool.ClearAsync().ConfigureAwait(false);
+                }
             }
         }
     }

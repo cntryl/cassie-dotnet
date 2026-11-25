@@ -41,12 +41,11 @@ public sealed class CleanupDeadlineContractTests
             reset.SetResult();
             await session.StayVerySilentAsync();
         });
-        var connectionString = server.ConnectionString("Maximum Pool Size=1;Command Timeout=0");
-        await using CassieConnection connection = new() { ConnectionString = connectionString };
-        await using CassieConnection next = new() { ConnectionString = connectionString };
+        var connectionString = server.ConnectionString("Maximum Pool Size=1;Command Timeout=0;Timeout=0");
+        await using CassieConnection connection = new(clock) { ConnectionString = connectionString };
+        await using CassieConnection next = new(clock) { ConnectionString = connectionString };
         await connection.OpenAsync(token);
         var transaction = await connection.BeginTransactionAsync(token);
-        connection.CleanupTimeProvider = clock;
         // Act
         var closing = synchronous ? Task.Run(connection.Close, token) : connection.CloseAsync();
 
@@ -103,12 +102,12 @@ public sealed class CleanupDeadlineContractTests
 
             await session.ServeQueriesAsync(session.WriteCommandCompleteAsync);
         });
-        var connectionString = server.ConnectionString("Maximum Pool Size=1");
-        await using CassieConnection connection = new() { ConnectionString = connectionString, CleanupTimeProvider = clock };
+        var connectionString = server.ConnectionString("Maximum Pool Size=1;Timeout=0");
+        await using CassieConnection connection = new(clock) { ConnectionString = connectionString };
         await connection.OpenAsync(token);
         // Act
         await connection.CloseAsync();
-        await using CassieConnection next = new() { ConnectionString = connectionString };
+        await using CassieConnection next = new(clock) { ConnectionString = connectionString };
         await next.OpenAsync(token);
         clock.Advance(TimeSpan.FromSeconds(5));
 
@@ -137,10 +136,9 @@ public sealed class CleanupDeadlineContractTests
             active.SetResult(session);
             await session.StayVerySilentAsync();
         });
-        await using CassieConnection connection = new()
+        await using CassieConnection connection = new(clock)
         {
-            ConnectionString = server.ConnectionString("Maximum Pool Size=1;Command Timeout=0"),
-            CleanupTimeProvider = clock
+            ConnectionString = server.ConnectionString("Maximum Pool Size=1;Command Timeout=0;Timeout=0")
         };
         await connection.OpenAsync(token);
         using var command = connection.CreateCommand();
@@ -152,7 +150,7 @@ public sealed class CleanupDeadlineContractTests
 
         try
         {
-            await clock.TimerCreated.WaitAsync(TestTimeout, token);
+            await clock.WaitForTimerAsync(TimeSpan.FromSeconds(5), token).WaitAsync(TestTimeout, token);
             clock.Advance(TimeSpan.FromSeconds(5));
             // Assert
             await closing.WaitAsync(TestTimeout, token);
@@ -200,10 +198,9 @@ public sealed class CleanupDeadlineContractTests
             waitingForAck.SetResult(session);
             await session.StayVerySilentAsync();
         });
-        await using CassieConnection connection = new()
+        await using CassieConnection connection = new(clock)
         {
-            ConnectionString = server.ConnectionString("Maximum Pool Size=1;Command Timeout=0"),
-            CleanupTimeProvider = clock
+            ConnectionString = server.ConnectionString("Maximum Pool Size=1;Command Timeout=0;Timeout=0")
         };
         await connection.OpenAsync(token);
         var prepared = connection.CreateCommand();

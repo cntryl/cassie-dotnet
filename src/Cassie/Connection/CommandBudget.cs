@@ -1,16 +1,14 @@
-using System.Diagnostics;
-
 namespace Cntryl.Cassie.Connection;
 
 /// <summary>One monotonic expiry shared by every wire phase of a command.</summary>
-internal readonly struct CommandBudget(int seconds)
+internal readonly struct CommandBudget(int seconds, TimeProvider clock)
 {
-    private readonly long _started = Stopwatch.GetTimestamp();
-    private readonly TimeSpan _duration = TimeSpan.FromSeconds(seconds);
+    private readonly long _started = seconds > 0 ? clock.GetTimestamp() : 0;
+    private TimeSpan Duration { get; } = TimeSpan.FromSeconds(seconds);
 
-    public bool HasTimeout => _duration > TimeSpan.Zero;
+    public TimeProvider Clock { get; } = clock;
 
-    public TimeSpan Remaining => HasTimeout
-        ? TimeSpan.FromTicks(Math.Max((_duration - Stopwatch.GetElapsedTime(_started)).Ticks, 0))
+    public TimeSpan Remaining => Duration > TimeSpan.Zero
+        ? TimeSpan.FromTicks(Math.Max((Duration - Clock.GetElapsedTime(_started)).Ticks, 0))
         : Timeout.InfiniteTimeSpan;
 }

@@ -59,13 +59,12 @@ public sealed class TransactionCompletionContractTests
             rollback.SetResult(session);
             await session.StayVerySilentAsync();
         });
-        await using CassieConnection connection = new()
+        await using CassieConnection connection = new(clock)
         {
-            ConnectionString = server.ConnectionString("Pooling=false;Command Timeout=0")
+            ConnectionString = server.ConnectionString("Pooling=false;Command Timeout=0;Timeout=0")
         };
         await connection.OpenAsync(token);
         var transaction = await connection.BeginTransactionAsync(token);
-        connection.CleanupTimeProvider = clock;
 
         // Act
         var closing = synchronous ? Task.Run(transaction.Dispose, token) : transaction.DisposeAsync().AsTask();
@@ -260,6 +259,42 @@ public sealed class TransactionCompletionContractTests
         // Assert
         Assert.Null(transaction.Connection);
         Assert.Equal(ConnectionState.Open, connection.State);
+    }
+
+    [Fact]
+    public async Task ShouldAbortSilentCommitGivenCallerCancellationWhenClockAdvances()
+    {
+        // Arrange
+        var token = TestContext.Current.CancellationToken;
+        using var clock = new DeadlineClock();
+        TaskCompletionSource commitReceived = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        using ScriptedServer server = new(async session =>
+        {
+            await BeginAsync(session);
+            await ExpectQueryAsync(session, "COMMIT");
+            commitReceived.SetResult();
+            await session.StayVerySilentAsync();
+        });
+        await using CassieConnection connection = new(clock)
+        {
+            ConnectionString = server.ConnectionString("Pooling=false;Timeout=0;Command Timeout=0")
+        };
+        await connection.OpenAsync(token);
+        await using var transaction = await connection.BeginTransactionAsync(token);
+        using CancellationTokenSource caller = new();
+        var committing = transaction.CommitAsync(caller.Token);
+        await commitReceived.Task.WaitAsync(TestTimeout, token);
+
+        // Act
+        await caller.CancelAsync();
+        await clock.WaitForTimerAsync(TimeSpan.FromSeconds(5), token).WaitAsync(TestTimeout, token);
+        clock.Advance(TimeSpan.FromSeconds(5));
+        var failure = await Record.ExceptionAsync(() => committing.WaitAsync(TestTimeout, token));
+
+        // Assert
+        Assert.Equal(caller.Token, Assert.IsType<OperationCanceledException>(failure, exactMatch: false).CancellationToken);
+        Assert.Null(transaction.Connection);
+        Assert.Equal(ConnectionState.Closed, connection.State);
     }
 
     private static async Task BeginAsync(ScriptedSession session)

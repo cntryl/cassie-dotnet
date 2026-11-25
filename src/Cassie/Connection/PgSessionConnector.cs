@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using Cntryl.Cassie.Protocol;
@@ -15,11 +14,12 @@ internal static class PgSessionConnector
     public static async Task<PgSession> ConnectAsync(
         CassieConnectionStringBuilder settings,
         bool synchronous,
+        TimeProvider clock,
         CancellationToken cancellationToken
     )
     {
         ArgumentNullException.ThrowIfNull(settings);
-        PgSession session = new(new DateStyleTracker(), Stopwatch.GetTimestamp());
+        PgSession session = new(new DateStyleTracker(), clock.GetTimestamp());
 
         try
         {

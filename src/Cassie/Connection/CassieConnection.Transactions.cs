@@ -39,6 +39,7 @@ public sealed partial class CassieConnection
         var session = RequireSession("The connection is not open.");
         ThrowIfReaderActive();
         var query = Encoding.UTF8.GetBytes(sql + "\0");
+        CommandBudget budget = new(0, Clock);
         long serial = 0;
         CommandTag? completion = null;
         var completionCount = 0;
@@ -49,7 +50,7 @@ public sealed partial class CassieConnection
         {
             serial = _gate.Serial;
             var readerSession = new ConnectionReaderSession(this, session, ValidateReady);
-            return new CassieDataReader(readerSession, default, CommandBehavior.Default,
+            return new CassieDataReader(readerSession, budget, CommandBehavior.Default,
                 statementCompleted: tag =>
                 {
                     completion = tag;
@@ -90,7 +91,7 @@ public sealed partial class CassieConnection
         }
 
         var reader = await RunReaderAsync(token => session.WriteFrameAsync(FrontendMessage.Query, query, token),
-            CreateReader, default, cancellationToken).ConfigureAwait(false);
+            CreateReader, budget, cancellationToken).ConfigureAwait(false);
         await using (reader.ConfigureAwait(false))
         {
             // A transaction terminator returns no rows. The reader consumes its reply through ReadyForQuery.
@@ -130,7 +131,7 @@ public sealed partial class CassieConnection
 
         try
         {
-            using CleanupDeadline deadline = new(session, CleanupTimeProvider);
+            using CleanupDeadline deadline = new(session, Clock);
             await ExecuteSessionCleanupQueryAsync(session, "ROLLBACK").ConfigureAwait(false);
             lock (_abortGate)
             {

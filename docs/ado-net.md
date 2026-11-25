@@ -26,6 +26,12 @@ passes startup settings such as `-c TimeZone=UTC` to Cassie.
 open connection with no active reader or transaction. When the database is
 omitted, the username is used as the startup database.
 
+The `CassieDataSource(connectionString, timeProvider)` and
+`CassieConnection(timeProvider)` constructors accept a clock for open and
+command deadlines, pool lifetimes, and recovery. The default is
+`TimeProvider.System`. Connections with the same settings share a pool when
+they use the same clock instance.
+
 ### Connection string keywords
 
 Keywords are case-insensitive. An unrecognized keyword, or a value outside the

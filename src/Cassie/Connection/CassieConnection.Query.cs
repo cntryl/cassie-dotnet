@@ -180,6 +180,6 @@ public sealed partial class CassieConnection
         cancellationToken.ThrowIfCancellationRequested();
         _ = RequireSession("The connection is not open.");
         ThrowIfReaderActive();
-        return new CommandBudget(commandTimeout);
+        return new CommandBudget(commandTimeout, Clock);
     }
 }
