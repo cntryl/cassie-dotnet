@@ -1,39 +1,28 @@
 # Cassie .NET
 
-Two ways to use Cassie from .NET, plus optional dependency injection:
-
-- **ADO.NET** for SQL, transactions, and streaming `COPY` over pgwire.
-- **REST** for vector collections, search, and administration.
-- **Dependency injection** through the separate `Cntryl.Cassie.DependencyInjection` package.
-
-Requires .NET 11. Packages are published to GitHub Packages.
+Cassie .NET is the .NET 11 client for [Cassie](https://github.com/cntryl/cassie).
+Use ADO.NET for SQL, transactions, and streaming COPY over pgwire. Use the REST
+client to manage collections, search vectors, and call administrative endpoints.
 
 ## Install
 
-Add the `cntryl` NuGet source and give NuGet a classic GitHub personal access
-token with `read:packages`. Store credentials in your local or CI secret store;
-set `NuGetPackageSourceCredentials_cntryl` to
-`Username=<GitHub username>;Password=<token>`. See [GitHub's NuGet guide] and
-[NuGet's credential guidance].
+Packages are available from the Cntryl GitHub Packages feed. Configure
+[GitHub Packages authentication](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-nuget-registry)
+with a classic personal access token that has `read:packages`.
 
 ```sh
 dotnet nuget add source https://nuget.pkg.github.com/cntryl/index.json --name cntryl
-dotnet add package Cntryl.Cassie --version 0.2.1
+dotnet add package Cntryl.Cassie
 ```
 
-For dependency injection, also install:
+Add `Cntryl.Cassie.DependencyInjection` to register a data source, scoped
+connections, or REST clients through `IServiceCollection`.
 
-```sh
-dotnet add package Cntryl.Cassie.DependencyInjection --version 0.2.1
-```
+## Quick start
 
-## Run a query
-
-Load `connectionString`, `username`, and `password` from your app configuration
-or secret store.
+Supply the Cassie connection string from your application configuration.
 
 ```csharp
-using System;
 using Cntryl.Cassie.Connection;
 
 await using var source = new CassieDataSource(connectionString);
@@ -44,54 +33,35 @@ command.CommandText = "SELECT 1";
 Console.WriteLine(await command.ExecuteScalarAsync());
 ```
 
-TLS certificate validation is on by default. For a private CA, set
-`SSL Root Certificate` in the connection string.
-
-## Use REST
+For REST, supply the server URI and credentials from your configuration. Create
+the collection and its vector index before searching.
 
 ```csharp
-using System;
 using Cntryl.Cassie.Rest;
 
 using var client = new CassieRestClient(new Uri("https://cassie.example/"));
 await client.LoginAsync(username, password);
 
-CassieRestQueryResult matches = await client.SearchAsync(
+var matches = await client.SearchAsync(
     "documents", new("embedding", "connection setup", Limit: 5));
-
-CassieRestQueryResult result = await client.Admin.ExecuteQueryAsync(
-    new("postgres", "SELECT 1 AS answer"));
 ```
 
-Create the collection and vector index before searching. Cassie uses its
-configured embedding provider to embed the search text. The REST client uses
-the server's `/api/v1/...` routes. See the
-[REST guide] for vectors, administration, and probe endpoints.
+## Guides
 
-## Dependency injection
+| Task | Guide |
+| --- | --- |
+| Configure TLS, execute SQL, or stream COPY | [ADO.NET provider](docs/ado-net.md) |
+| Search collections or call administrative endpoints | [REST client](docs/rest-client.md) |
+| Register clients with dependency injection | [Dependency injection](src/Cassie.DependencyInjection/README.md) |
+| Run against a disposable Cassie server | [Live tests](test/Cassie.Tests/Live/README.md) |
 
-`Cntryl.Cassie.DependencyInjection` registers the data source, scoped connections, and
-REST clients. In ASP.NET Core startup, call:
+## Development
 
-```csharp
-using System;
-using Cntryl.Cassie.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection;
+Run the solution tests with the .NET 11 SDK and authenticated access to the
+Cntryl package feed. The live tests guide shows how to enable server coverage.
 
-builder.Services.AddCassieDataSource(connectionString);
-builder.Services.AddCassieRestClient(new Uri("https://cassie.example/"));
+```sh
+dotnet test --solution Cassie.slnx -c Release --filter-not-trait Isolation=Server
 ```
 
-## More
-
-- [ADO.NET overview]
-- [REST guide]
-- [Dependency injection details]
-- [Live test setup]
-
-[GitHub's NuGet guide]: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-nuget-registry
-[NuGet's credential guidance]: https://learn.microsoft.com/nuget/consume-packages/consuming-packages-authenticated-feeds
-[ADO.NET overview]: https://github.com/cntryl/cassie-dotnet/blob/main/docs/ado-net.md
-[REST guide]: https://github.com/cntryl/cassie-dotnet/blob/main/docs/rest-client.md
-[Dependency injection details]: https://github.com/cntryl/cassie-dotnet/blob/main/src/Cassie.DependencyInjection/README.md
-[Live test setup]: https://github.com/cntryl/cassie-dotnet/blob/main/test/Cassie.Tests/Live/README.md
+See [Contributing](CONTRIBUTING.md) for repository conventions.
