@@ -12,16 +12,20 @@ internal static class CassieConnectionPools
     // pools can be collected when callers no longer hold them.
     private static readonly ConditionalWeakTable<TimeProvider, ConcurrentDictionary<string, CassieConnectionPool>> Pools = [];
 
+    private static readonly ConditionalWeakTable<Func<CancellationToken, ValueTask<string>>,
+        ConditionalWeakTable<TimeProvider, ConcurrentDictionary<string, CassieConnectionPool>>> ProviderPools = [];
+
     private static readonly ConcurrentDictionary<string, (DateTime Stamp, long Length, string Hash)> TrustFingerprints =
         new(StringComparer.Ordinal);
 
     internal static (string Key, CassieConnectionPool Pool) Get(
         CassieConnectionStringBuilder settings,
-        TimeProvider clock
+        TimeProvider clock,
+        Func<CancellationToken, ValueTask<string>>? passwordProvider
     )
     {
         var key = GetKey(settings);
-        var partition = Pools.GetValue(clock, static _ => new ConcurrentDictionary<string, CassieConnectionPool>(
+        var partition = GetClockPools(passwordProvider).GetValue(clock, static _ => new ConcurrentDictionary<string, CassieConnectionPool>(
             StringComparer.Ordinal));
         return (key,
             partition.GetOrAdd(key,
@@ -36,9 +40,13 @@ internal static class CassieConnectionPools
         return CreateKey(settings);
     }
 
-    internal static async Task ClearAsync(string key, TimeProvider clock)
+    internal static async Task ClearAsync(
+        string key,
+        TimeProvider clock,
+        Func<CancellationToken, ValueTask<string>>? passwordProvider
+    )
     {
-        if (Pools.TryGetValue(clock, out var partition) && partition.TryRemove(key, out var pool))
+        if (GetClockPools(passwordProvider).TryGetValue(clock, out var partition) && partition.TryRemove(key, out var pool))
         {
             await pool.ClearAsync().ConfigureAwait(false);
         }
@@ -46,7 +54,24 @@ internal static class CassieConnectionPools
 
     internal static async Task ClearAllAsync()
     {
-        foreach (var (_, partition) in Pools)
+        await ClearPartitionsAsync(Pools).ConfigureAwait(false);
+
+        foreach (var (_, clockPools) in ProviderPools)
+        {
+            await ClearPartitionsAsync(clockPools).ConfigureAwait(false);
+        }
+    }
+
+    private static ConditionalWeakTable<TimeProvider, ConcurrentDictionary<string, CassieConnectionPool>> GetClockPools(
+        Func<CancellationToken, ValueTask<string>>? passwordProvider)
+    {
+        return passwordProvider is null ? Pools : ProviderPools.GetValue(passwordProvider, static _ => []);
+    }
+
+    private static async Task ClearPartitionsAsync(
+        ConditionalWeakTable<TimeProvider, ConcurrentDictionary<string, CassieConnectionPool>> clockPools)
+    {
+        foreach (var (_, partition) in clockPools)
         {
             foreach (var pair in partition)
             {

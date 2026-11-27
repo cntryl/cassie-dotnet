@@ -13,6 +13,8 @@ internal static class PgSessionConnector
 
     public static async Task<PgSession> ConnectAsync(
         CassieConnectionStringBuilder settings,
+        string password,
+        bool redactStartupErrors,
         bool synchronous,
         TimeProvider clock,
         CancellationToken cancellationToken
@@ -48,7 +50,7 @@ internal static class PgSessionConnector
                     SessionMessages.Startup(settings.Username, settings.Database, settings.ApplicationName,
                         settings.Options), cancellationToken).ConfigureAwait(false);
             var (serverVersion, processId, secretKey) =
-                await AuthenticateAsync(session.Stream, settings, session.DateStyle, cancellationToken)
+                await AuthenticateAsync(session.Stream, password, redactStartupErrors, session.DateStyle, cancellationToken)
                     .ConfigureAwait(false);
             session.Identify(serverVersion, processId, secretKey);
             session.DateStyle.CompleteStartup();
@@ -63,7 +65,8 @@ internal static class PgSessionConnector
 
     private static async Task<(string ServerVersion, int ProcessId, int SecretKey)> AuthenticateAsync(
         Stream stream,
-        CassieConnectionStringBuilder settings,
+        string password,
+        bool redactStartupErrors,
         DateStyleTracker dateStyle,
         CancellationToken cancellationToken
     )
@@ -80,7 +83,7 @@ internal static class PgSessionConnector
             switch (tag)
             {
                 case BackendMessage.Authentication:
-                    authenticated |= await HandleAuthenticationAsync(stream, settings, payload, cancellationToken)
+                    authenticated |= await HandleAuthenticationAsync(stream, password, payload, cancellationToken)
                         .ConfigureAwait(false);
                     break;
                 case BackendMessage.ParameterStatus:
@@ -102,7 +105,9 @@ internal static class PgSessionConnector
                     secretKey = BinaryPrimitives.ReadInt32BigEndian(payload.AsSpan(4));
                     break;
                 case BackendMessage.ErrorResponse:
-                    throw ServerErrorParser.Parse(payload);
+                    throw redactStartupErrors
+                        ? new IOException("Cassie rejected the connection during startup.")
+                        : ServerErrorParser.Parse(payload);
                 case BackendMessage.ReadyForQuery:
                     if (!authenticated)
                     {
@@ -119,7 +124,7 @@ internal static class PgSessionConnector
     /// <summary>Answers an authentication request; returns true once the server reports success.</summary>
     private static async Task<bool> HandleAuthenticationAsync(
         Stream stream,
-        CassieConnectionStringBuilder settings,
+        string password,
         byte[] payload,
         CancellationToken cancellationToken
     )
@@ -142,8 +147,8 @@ internal static class PgSessionConnector
             throw new NotSupportedException($"Cassie requested unsupported authentication method {method}.");
         }
 
-        var passwordPayload = new byte[Encoding.UTF8.GetByteCount(settings.Password) + 1];
-        _ = Encoding.UTF8.GetBytes(settings.Password, passwordPayload);
+        var passwordPayload = new byte[Encoding.UTF8.GetByteCount(password) + 1];
+        _ = Encoding.UTF8.GetBytes(password, passwordPayload);
 
         try
         {

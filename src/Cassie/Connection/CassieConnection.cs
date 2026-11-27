@@ -32,6 +32,8 @@ public sealed partial class CassieConnection(TimeProvider timeProvider) : DbConn
     {
     }
 
+    internal Func<CancellationToken, ValueTask<string>>? PasswordProvider { get; init; }
+
     internal TimeProvider Clock { get; } = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     /// <inheritdoc />
@@ -270,7 +272,7 @@ public sealed partial class CassieConnection(TimeProvider timeProvider) : DbConn
 
         if (settings.Pooling)
         {
-            (poolKey, pool) = CassieConnectionPools.Get(settings, Clock);
+            (poolKey, pool) = CassieConnectionPools.Get(settings, Clock, PasswordProvider);
         }
 
 
@@ -292,8 +294,16 @@ public sealed partial class CassieConnection(TimeProvider timeProvider) : DbConn
             }
 
 
-            session ??= await PgSessionConnector.ConnectAsync(settings, _synchronous, Clock, deadline.Token)
-                .ConfigureAwait(false);
+            if (session is null)
+            {
+                var password = PasswordProvider is { } provider
+                    ? await GetPasswordAsync(provider, deadline.Token).ConfigureAwait(false)
+                    : settings.Password;
+                session = await PgSessionConnector
+                    .ConnectAsync(settings, password, PasswordProvider is not null, _synchronous, Clock, deadline.Token)
+                    .ConfigureAwait(false);
+            }
+
             session.SynchronousIO = _synchronous;
             session.DateStyle.BeginLease();
             session.VectorOid = null;
@@ -319,9 +329,52 @@ public sealed partial class CassieConnection(TimeProvider timeProvider) : DbConn
         }
     }
 
+    internal static void ValidatePasswordProviderSettings(CassieConnectionStringBuilder settings)
+    {
+        if (settings.ContainsKey("Password"))
+        {
+            throw new ArgumentException("A password provider cannot be combined with a Password connection string entry.");
+        }
+    }
+
+    private async Task<string> GetPasswordAsync(
+        Func<CancellationToken, ValueTask<string>> provider,
+        CancellationToken cancellationToken
+    )
+    {
+        string password;
+
+        try
+        {
+            // A synchronous caller may be blocking a synchronization context needed by the callback.
+            var pending = _synchronous
+                ? Task.Run(async () => await provider(cancellationToken).ConfigureAwait(false), cancellationToken)
+                : provider(cancellationToken).AsTask();
+            password = await pending.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            // Callback exceptions can contain credentials. Do not retain the original exception.
+            throw new InvalidOperationException("The Cassie password provider failed to supply a password.");
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return password is null || password.Contains('\0', StringComparison.Ordinal)
+            ? throw new InvalidOperationException("The Cassie password provider returned an invalid password.")
+            : password;
+    }
+
     private CassieConnectionStringBuilder ValidateSettings()
     {
         CassieConnectionStringBuilder settings = [with(_connectionString)];
+
+        if (PasswordProvider is not null)
+        {
+            ValidatePasswordProviderSettings(settings);
+        }
+
         settings.ValidateKeywords();
         ValidateProtocolString(settings.Host, nameof(CassieConnectionStringBuilder.Host));
         ValidateProtocolString(settings.Username, nameof(CassieConnectionStringBuilder.Username));
@@ -364,7 +417,7 @@ public sealed partial class CassieConnection(TimeProvider timeProvider) : DbConn
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 // The pool was cleared while this opener waited; join the replacement pool.
-                (poolKey, pool) = CassieConnectionPools.Get(settings, Clock);
+                (poolKey, pool) = CassieConnectionPools.Get(settings, Clock, PasswordProvider);
             }
         }
     }
@@ -546,7 +599,7 @@ public sealed partial class CassieConnection(TimeProvider timeProvider) : DbConn
         var key = connection._poolKey ?? (connection._pool is null
             ? CassieConnectionPools.GetKey([with(connection.ConnectionString)])
             : throw new InvalidOperationException("The connection has no pool key."));
-        SynchronousCall.Wait(CassieConnectionPools.ClearAsync(key, connection.Clock));
+        SynchronousCall.Wait(CassieConnectionPools.ClearAsync(key, connection.Clock, connection.PasswordProvider));
     }
 
     /// <summary>Closes idle physical sessions held by every Cassie connection pool.</summary>

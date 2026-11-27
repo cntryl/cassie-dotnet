@@ -20,16 +20,20 @@ internal sealed class ScriptedServer : IDisposable
     internal ScriptedServer(
         Func<ScriptedSession, Task> handler,
         bool handlesVectorCatalog = true,
-        Func<Task>? acknowledgeCancel = null
+        Func<Task>? acknowledgeCancel = null,
+        Action<string>? observePassword = null
     )
     {
         _handler = handler;
+        ObservePassword = observePassword;
         HandlesVectorCatalog = handlesVectorCatalog;
         _acknowledgeCancel = acknowledgeCancel;
         _listener.Start();
         Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
         _ = Task.Run(AcceptLoopAsync);
     }
+
+    internal Action<string>? ObservePassword { get; }
 
     internal bool HandlesVectorCatalog { get; }
 
@@ -147,6 +151,19 @@ internal sealed class ScriptedSession(ScriptedServer server, TcpClient client)
             return false;
         }
 
+
+        if (server.ObservePassword is { } observePassword)
+        {
+            await WriteAsync((byte)'R', [0, 0, 0, 3]);
+            var (tag, payload) = await ReadFrameAsync();
+
+            if (tag != (byte)'p' || payload.Length == 0 || payload[^1] != 0)
+            {
+                throw new IOException("Expected a null-terminated password frame.");
+            }
+
+            observePassword(Encoding.UTF8.GetString(payload.AsSpan(0, payload.Length - 1)));
+        }
 
         await WriteAsync((byte)'R', [0, 0, 0, 0]);
         var key = new byte[8];
