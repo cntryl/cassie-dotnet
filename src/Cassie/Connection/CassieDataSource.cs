@@ -10,6 +10,7 @@ public sealed class CassieDataSource : DbDataSource
 {
     private readonly Lazy<int> _defaultCommandTimeout;
     private readonly TimeProvider _clock;
+    private readonly Func<CancellationToken, ValueTask<string>>? _passwordProvider;
     private int _disposed;
 
     /// <summary>Creates a data source without opening a connection.</summary>
@@ -24,6 +25,23 @@ public sealed class CassieDataSource : DbDataSource
         _clock = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         ConnectionString = connectionString;
         _defaultCommandTimeout = new Lazy<int>(() => CassieConnection.CommandTimeoutFrom(connectionString));
+    }
+
+    /// <summary>Creates a data source that obtains a password for each new physical connection.</summary>
+    /// <param name="connectionString">Connection settings without a Password entry.</param>
+    /// <param name="timeProvider">The clock shared with connections created by this source.</param>
+    /// <param name="passwordProvider">A callback that can be invoked concurrently and observes the open cancellation token.</param>
+    /// <remarks>Pool reuse does not call the provider. Use certificate-verified TLS for IAM tokens.</remarks>
+    public CassieDataSource(
+        string connectionString,
+        TimeProvider timeProvider,
+        Func<CancellationToken, ValueTask<string>> passwordProvider
+    ) : this(connectionString, timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(passwordProvider);
+        CassieConnectionStringBuilder settings = [with(connectionString)];
+        CassieConnection.ValidatePasswordProviderSettings(settings);
+        _passwordProvider = passwordProvider;
     }
 
     /// <inheritdoc />
@@ -62,7 +80,12 @@ public sealed class CassieDataSource : DbDataSource
     protected override DbConnection CreateDbConnection()
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        return new CassieConnection(_clock) { ConnectionString = ConnectionString, LoggerFactory = LoggerFactory };
+        return new CassieConnection(_clock)
+        {
+            PasswordProvider = _passwordProvider,
+            ConnectionString = ConnectionString,
+            LoggerFactory = LoggerFactory
+        };
     }
 
     /// <inheritdoc />

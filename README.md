@@ -46,6 +46,12 @@ var matches = await client.SearchAsync(
     "documents", new("embedding", "connection setup", Limit: 5));
 ```
 
+For short-lived credentials such as Cassie AWS IAM tokens, omit `Password` and pass a callback to
+`new CassieDataSource(connectionString, TimeProvider.System, passwordProvider)`. The callback runs
+for each new physical connection, can run concurrently, and receives the connection open cancellation
+token. Pool reuse skips the callback. Use certificate-verified TLS and configure the callback to obtain
+the credential from your application's identity provider.
+
 ## Guides
 
 | Task | Guide |

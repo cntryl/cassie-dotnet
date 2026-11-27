@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
 using Cntryl.Cassie.Commands;
@@ -228,6 +229,115 @@ public sealed class CassieDataSourceContractTests
         {
             CassieConnection.ClearPool(identity);
         }
+    }
+
+    [Fact]
+    public async Task ShouldRefreshPasswordGivenPooledSourceWhenNewPhysicalConnectionsOpen()
+    {
+        // Arrange
+        ConcurrentQueue<string> passwords = [];
+        using ScriptedServer server = new(ServeQueriesAsync, observePassword: passwords.Enqueue);
+        var settings = PasswordlessSettings(server);
+        var calls = 0;
+        await using CassieDataSource source = new(settings, TimeProvider.System,
+            _ => ValueTask.FromResult($"token-{Interlocked.Increment(ref calls)}"));
+        await using var connection = source.CreateConnection();
+        var token = TestContext.Current.CancellationToken;
+
+        // Act
+        await connection.OpenAsync(token);
+        await connection.CloseAsync();
+        await connection.OpenAsync(token);
+        await connection.CloseAsync();
+        CassieConnection.ClearPool(connection);
+        await connection.OpenAsync(token);
+        await connection.CloseAsync();
+
+        // Assert
+        Assert.Equal(["token-1", "token-2"], [.. passwords]);
+        Assert.Equal(2, calls);
+        Assert.Equal(2, server.Accepted);
+        Assert.Equal(settings, connection.ConnectionString);
+        Assert.DoesNotContain("token-", connection.ToString(), StringComparison.Ordinal);
+        CassieConnection.ClearPool(connection);
+    }
+
+    [Fact]
+    public async Task ShouldReleasePoolSlotGivenThrowingPasswordProviderWhenConnectionOpenIsRetried()
+    {
+        // Arrange
+        const string secret = "secret-from-provider-exception";
+        using ScriptedServer server = new(ServeQueriesAsync);
+        var calls = 0;
+        await using CassieDataSource source = new(PasswordlessSettings(server), TimeProvider.System, _ =>
+            Interlocked.Increment(ref calls) == 1
+                ? ValueTask.FromException<string>(new InvalidOperationException(secret))
+                : ValueTask.FromResult("fresh-token"));
+        await using var connection = source.CreateConnection();
+        var token = TestContext.Current.CancellationToken;
+
+        // Act
+        var failure = await Record.ExceptionAsync(() => connection.OpenAsync(token));
+        var stateAfterFailure = connection.State;
+        await connection.OpenAsync(token);
+
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(failure);
+        Assert.DoesNotContain(secret, error.ToString(), StringComparison.Ordinal);
+        Assert.Null(error.InnerException);
+        Assert.Equal(ConnectionState.Closed, stateAfterFailure);
+        Assert.Equal(1, server.Accepted);
+        CassieConnection.ClearPool(connection);
+    }
+
+    [Theory]
+    [InlineData("Password=static")]
+    [InlineData("pAsSwOrD=\"\"")]
+    public void ShouldRejectPasswordEntryGivenPasswordProviderWhenCreatingSource(string passwordEntry)
+    {
+        // Arrange
+        var settings = $"{Settings};{passwordEntry}";
+
+        // Act
+        var failure = Record.Exception(() =>
+        {
+            using CassieDataSource source = new(settings, TimeProvider.System, _ => ValueTask.FromResult("token"));
+        });
+
+        // Assert
+        _ = Assert.IsType<ArgumentException>(failure);
+    }
+
+    [Fact]
+    public async Task ShouldIsolatePoolsGivenDifferentProvidersWhenConnectionsOpen()
+    {
+        // Arrange
+        ConcurrentQueue<string> passwords = [];
+        using ScriptedServer server = new(ServeQueriesAsync, observePassword: passwords.Enqueue);
+        var settings = PasswordlessSettings(server);
+        await using CassieDataSource first = new(settings, TimeProvider.System, _ => ValueTask.FromResult("first"));
+        await using CassieDataSource second = new(settings, TimeProvider.System, _ => ValueTask.FromResult("second"));
+        await using var firstConnection = first.CreateConnection();
+        await using var secondConnection = second.CreateConnection();
+        var token = TestContext.Current.CancellationToken;
+
+        // Act
+        await firstConnection.OpenAsync(token);
+        await firstConnection.CloseAsync();
+        await secondConnection.OpenAsync(token);
+        await secondConnection.CloseAsync();
+
+        // Assert
+        Assert.Equal(["first", "second"], [.. passwords]);
+        CassieConnection.ClearPool(firstConnection);
+        CassieConnection.ClearPool(secondConnection);
+    }
+
+    private static string PasswordlessSettings(ScriptedServer server)
+    {
+        CassieConnectionStringBuilder settings = [with(server.ConnectionString("Maximum Pool Size=1"))];
+        _ = settings.Remove("Password");
+        return settings.ConnectionString;
     }
 
     private static Task ServeQueriesAsync(ScriptedSession session)
